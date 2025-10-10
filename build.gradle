@@ -96,3 +96,13 @@ mavenPublishing {
         }
     }
 }
+// Enable in-memory GPG signing for CI/CD environments
+afterEvaluate {
+    signing {
+        def signingKey = findProperty("signingInMemoryKey")
+        def signingPassword = findProperty("signingInMemoryKeyPassword")
+        if (signingKey && signingPassword) {
+            useInMemoryPgpKeys(signingKey, signingPassword)
+        }
+    }
+}
