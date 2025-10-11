@@ -54,68 +54,114 @@ The project uses checkstyle for code quality. Run the checks with:
 - `src/test/java` - Test code
 - `src/test/resources` - Test resources and configuration files
 
-## Releasing
+Automated Release Process
+This project uses a two-step GitHub Actions workflow to publish releases to Maven Central:
 
-This section is for maintainers who have permission to release new versions:
+Prepare Release - Creates a release branch with updated versions
+Publish to Maven Central - Builds, signs, and publishes the artifact
 
-1. Update version in build files
-2. Update documentation
-3. Create a new release tag
-4. Deploy to Maven Central
+Step 1: Prepare Release Branch
 
-## Automated Release to Maven Central
+Go to the Actions tab in your GitHub repository
+Select the "Prepare Release" workflow
+Click "Run workflow"
+Enter the version number to release (e.g., 0.4.0)
+Optionally, enter the next development version (e.g., 0.5.0-SNAPSHOT)
 
-This project uses GitHub Actions to automatically publish releases to Maven Central. The release process is fully
-automated and can be triggered either by pushing a version tag or manually through the GitHub Actions UI.
+If left empty, it will auto-increment the minor version
 
-### Triggering a Release
 
-There are two ways to trigger an automated release:
+Click "Run workflow"
 
-#### Option 1: Push a Version Tag (Recommended)
+This will:
 
-```bash
-# Create and push a version tag
-git tag v0.4.0
-git push origin v0.4.0
-```
+Create a release branch named release/X.Y.Z
+Update releaseVersion in build.gradle
+Update version numbers in README.md
+Create a Pull Request for review
 
-The workflow will automatically:
-1. Extract the version from the tag (e.g., `v0.4.0` → `0.4.0`)
-2. Build the project
-3. Sign the artifacts with your GPG key
-4. Publish to Maven Central
+Step 2: Review and Merge
 
-#### Option 2: Manual Dispatch
+Review the automatically created Pull Request
+Merge the PR into main when ready
 
-1. Go to the **Actions** tab in your GitHub repository
-2. Select the **"Publish to Maven Central"** workflow
-3. Click **"Run workflow"**
-4. Enter the version number (e.g., `0.4.0`)
-5. Click **"Run workflow"**
+Step 3: Publish to Maven Central
 
-### Post-Release Steps
+Checkout the release branch locally:
 
-After the workflow completes successfully:
+bash   git checkout release/0.4.0  # Replace with your version
+Or manually trigger from GitHub:
 
-1. **Verify the publication**: Check the workflow summary for the artifact URL
-2. **Wait for synchronization**: It may take 15-30 minutes for the artifact to appear on Maven Central
-3. **Update version numbers**: Update `projectVersion` and `releaseVersion` in `build.gradle` for the next development cycle
-4. **Create a GitHub Release** (optional): Document the changes in a GitHub release
+Go to the Actions tab
+Select the "Publish to Maven Central" workflow
+Click "Run workflow"
+Select the release branch from the dropdown (e.g., release/0.4.0)
+Optionally, specify the next development version
+Click "Run workflow"
 
-### Troubleshooting
+This will:
 
-**Workflow fails during signing:**
-- Verify that `GPG_PRIVATE_KEY` includes the complete ASCII-armored key with BEGIN/END lines
-- Ensure `GPG_PASSPHRASE` matches the passphrase used when creating the key
-- Check that your public key was successfully uploaded to a key server
+Extract the version from build.gradle
+Build and sign the artifact with GPG
+Publish to Maven Central
+Create a git tag (e.g., v0.4.0)
+Create a PR to update projectVersion to the next development version
 
-**Workflow fails during publication:**
-- Verify your Maven Central credentials are correct
-- Ensure you have claimed your namespace on Maven Central (e.g., `io.github.alexshamrai`)
-- Check that the version number doesn't already exist
+Step 4: Post-Release
 
-**Artifact doesn't appear on Maven Central:**
-- Wait 15-30 minutes for synchronization
-- Check [Maven Central Search](https://search.maven.org/) for your artifact
-- Verify the workflow completed successfully without errors
+Verify the publication: Check the workflow summary for the artifact URL
+Wait for synchronization: It may take 15-30 minutes for the artifact to appear on Maven Central
+Review and merge the version bump PR: This updates projectVersion for the next development cycle
+Create a GitHub Release (optional): Document the changes in a GitHub release using the created tag
+
+Prerequisites (First-Time Setup)
+Before you can publish releases, you need to configure four GitHub Secrets:
+Secret NameDescriptionMAVEN_CENTRAL_USERNAMEYour Maven Central user token usernameMAVEN_CENTRAL_PASSWORDYour Maven Central user token passwordGPG_PRIVATE_KEYYour GPG private key in ASCII-armored formatGPG_PASSPHRASEThe passphrase for your GPG key
+For detailed setup instructions, see the GitHub Secrets Setup Guide.
+Quick Setup for Existing GPG Key
+If you already have a GPG key, export it for GitHub Actions:
+bash# Export your private key (replace KEY_ID with your actual key ID)
+gpg --armor --export-secret-keys YOUR_KEY_ID
+Copy the entire output (including -----BEGIN and -----END lines) and add it as the GPG_PRIVATE_KEY secret.
+Troubleshooting
+Workflow fails during signing
+
+Verify that GPG_PRIVATE_KEY includes the complete ASCII-armored key with BEGIN/END lines
+Ensure GPG_PASSPHRASE matches the passphrase used when creating the key
+Check that your public key was successfully uploaded to a key server:
+
+bash  gpg --keyserver keyserver.ubuntu.com --send-keys YOUR_KEY_ID
+Workflow fails during publication
+
+Verify your Maven Central credentials are correct
+Ensure you have claimed your namespace on Maven Central (e.g., io.github.alexshamrai)
+Check that the version number doesn't already exist on Maven Central
+Verify your user token is still valid at https://central.sonatype.com/
+
+Artifact doesn't appear on Maven Central
+
+Wait 15-30 minutes for synchronization
+Check Maven Central Search for your artifact
+Verify the workflow completed successfully without errors
+Check the Maven Central repository directly:
+https://repo1.maven.org/maven2/io/github/alexshamrai/junit-ctrf-reporter/
+
+Version conflicts
+If you need to republish a version:
+
+Maven Central doesn't allow republishing the same version
+You must increment the version number (e.g., from 0.4.0 to 0.4.1)
+Delete the git tag locally and remotely if already created:
+
+bash  git tag -d v0.4.0
+git push origin :refs/tags/v0.4.0
+Manual Release (Alternative)
+If you prefer to release manually without GitHub Actions:
+
+Update versions in build.gradle
+Update versions in README.md
+Build the project: ./gradlew build
+Publish: ./gradlew publishAllPublicationsToMavenCentralRepository
+Create and push a git tag: git tag v0.4.0 && git push origin v0.4.0
+
+Note: Manual releases require local configuration of Maven Central credentials and GPG keys.
