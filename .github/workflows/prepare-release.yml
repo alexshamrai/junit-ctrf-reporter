@@ -1,0 +1,138 @@
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.4.0)'
+        required: true
+        type: string
+      nextVersion:
+        description: 'Next development version (e.g., 0.5.0-SNAPSHOT, leave empty to auto-increment)'
+        required: false
+        type: string
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate and calculate versions
+        id: versions
+        run: |
+          RELEASE_VERSION="${{ github.event.inputs.version }}"
+          NEXT_VERSION="${{ github.event.inputs.nextVersion }}"
+          
+          echo "Preparing release version: $RELEASE_VERSION"
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+          
+          # Calculate next version if not provided
+          if [ -z "$NEXT_VERSION" ]; then
+            # Auto-increment minor version and add -SNAPSHOT
+            MAJOR=$(echo $RELEASE_VERSION | cut -d. -f1)
+            MINOR=$(echo $RELEASE_VERSION | cut -d. -f2)
+            PATCH=$(echo $RELEASE_VERSION | cut -d. -f3)
+            NEXT_MINOR=$((MINOR + 1))
+            NEXT_VERSION="${MAJOR}.${NEXT_MINOR}.0-SNAPSHOT"
+          fi
+          
+          echo "Next development version: $NEXT_VERSION"
+          echo "NEXT_VERSION=$NEXT_VERSION" >> $GITHUB_ENV
+          echo "NEXT_VERSION=$NEXT_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create release branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          BRANCH_NAME="release/${{ env.RELEASE_VERSION }}"
+          git checkout -b $BRANCH_NAME
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Update version in build.gradle
+        run: |
+          # Update releaseVersion to the version being released
+          sed -i "s/releaseVersion = '.*'/releaseVersion = '${{ env.RELEASE_VERSION }}'/" build.gradle
+          
+          # Keep projectVersion as is for now (will be updated after release)
+          
+          echo "Updated build.gradle:"
+          cat build.gradle | grep -E "(releaseVersion|projectVersion)" || true
+
+      - name: Update version in README.md
+        run: |
+          # Update Maven dependency version
+          sed -i "s|junit-ctrf-reporter:[0-9.]*|junit-ctrf-reporter:${{ env.RELEASE_VERSION }}|g" README.md
+          
+          # Update Gradle dependency version
+          sed -i "s|implementation 'io.github.alexshamrai:junit-ctrf-reporter:[0-9.]*'|implementation 'io.github.alexshamrai:junit-ctrf-reporter:${{ env.RELEASE_VERSION }}'|" README.md
+          
+          echo "Updated README.md:"
+          cat README.md | grep "junit-ctrf-reporter:" || true
+
+      - name: Commit and push changes
+        run: |
+          git add build.gradle README.md
+          git commit -m "chore: prepare release ${{ env.RELEASE_VERSION }}
+          
+          - Set releaseVersion to ${{ env.RELEASE_VERSION }}
+          - Update README.md with version ${{ env.RELEASE_VERSION }}"
+          
+          git push origin ${{ env.BRANCH_NAME }}
+
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create \
+            --title "Release ${{ env.RELEASE_VERSION }}" \
+            --body "## 🚀 Release Preparation for version ${{ env.RELEASE_VERSION }}
+          
+          This PR prepares the release branch for version ${{ env.RELEASE_VERSION }}.
+          
+          ## Changes
+          
+          - 📝 Updated \`releaseVersion\` in \`build.gradle\` to \`${{ env.RELEASE_VERSION }}\`
+          - 📝 Updated dependency versions in \`README.md\` to \`${{ env.RELEASE_VERSION }}\`
+          
+          ## Next Steps
+          
+          1. Review and merge this PR into \`main\`
+          2. Checkout the release branch: \`release/${{ env.RELEASE_VERSION }}\`
+          3. Run the **Publish to Maven Central** workflow from this branch
+          4. After successful publication, the version will be updated to \`${{ env.NEXT_VERSION }}\` automatically
+          
+          ## Release Branch
+          
+          To publish from this branch:
+          \`\`\`bash
+          git checkout release/${{ env.RELEASE_VERSION }}
+          \`\`\`
+          
+          Then go to Actions → Publish to Maven Central → Run workflow
+          
+          _This PR was automatically created by the prepare release workflow._" \
+            --base main \
+            --head ${{ env.BRANCH_NAME }}
+
+      - name: Publish summary
+        run: |
+          echo "## ✅ Release branch created successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release Version:** ${{ env.RELEASE_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Next Version:** ${{ env.NEXT_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** release/${{ env.RELEASE_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review and merge the created Pull Request" >> $GITHUB_STEP_SUMMARY
+          echo "2. Checkout branch: \`release/${{ env.RELEASE_VERSION }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. Run the 'Publish to Maven Central' workflow" >> $GITHUB_STEP_SUMMARY
