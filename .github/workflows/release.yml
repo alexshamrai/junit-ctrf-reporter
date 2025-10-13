@@ -1,0 +1,33 @@
+name: Release Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.4.0)'
+        required: true
+        type: string
+      nextVersion:
+        description: 'Next development version (e.g., 0.5.0-SNAPSHOT, leave empty to auto-increment)'
+        required: false
+        type: string
+
+jobs:
+  prepare:
+    name: Prepare Release
+    uses: ./.github/workflows/prepare-release.yml
+    permissions:
+      contents: write
+      pull-requests: write
+    with:
+      version: ${{ inputs.version }}
+      nextVersion: ${{ inputs.nextVersion }}
+    secrets: inherit
+
+  publish:
+    name: Publish to Maven Central
+    needs: prepare
+    uses: ./.github/workflows/publish-maven-central.yml
+    permissions:
+      contents: read
+    secrets: inherit

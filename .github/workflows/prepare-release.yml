@@ -11,6 +11,16 @@ on:
         description: 'Next development version (e.g., 0.5.0-SNAPSHOT, leave empty to auto-increment)'
         required: false
         type: string
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to release'
+        required: true
+        type: string
+      nextVersion:
+        description: 'Next development version'
+        required: false
+        type: string
 
 jobs:
   prepare:
@@ -28,8 +38,8 @@ jobs:
       - name: Validate and calculate versions
         id: versions
         run: |
-          RELEASE_VERSION="${{ github.event.inputs.version }}"
-          NEXT_VERSION="${{ github.event.inputs.nextVersion }}"
+          RELEASE_VERSION="${{ inputs.version }}"
+          NEXT_VERSION="${{ inputs.nextVersion }}"
           
           echo "Preparing release version: $RELEASE_VERSION"
           echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
@@ -62,8 +72,6 @@ jobs:
         run: |
           # Update releaseVersion to the version being released
           sed -i "s/releaseVersion = '.*'/releaseVersion = '${{ env.RELEASE_VERSION }}'/" build.gradle
-          
-          # Keep projectVersion as is for now (will be updated after release)
           
           echo "Updated build.gradle:"
           cat build.gradle | grep -E "(releaseVersion|projectVersion)" || true
@@ -106,21 +114,17 @@ jobs:
           
           ## Next Steps
           
-          1. Review and merge this PR into \`main\`
-          2. Checkout the release branch: \`release/${{ env.RELEASE_VERSION }}\`
-          3. Run the **Publish to Maven Central** workflow from this branch
-          4. After successful publication, the version will be updated to \`${{ env.NEXT_VERSION }}\` automatically
+          **The package has been published to Maven Central from this release branch.**
           
-          ## Release Branch
+          1. ⏳ Wait 15-30 minutes for Maven Central synchronization
+          2. ✅ Verify the package at: https://search.maven.org/artifact/io.github.alexshamrai/junit-ctrf-reporter/${{ env.RELEASE_VERSION }}/jar
+          3. 🧪 Test the published package in a real project
+          4. ✅ Once validated, merge this PR into \`main\`
+          5. 🏷️ Create a GitHub Release (optional)
           
-          To publish from this branch:
-          \`\`\`bash
-          git checkout release/${{ env.RELEASE_VERSION }}
-          \`\`\`
+          ⚠️ **Do not merge until you have validated the package on Maven Central!**
           
-          Then go to Actions → Publish to Maven Central → Run workflow
-          
-          _This PR was automatically created by the prepare release workflow._" \
+          _This PR was automatically created by the release workflow._" \
             --base main \
             --head ${{ env.BRANCH_NAME }}
 
@@ -132,7 +136,6 @@ jobs:
           echo "**Next Version:** ${{ env.NEXT_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** release/${{ env.RELEASE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
-          echo "1. Review and merge the created Pull Request" >> $GITHUB_STEP_SUMMARY
-          echo "2. Checkout branch: \`release/${{ env.RELEASE_VERSION }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "3. Run the 'Publish to Maven Central' workflow" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 The publish job will run next automatically" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "After publishing completes, validate the package before merging the PR." >> $GITHUB_STEP_SUMMARY
