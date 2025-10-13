@@ -63,19 +63,29 @@ jobs:
           # Update releaseVersion to the version being released
           sed -i "s/releaseVersion = '.*'/releaseVersion = '${{ env.RELEASE_VERSION }}'/" build.gradle
           
+          # Update projectVersion to the next development version
+          sed -i "s/projectVersion = '.*'/projectVersion = '${{ env.NEXT_VERSION }}'/" build.gradle
+
           echo "Updated build.gradle:"
           cat build.gradle | grep -E "(releaseVersion|projectVersion)" || true
 
       - name: Update version in README.md
         run: |
-          # Update Maven dependency version
-          sed -i "s|junit-ctrf-reporter:[0-9.]*|junit-ctrf-reporter:${{ env.RELEASE_VERSION }}|g" README.md
-          
+          # Update Maven dependency version in <version> tag
+          sed -i "s|<version>[0-9.]*</version>|<version>${{ env.RELEASE_VERSION }}</version>|" README.md
+
           # Update Gradle dependency version
           sed -i "s|implementation 'io.github.alexshamrai:junit-ctrf-reporter:[0-9.]*'|implementation 'io.github.alexshamrai:junit-ctrf-reporter:${{ env.RELEASE_VERSION }}'|" README.md
-          
+
+          # Update Markdown link (e.g. ![Maven Central](...) )
+          sed -i "s|\/junit-ctrf-reporter\/[0-9.]*\/jar|\/junit-ctrf-reporter\/${{ env.RELEASE_VERSION }}\/jar|g" README.md
+
+          # Update Badge link (e.g. [![Maven Central](...) )
+          sed -i "s|maven-central\/v\/io.github.alexshamrai\/junit-ctrf-reporter.svg?label=Maven%20Central&v=[0-9.]*|maven-central\/v\/io.github.alexshamrai\/junit-ctrf-reporter.svg?label=Maven%20Central&v=${{ env.RELEASE_VERSION }}|g" README.md
+
           echo "Updated README.md:"
           cat README.md | grep "junit-ctrf-reporter:" || true
+          cat README.md | grep -E "(<version>)" || true
 
       - name: Commit and push changes
         run: |
