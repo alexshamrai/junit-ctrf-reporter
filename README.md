@@ -41,7 +41,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'io.github.alexshamrai:junit-ctrf-reporter:0.4.0'
+    implementation 'io.github.alexshamrai:junit-ctrf-reporter:0.4.1'
 }
 ```
 
