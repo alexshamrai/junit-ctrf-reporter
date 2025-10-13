@@ -80,7 +80,7 @@ jobs:
       - name: Commit and push changes
         run: |
           git add build.gradle README.md
-          git commit -m "chore: prepare release ${{ env.RELEASE_VERSION }}
+          git commit -m "release: v${{ env.RELEASE_VERSION }}
           
           - Set releaseVersion to ${{ env.RELEASE_VERSION }}
           - Update README.md with version ${{ env.RELEASE_VERSION }}"
@@ -103,7 +103,7 @@ jobs:
 
       - name: Create Pull Request
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           gh pr create \
             --title "Release ${{ env.RELEASE_VERSION }}" \
