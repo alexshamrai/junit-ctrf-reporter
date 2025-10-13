@@ -2,6 +2,7 @@ name: Publish to Maven Central
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   publish:
@@ -10,6 +11,16 @@ jobs:
       contents: read
 
     steps:
+      - name: Validate branch
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          if [[ ! "$BRANCH_NAME" =~ ^release/ ]]; then
+            echo "❌ This workflow can only be run from release/* branches"
+            echo "Current branch: $BRANCH_NAME"
+            exit 1
+          fi
+          echo "✅ Running on release branch: $BRANCH_NAME"
+
       - name: Checkout code
         uses: actions/checkout@v5
         with:
@@ -54,20 +65,26 @@ jobs:
 
       - name: Publish release summary
         run: |
-          echo "✅ Successfully published version ${{ env.RELEASE_VERSION }} to Maven Central" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Successfully published version ${{ env.RELEASE_VERSION }} to Maven Central" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Artifact Details:**" >> $GITHUB_STEP_SUMMARY
           echo "- Group: io.github.alexshamrai" >> $GITHUB_STEP_SUMMARY
           echo "- Artifact: junit-ctrf-reporter" >> $GITHUB_STEP_SUMMARY
           echo "- Version: ${{ env.RELEASE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The artifact will be available at:" >> $GITHUB_STEP_SUMMARY
+          echo "**Maven Central URL:**" >> $GITHUB_STEP_SUMMARY
           echo "https://repo1.maven.org/maven2/io/github/alexshamrai/junit-ctrf-reporter/${{ env.RELEASE_VERSION }}/" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Note:** It may take 15-30 minutes for the artifact to appear on Maven Central" >> $GITHUB_STEP_SUMMARY
+          echo "**Maven Central Search:**" >> $GITHUB_STEP_SUMMARY
+          echo "https://search.maven.org/artifact/io.github.alexshamrai/junit-ctrf-reporter/${{ env.RELEASE_VERSION }}/jar" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
-          echo "1. Wait 15-30 minutes for Maven Central synchronization" >> $GITHUB_STEP_SUMMARY
-          echo "2. Verify at: https://search.maven.org/artifact/io.github.alexshamrai/junit-ctrf-reporter/${{ env.RELEASE_VERSION }}/jar" >> $GITHUB_STEP_SUMMARY
-          echo "3. Create a GitHub Release (optional)" >> $GITHUB_STEP_SUMMARY
-          echo "4. Merge the release branch back to main" >> $GITHUB_STEP_SUMMARY
+          echo "⏱️ **Note:** It may take 15-30 minutes for the artifact to appear on Maven Central" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🧪 Next Steps - Validation Required:" >> $GITHUB_STEP_SUMMARY
+          echo "1. ⏳ Wait 15-30 minutes for Maven Central synchronization" >> $GITHUB_STEP_SUMMARY
+          echo "2. ✅ Verify the artifact appears in Maven Central Search (link above)" >> $GITHUB_STEP_SUMMARY
+          echo "3. 🧪 Test the published package in a real project" >> $GITHUB_STEP_SUMMARY
+          echo "4. ✅ Once validated, merge the Pull Request to main" >> $GITHUB_STEP_SUMMARY
+          echo "5. 🏷️ Create a GitHub Release (optional)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Important:** Do not merge the PR until the package is validated!" >> $GITHUB_STEP_SUMMARY
