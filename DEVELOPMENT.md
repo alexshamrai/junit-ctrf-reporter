@@ -55,64 +55,44 @@ The project uses checkstyle for code quality. Run the checks with:
 - `src/test/resources` - Test resources and configuration files
 
 Automated Release Process
-This project uses a two-step GitHub Actions workflow to publish releases to Maven Central:
+This project uses GitHub Actions workflows to manage releases to Maven Central. The process involves preparing a release branch, which then automatically triggers the publishing workflow.
 
-Prepare Release - Creates a release branch with updated versions
-Publish to Maven Central - Builds, signs, and publishes the artifact
+### Step 1: Prepare Release Branch
 
-Step 1: Prepare Release Branch
+This step creates a new release branch, updates version numbers, and generates a Pull Request (PR) for review.
 
-Go to the Actions tab in your GitHub repository
-Select the "Prepare Release" workflow
-Click "Run workflow"
-Enter the version number to release (e.g., 0.4.0)
-Optionally, enter the next development version (e.g., 0.5.0-SNAPSHOT)
-
-If left empty, it will auto-increment the minor version
-
-
-Click "Run workflow"
+1.  Go to the **Actions** tab in your GitHub repository.
+2.  Select the **Prepare Release** workflow from the list.
+3.  Click **Run workflow**.
+4.  Enter the `version` number to release (e.g., `0.4.0`).
+5.  Optionally, enter the `nextVersion` for development (e.g., `0.5.0-SNAPSHOT`). If left empty, the minor version will be auto-incremented.
+6.  Click **Run workflow**.
 
 This will:
+*   Create a release branch named `release/X.Y.Z`.
+*   Update `releaseVersion` in `build.gradle`.
+*   Update version numbers in `README.md`.
+*   Create a Pull Request (PR) from `release/X.Y.Z` to `master` for review.
 
-Create a release branch named release/X.Y.Z
-Update releaseVersion in build.gradle
-Update version numbers in README.md
-Create a Pull Request for review
+### Step 2: Publish to Maven Central
 
-Step 2: Review and Merge
+This step is **automatically triggered** when a Pull Request is opened from a `release/*` branch to `master`. The workflow will publish the artifact to Maven Central.
 
-Review the automatically created Pull Request
-Merge the PR into main when ready
+The `Publish to Maven Central` workflow will:
+*   Extract the version from `build.gradle`.
+*   Build and sign the artifact with GPG.
+*   Publish the artifact to Maven Central.
 
-Step 3: Publish to Maven Central
+### Step 3: Review and Merge
 
-Checkout the release branch locally:
+1.  Review the automatically created Pull Request.
+2.  **Crucially, this PR needs to be merged into `master` to finalize the release.**
 
-bash   git checkout release/0.4.0  # Replace with your version
-Or manually trigger from GitHub:
+### Step 4: Post-Release
 
-Go to the Actions tab
-Select the "Publish to Maven Central" workflow
-Click "Run workflow"
-Select the release branch from the dropdown (e.g., release/0.4.0)
-Optionally, specify the next development version
-Click "Run workflow"
-
-This will:
-
-Extract the version from build.gradle
-Build and sign the artifact with GPG
-Publish to Maven Central
-Create a git tag (e.g., v0.4.0)
-Create a PR to update projectVersion to the next development version
-
-Step 4: Post-Release
-
-Verify the publication: Check the workflow summary for the artifact URL
-Wait for synchronization: It may take 15-30 minutes for the artifact to appear on Maven Central
-Review and merge the version bump PR: This updates projectVersion for the next development cycle
-Create a GitHub Release (optional): Document the changes in a GitHub release using the created tag
+1.  **Verify the publication**: Check the `Publish to Maven Central` workflow run for the artifact URL.
+2.  **Wait for synchronization**: It may take 15-30 minutes for the artifact to appear on Maven Central.
+3.  **Create a GitHub Release (optional)**: Document the changes in a GitHub release using the created tag (e.g., `v0.4.0`).
 
 Prerequisites (First-Time Setup)
 Before you can publish releases, you need to configure four GitHub Secrets:
