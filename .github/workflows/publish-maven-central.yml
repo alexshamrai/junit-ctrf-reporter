@@ -2,28 +2,53 @@ name: Publish to Maven Central
 
 on:
   workflow_dispatch:
-  workflow_call:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - master
+  push:
+    branches:
+      - 'release/**'
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # Only run if it's a push to release branch OR a PR from release branch
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')) ||
+      (github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')) ||
+      github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Validate branch
         run: |
-          BRANCH_NAME="${{ github.ref_name }}"
+          # For push events
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            BRANCH_NAME="${{ github.ref_name }}"
+          # For pull_request events
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BRANCH_NAME="${{ github.head_ref }}"
+          # For workflow_dispatch
+          else
+            BRANCH_NAME="${{ github.ref_name }}"
+          fi
+          
+          echo "Branch name: $BRANCH_NAME"
+          
           if [[ ! "$BRANCH_NAME" =~ ^release/ ]]; then
             echo "❌ This workflow can only be run from release/* branches"
             echo "Current branch: $BRANCH_NAME"
             exit 1
           fi
           echo "✅ Running on release branch: $BRANCH_NAME"
+          echo "RELEASE_BRANCH=$BRANCH_NAME" >> $GITHUB_ENV
 
       - name: Checkout code
         uses: actions/checkout@v5
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
           fetch-depth: 0
 
       - name: Set up JDK 21
@@ -84,7 +109,7 @@ jobs:
           echo "1. ⏳ Wait 15-30 minutes for Maven Central synchronization" >> $GITHUB_STEP_SUMMARY
           echo "2. ✅ Verify the artifact appears in Maven Central Search (link above)" >> $GITHUB_STEP_SUMMARY
           echo "3. 🧪 Test the published package in a real project" >> $GITHUB_STEP_SUMMARY
-          echo "4. ✅ Once validated, merge the Pull Request to main" >> $GITHUB_STEP_SUMMARY
+          echo "4. ✅ Once validated, merge the Pull Request to master" >> $GITHUB_STEP_SUMMARY
           echo "5. 🏷️ Create a GitHub Release (optional)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "⚠️ **Important:** Do not merge the PR until the package is validated!" >> $GITHUB_STEP_SUMMARY
