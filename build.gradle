@@ -26,7 +26,7 @@ compileJava {
 
 ext {
     projectVersion = '0.4.1-SNAPSHOT'
-    releaseVersion = '0.4.0'
+    releaseVersion = '0.4.1'
 
     junitVersion = '6.0.0'
     lombokVersion = '1.18.42'
