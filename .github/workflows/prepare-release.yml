@@ -133,13 +133,13 @@ jobs:
           1. ⏳ Wait 15-30 minutes for Maven Central synchronization
           2. ✅ Verify the package at: https://search.maven.org/artifact/io.github.alexshamrai/junit-ctrf-reporter/${{ env.RELEASE_VERSION }}/jar
           3. 🧪 Test the published package in a real project
-          4. ✅ Once validated, merge this PR into \`main\`
+          4. ✅ Once validated, merge this PR into \`master\`
           5. 🏷️ Create a GitHub Release (optional)
           
           ⚠️ **Do not merge until you have validated the package on Maven Central!**
           
           _This PR was automatically created by the release workflow._" \
-            --base main \
+            --base master \
             --head ${{ env.BRANCH_NAME }}
 
       - name: Publish summary
