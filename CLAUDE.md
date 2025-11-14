@@ -112,15 +112,16 @@ CtrfReportFileService (filesystem I/O)
 
 ### Key Components
 
-| Component                      | Responsibility                                                                                        |
-|--------------------------------|-------------------------------------------------------------------------------------------------------|
-| **CtrfReportManager**          | Singleton orchestrator; manages test lifecycle events and triggers report generation                  |
-| **TestProcessor**              | Converts JUnit test execution data (status, duration, failures) into CTRF Test objects                |
-| **CtrfJsonComposer**           | Assembles final CTRF JSON structure with metadata (tool, environment, summary)                        |
-| **CtrfReportFileService**      | Handles file I/O; supports reading existing reports for test reruns                                   |
-| **ConfigReader/CtrfConfig**    | Configuration facade using owner library; loads from system properties → env vars → `ctrf.properties` |
-| **SuiteExecutionErrorHandler** | Captures suite-level initialization/execution failures                                                |
-| **StartupDurationProcessor**   | Optionally calculates test suite startup duration                                                     |
+| Component                       | Responsibility                                                                                        |
+|---------------------------------|-------------------------------------------------------------------------------------------------------|
+| **CtrfReportManager**           | Singleton orchestrator; manages test lifecycle events and triggers report generation                  |
+| **EnvironmentHealthTracker**    | Public API for tracking test environment health status                                                |
+| **TestProcessor**               | Converts JUnit test execution data (status, duration, failures) into CTRF Test objects                |
+| **CtrfJsonComposer**            | Assembles final CTRF JSON structure with metadata (tool, environment, summary)                        |
+| **CtrfReportFileService**       | Handles file I/O; supports reading existing reports for test reruns                                   |
+| **ConfigReader/CtrfConfig**     | Configuration facade using owner library; loads from system properties → env vars → `ctrf.properties` |
+| **SuiteExecutionErrorHandler**  | Captures suite-level initialization/execution failures                                                |
+| **StartupDurationProcessor**    | Optionally calculates test suite startup duration                                                     |
 
 ### CTRF Model Classes
 
@@ -191,6 +192,7 @@ src/main/java/io/github/alexshamrai/
 │   └── TestDetails.java           # Internal DTO for test data
 ├── util/                          # Utilities (SummaryUtil, TestDetailsUtil)
 ├── CtrfReportManager.java         # Singleton coordinator
+├── EnvironmentHealthTracker.java  # Public API for environment health tracking
 ├── CtrfJsonComposer.java          # JSON structure assembly
 ├── CtrfReportFileService.java     # File I/O operations
 ├── TestProcessor.java             # Test result processing
@@ -261,6 +263,43 @@ Each test tracks its execution thread via `Thread.currentThread().getName()` in 
 ### Startup Duration
 
 When `ctrf.calculate.startup.duration=true`, the library calculates test suite initialization overhead as: `earliest_test_start - suite_start_time`
+
+### Environment Health Tracking
+
+The library tracks the health status of the test environment, allowing tests to signal when they're running in degraded or problematic conditions.
+
+**Implementation:**
+- **EnvironmentHealthTracker**: Public API class providing static methods:
+  - `markEnvironmentUnhealthy()`: Marks environment as unhealthy (irreversible)
+  - `isEnvironmentHealthy()`: Returns current health status
+- **CtrfReportManager**: Stores health state in `AtomicBoolean` for thread safety
+  - Initialized by checking `ENV_HEALTHY` environment variable during startup
+  - Health state is preserved across test reruns via `CtrfReportFileService`
+- **CtrfJsonComposer**: Includes health status in `Environment.healthy` field
+
+**Initialization Methods:**
+1. **Environment Variable**: Set `ENV_HEALTHY=false` before test execution
+2. **Programmatic API**: Call `EnvironmentHealthTracker.markEnvironmentUnhealthy()` from test code
+
+**Behavior:**
+- Default state: `true` (healthy)
+- Once marked unhealthy, remains unhealthy for entire test run
+- State persists across reruns when using same report file
+- Thread-safe for parallel test execution
+- Included in CTRF report as `results.environment.healthy`
+
+**Usage Example:**
+```java
+import static io.github.alexshamrai.EnvironmentHealthTracker.markEnvironmentUnhealthy;
+
+@Test
+void testWithUnhealthyEnvironment() {
+    if (!externalService.isAvailable()) {
+        markEnvironmentUnhealthy();
+    }
+    // Continue test...
+}
+```
 
 ## Important Notes
 

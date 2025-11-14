@@ -51,7 +51,7 @@ public class CtrfJsonComposerTest {
         var summary = Summary.builder().build();
         var tests = List.of(Test.builder().build(), Test.builder().build());
 
-        var result = composer.generateCtrfJson(summary, tests);
+        var result = composer.generateCtrfJson(summary, tests, true);
 
         assertNotNull(result);
         assertNotNull(result.getResults());
@@ -82,6 +82,7 @@ public class CtrfJsonComposerTest {
         assertEquals("mockedOsRelease", environment.getOsRelease());
         assertEquals("mockedOsVersion", environment.getOsVersion());
         assertEquals("mockedTestEnvironment", environment.getTestEnvironment());
+        assertEquals(true, environment.isHealthy());
     }
 
     @org.junit.jupiter.api.Test
@@ -89,7 +90,7 @@ public class CtrfJsonComposerTest {
         var summary = Summary.builder().build();
         List<Test> tests = Collections.emptyList();
 
-        var result = composer.generateCtrfJson(summary, tests);
+        var result = composer.generateCtrfJson(summary, tests, true);
 
         assertNotNull(result);
         assertNotNull(result.getResults());
@@ -101,7 +102,7 @@ public class CtrfJsonComposerTest {
     void testGenerateCtrfJsonWithNullSummary() {
         var tests = List.of(Test.builder().build());
 
-        var result = composer.generateCtrfJson(null, tests);
+        var result = composer.generateCtrfJson(null, tests, true);
 
         assertNotNull(result);
         assertNotNull(result.getResults());
@@ -127,12 +128,25 @@ public class CtrfJsonComposerTest {
 
         long expectedStartupDuration = 3000L;
 
-        var result = composer.generateCtrfJson(summary, tests);
+        var result = composer.generateCtrfJson(summary, tests, true);
 
         assertNotNull(result);
         assertNotNull(result.getResults());
         assertNotNull(result.getResults().getSummary());
         assertNotNull(result.getResults().getSummary().getExtra());
         assertEquals(expectedStartupDuration, result.getResults().getSummary().getExtra().getStartupDuration());
+    }
+
+    @org.junit.jupiter.api.Test
+    void testGenerateCtrfJsonWithUnhealthyEnvironment() {
+        var summary = Summary.builder().build();
+        var tests = List.of(Test.builder().build());
+
+        var result = composer.generateCtrfJson(summary, tests, false);
+
+        assertNotNull(result);
+        Environment environment = result.getResults().getEnvironment();
+        assertNotNull(environment);
+        assertEquals(false, environment.isHealthy());
     }
 }

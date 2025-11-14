@@ -20,6 +20,7 @@ jobs:
 
     env:
       CTRF_REPORT_PATH: 'integration-tests-listener/build/test-results/ctrf-report.json'
+      ENV_HEALTHY: 'false' ## required for ctrf-validator test to pass env.healthy check
 
     steps:
       - uses: actions/checkout@v5

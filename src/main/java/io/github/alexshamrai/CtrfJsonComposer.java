@@ -33,9 +33,10 @@ public class CtrfJsonComposer {
      *
      * @param summary the test execution summary
      * @param tests the list of test results
+     * @param isEnvironmentHealthy whether the test environment is considered healthy
      * @return a complete CTRF JSON object ready for serialization
      */
-    public CtrfJson generateCtrfJson(Summary summary, List<Test> tests) {
+    public CtrfJson generateCtrfJson(Summary summary, List<Test> tests, boolean isEnvironmentHealthy) {
         if (configReader.calculateStartupDuration()) {
             startupDurationProcessor.processStartupDuration(summary, tests);
         }
@@ -44,7 +45,7 @@ public class CtrfJsonComposer {
             .tool(composeTool())
             .summary(summary)
             .tests(tests)
-            .environment(composeEnvironment())
+            .environment(composeEnvironment(isEnvironmentHealthy))
             .build();
 
         return CtrfJson.builder()
@@ -72,9 +73,10 @@ public class CtrfJsonComposer {
      * Creates the environment section of the CTRF JSON, including details about
      * the application, build, repository, operating system, and test environment.
      *
+     * @param isEnvironmentHealthy whether the test environment is considered healthy
      * @return an Environment object containing all available environment information
      */
-    private Environment composeEnvironment() {
+    private Environment composeEnvironment(boolean isEnvironmentHealthy) {
         return Environment.builder()
             .reportName(configReader.getReportName())
             .appName(configReader.getAppName())
@@ -90,6 +92,7 @@ public class CtrfJsonComposer {
             .osRelease(configReader.getOsRelease())
             .osVersion(configReader.getOsVersion())
             .testEnvironment(configReader.getTestEnvironment())
+            .healthy(isEnvironmentHealthy)
             .build();
     }
 }

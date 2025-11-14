@@ -24,6 +24,7 @@ CTRF is a universal JSON test report schema that addresses the lack of a standar
 - Supports customization of report content via configuration
 - Tracks and includes environment information
 - Handles parallel test execution
+- Environment health tracking (propagates to report info that a test run is executed in a degraded environment)
 
 ## Getting Started
 
@@ -177,6 +178,92 @@ The following parameters can be configured in the `ctrf.properties` file:
 | `ctrf.test.environment`           | Test environment identifier (e.g., dev, staging, prod)       |                    |
 
 All mandatory parameters have default values
+
+## Environment Health Tracking
+
+The library supports tracking environment health status during test execution. This feature allows you to mark when tests are running in a degraded or problematic environment, which is then reflected in the CTRF report.
+
+### When to Use
+
+Mark the environment as unhealthy when tests encounter:
+- Service or application unavailability (APIs, databases, etc.)
+- Network connectivity issues
+- Insufficient system resources
+- Infrastructure problems
+- Any condition that might affect test reliability
+
+### Usage
+
+There are two ways to mark the environment as unhealthy:
+
+#### 1. Using Environment Variable
+
+Set the `ENV_HEALTHY` environment variable to `false` before running tests:
+
+```bash
+export ENV_HEALTHY=false
+./gradlew test
+```
+
+Or in your CI/CD configuration:
+
+```yaml
+env:
+  ENV_HEALTHY: 'false'
+```
+
+#### 2. Programmatic API
+
+Call the `EnvironmentHealthTracker` API from within your tests:
+
+```java
+import static io.github.alexshamrai.EnvironmentHealthTracker.markEnvironmentUnhealthy;
+
+@Test
+void testWithUnhealthyEnvironment() {
+    try {
+        // Attempt to connect to external service
+        externalService.connect();
+    } catch (ConnectionException e) {
+        // Mark environment as unhealthy
+        markEnvironmentUnhealthy();
+    }
+
+    // Continue with test...
+}
+```
+
+You can also check the current health status:
+
+```java
+import io.github.alexshamrai.EnvironmentHealthTracker;
+
+boolean healthy = EnvironmentHealthTracker.isEnvironmentHealthy();
+```
+
+### Behavior
+
+- **Default State**: Environment starts as healthy (`true`)
+- **Irreversible**: Once marked unhealthy, it remains unhealthy for the entire test run
+- **Persistence**: Unhealthy state is preserved across test reruns when using the same report file
+- **Report Field**: The health status appears in the CTRF report under `results.environment.healthy`
+
+### Example Report Output
+
+When the environment is marked unhealthy, the CTRF report includes:
+
+```json
+{
+  "results": {
+    "environment": {
+      "healthy": false,
+      "appName": "My Application",
+      "buildNumber": "123"
+      // ... other environment fields
+    }
+  }
+}
+```
 
 ## Contributing
 

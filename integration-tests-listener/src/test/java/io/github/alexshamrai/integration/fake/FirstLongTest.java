@@ -10,6 +10,7 @@ public class FirstLongTest extends BaseFakeTest {
         Thread.sleep(1000);
     }
 
+
     @Test
     void firstLongHalfSecondTest() throws InterruptedException {
         System.out.println("halfSecondTest");

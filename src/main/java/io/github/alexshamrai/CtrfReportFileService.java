@@ -77,6 +77,22 @@ public class CtrfReportFileService {
     }
 
     /**
+     * Gets the environment health status from an existing report if available.
+     * If the environment was marked unhealthy in the previous report, that status should be preserved.
+     * If no report exists or the health status cannot be extracted, returns true (healthy by default).
+     *
+     * @return Boolean representing the health status from the existing report, or true if not available
+     */
+    public boolean getExistingEnvironmentHealth() {
+        var existingReport = readExistingReport();
+        if (existingReport != null && existingReport.getResults() != null
+            && existingReport.getResults().getEnvironment() != null) {
+            return existingReport.getResults().getEnvironment().isHealthy();
+        }
+        return true;
+    }
+
+    /**
      * Reads an existing CTRF JSON report file if it exists.
      *
      * @return CtrfJson object containing the report data, or null if the file doesn't exist or can't be read

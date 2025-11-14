@@ -27,5 +27,6 @@ public class Environment {
     private String osRelease;
     private String osVersion;
     private String testEnvironment;
+    private boolean healthy;
     private Extra extra;
 }
