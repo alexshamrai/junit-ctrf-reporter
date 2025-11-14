@@ -30,7 +30,7 @@ ext {
 
     junitVersion = '6.0.0'
     lombokVersion = '1.18.42'
-    jaksonVersion = '2.20.0'
+    jaksonVersion = '2.20.1'
     ownerVersion = '1.0.12'
     mockitoVersion = '5.20.0'
     assertjVersion = '3.27.6'

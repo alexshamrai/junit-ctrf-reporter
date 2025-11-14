@@ -63,12 +63,14 @@ class CtrfReportManagerTest {
     void startTestRun_initializesOnce() {
         when(ctrfReportFileService.getExistingStartTime()).thenReturn(1000L);
         when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
+        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
 
         reportManager.startTestRun("Listener");
         reportManager.startTestRun("Listener"); // This second call should do nothing
 
         verify(ctrfReportFileService, times(1)).getExistingStartTime();
         verify(ctrfReportFileService, times(1)).getExistingTests();
+        verify(ctrfReportFileService, times(1)).getExistingEnvironmentHealth();
     }
 
     @org.junit.jupiter.api.Test
@@ -155,6 +157,7 @@ class CtrfReportManagerTest {
     void finishTestRun_generatesReport() {
         var testResult = new Test();
         when(testProcessor.createTest(anyString(), any(), anyLong())).thenReturn(testResult);
+        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
         reportManager.onTestStart(TestDetails.builder().uniqueId("id-1").displayName("test").build());
         reportManager.onTestSuccess("id-1");
 
@@ -163,12 +166,12 @@ class CtrfReportManagerTest {
         try (MockedStatic<SummaryUtil> summaryUtil = Mockito.mockStatic(SummaryUtil.class)) {
             var mockReport = CtrfJson.builder().build();
             summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
-            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList())).thenReturn(mockReport);
+            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(true))).thenReturn(mockReport);
 
             reportManager.finishTestRun(Optional.empty());
 
             summaryUtil.verify(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong()));
-            verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList());
+            verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(true));
             verify(ctrfReportFileService).writeResultsToFile(mockReport);
         }
     }
@@ -177,6 +180,7 @@ class CtrfReportManagerTest {
     @DisplayName("finishTestRun should handle initialization error if no tests were run")
     void finishTestRun_handlesInitializationError() {
         when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
+        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
 
         reportManager.startTestRun("Listener");
         reportManager.finishTestRun(Optional.of(extensionContext));
@@ -189,6 +193,7 @@ class CtrfReportManagerTest {
     void finishTestRun_handlesExecutionError() {
         var testResult = Test.builder().stop(12345L).build();
         when(testProcessor.createTest(anyString(), any(), anyLong())).thenReturn(testResult);
+        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
         reportManager.onTestStart(TestDetails.builder().uniqueId("id-1").displayName("test").build());
         reportManager.onTestSuccess("id-1");
 
@@ -199,5 +204,45 @@ class CtrfReportManagerTest {
 
         verify(suiteExecutionErrorHandler).handleExecutionError(eq(extensionContext), eq(12345L), anyLong());
         verify(suiteExecutionErrorHandler, never()).handleInitializationError(any(), anyLong(), anyLong());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("startTestRun should preserve unhealthy state from previous run")
+    void startTestRun_preservesUnhealthyState() {
+        when(ctrfReportFileService.getExistingStartTime()).thenReturn(1000L);
+        when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
+        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(false);
+
+        reportManager.startTestRun("Listener");
+
+        try (MockedStatic<SummaryUtil> summaryUtil = Mockito.mockStatic(SummaryUtil.class)) {
+            var mockReport = CtrfJson.builder().build();
+            summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
+            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(false))).thenReturn(mockReport);
+
+            reportManager.finishTestRun(Optional.empty());
+
+            verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(false));
+        }
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("startTestRun should keep healthy state when previous run was healthy")
+    void startTestRun_keepsHealthyState() {
+        when(ctrfReportFileService.getExistingStartTime()).thenReturn(1000L);
+        when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
+        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
+
+        reportManager.startTestRun("Listener");
+
+        try (MockedStatic<SummaryUtil> summaryUtil = Mockito.mockStatic(SummaryUtil.class)) {
+            var mockReport = CtrfJson.builder().build();
+            summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
+            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(true))).thenReturn(mockReport);
+
+            reportManager.finishTestRun(Optional.empty());
+
+            verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(true));
+        }
     }
 }

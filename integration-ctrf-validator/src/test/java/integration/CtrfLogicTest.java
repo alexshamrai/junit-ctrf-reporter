@@ -155,5 +155,15 @@ public class CtrfLogicTest extends BaseIntegrationTest {
                 .isEqualTo("io.github.alexshamrai.jupiter.CtrfExtension");
         }
     }
+
+    @Test
+    void verifyEnvironmentHealthIsFalse() {
+        var environment = report.getResults().getEnvironment();
+        assertThat(environment).isNotNull();
+
+        assertThat(environment.isHealthy())
+            .as("Environment health should be false")
+            .isFalse();
+    }
 }
 

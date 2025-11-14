@@ -60,6 +60,64 @@ public abstract class BaseFakeTest {
 - **FirstLongTest** and **SecondLongTest**: Contain tests with specific sleep durations (0.5s, 1s, 2s)
 - Used to verify that test durations are correctly captured in the report
 
+### Environment Health Testing
+
+The integration tests verify the environment health tracking feature using different approaches for each module:
+
+#### integration-tests-listener
+
+For the listener-based tests, environment health is controlled via the `ENV_HEALTHY` environment variable:
+
+- **CI Environment**: Set in `.github/workflows/integration-listener.yml`:
+  ```yaml
+  env:
+    ENV_HEALTHY: 'false'
+  ```
+- **Local Testing**: Must set the environment variable manually:
+  ```bash
+  export ENV_HEALTHY=false
+  ./gradlew clean :integration-tests-listener:test
+  ```
+
+This approach demonstrates how environment health can be controlled externally in CI/CD pipelines without modifying test code.
+
+#### integration-tests-extension
+
+For the extension-based tests, environment health is set programmatically within the test:
+
+**File**: `integration-tests-extension/src/test/java/.../FirstLongTest.java`
+
+```java
+import static io.github.alexshamrai.EnvironmentHealthTracker.markEnvironmentUnhealthy;
+
+@Test
+void firstLongOneSecondTest() throws InterruptedException {
+    System.out.println("OneSecondTest");
+    Thread.sleep(1000);
+    markEnvironmentUnhealthy();  // Explicitly mark environment as unhealthy
+}
+```
+
+This approach demonstrates the programmatic API for marking environment health within test code, useful for detecting runtime issues like service unavailability.
+
+#### Validation
+
+Both approaches are validated by `integration-ctrf-validator` module:
+
+**File**: `integration-ctrf-validator/src/test/java/integration/CtrfLogicTest.java`
+
+```java
+@Test
+void verifyEnvironmentHealthIsFalse() {
+    var environment = report.getResults().getEnvironment();
+    assertThat(environment).isNotNull();
+    assertThat(environment.isHealthy())
+        .as("Environment health should be false")
+        .isFalse();
+}
+```
+
+This test ensures that the `environment.healthy` field in the generated CTRF report is correctly set to `false`.
 
 The `integration-ctrf-validator` module contains validation logic for json file that`integration-tests-extension` and `integration-tests-listener` modules create after test execution.
 ```
@@ -133,14 +191,40 @@ This configures JUnit to run tests concurrently, which helps verify that the CTR
 ## Run tests exactly as in CI
 
 To run the integration tests exactly as in CI, in order to verify all the parameters processing locally (dynamic parameters, like build.number and build.url are hardcoded here):
+
+### For integration-tests-listener
+
+**Note:** The listener module requires `ENV_HEALTHY=false` environment variable to be set for the environment health validation test to pass.
+
 ```bash
-./gradlew clean :integration-tests-listener:test -Dthreads=2 -Dctrf.build.name=system-build -Dctrf.build.number=777 -Dctrf.build.url=https://github.com/alexshamrai/junit-ctrf-reporter/actions/runs/12345678
+# Set environment variable (Unix/Linux/macOS)
+export ENV_HEALTHY=false
+
+# Or set inline (Unix/Linux/macOS)
+ENV_HEALTHY=false ./gradlew clean :integration-tests-listener:test -Dthreads=2 \
+  -Dctrf.build.name=system-build \
+  -Dctrf.build.number=777 \
+  -Dctrf.build.url=https://github.com/alexshamrai/junit-ctrf-reporter/actions/runs/12345678
 ```
 
 ```bash
 ./gradlew :integration-ctrf-validator:test -Dctrf.report.path=../integration-tests-listener/build/test-results/ctrf-report.json
 ```
-If you want to run integration tests locally, run them exactly as in CI for the module `integration-tests-listener` or `integration-tests-extension`
+
+### For integration-tests-extension
+
+**Note:** The extension module sets environment health programmatically via `EnvironmentHealthTracker.markEnvironmentUnhealthy()` in test code, so no environment variable is needed.
+
+```bash
+./gradlew clean :integration-tests-extension:test -Dthreads=2 \
+  -Dctrf.build.name=system-build \
+  -Dctrf.build.number=777 \
+  -Dctrf.build.url=https://github.com/alexshamrai/junit-ctrf-reporter/actions/runs/12345678
+```
+
+```bash
+./gradlew :integration-ctrf-validator:test -Dctrf.report.path=../integration-tests-extension/build/test-results/ctrf-report.json
+```
 
 ## Conclusion
 

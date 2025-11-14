@@ -26,6 +26,7 @@ public final class CtrfReportManager {
     private long testRunStartTime;
     private final AtomicBoolean isTestRunStarted = new AtomicBoolean(false);
     private String generator;
+    private final AtomicBoolean isEnvironmentHealthy = new AtomicBoolean(true);
 
     private final CtrfReportFileService ctrfReportFileService;
     private final TestProcessor testProcessor;
@@ -38,6 +39,7 @@ public final class CtrfReportManager {
         this.testProcessor = new TestProcessor(configReader);
         this.suiteExecutionErrorHandler = new SuiteExecutionErrorHandler(testProcessor);
         this.ctrfJsonComposer = null;
+        initializeEnvironmentHealth();
     }
 
     /**
@@ -55,6 +57,25 @@ public final class CtrfReportManager {
 
     public static CtrfReportManager getInstance() {
         return INSTANCE;
+    }
+
+    private void initializeEnvironmentHealth() {
+        String envHealthy = System.getenv("ENV_HEALTHY");
+        if (envHealthy != null && "false".equalsIgnoreCase(envHealthy)) {
+            isEnvironmentHealthy.set(false);
+        }
+    }
+
+    void markEnvironmentUnhealthyInternal() {
+        isEnvironmentHealthy.set(false);
+    }
+
+    boolean isEnvironmentHealthyInternal() {
+        return isEnvironmentHealthy.get();
+    }
+
+    void resetEnvironmentHealthForTesting() {
+        isEnvironmentHealthy.set(true);
     }
 
     public void onTestStart(TestDetails testDetails) {
@@ -105,6 +126,7 @@ public final class CtrfReportManager {
             Long existingStartTime = ctrfReportFileService.getExistingStartTime();
             testRunStartTime = existingStartTime != null ? existingStartTime : System.currentTimeMillis();
             tests.addAll(ctrfReportFileService.getExistingTests());
+            preserveEnvironmentHealthFromPreviousRun();
         }
     }
 
@@ -135,7 +157,7 @@ public final class CtrfReportManager {
         }
 
         var summary = SummaryUtil.createSummary(tests, testRunStartTime, testRunStopTime);
-        var ctrfJson = composer.generateCtrfJson(summary, tests);
+        var ctrfJson = composer.generateCtrfJson(summary, tests, isEnvironmentHealthy.get());
 
         ctrfReportFileService.writeResultsToFile(ctrfJson);
         tests.clear();
@@ -160,5 +182,12 @@ public final class CtrfReportManager {
         return tests.stream()
             .filter(t -> t.getName() != null && t.getName().equals(name))
             .collect(Collectors.toList());
+    }
+
+    private void preserveEnvironmentHealthFromPreviousRun() {
+        var existingHealth = ctrfReportFileService.getExistingEnvironmentHealth();
+        if (!existingHealth) {
+            isEnvironmentHealthy.set(false);
+        }
     }
 }
