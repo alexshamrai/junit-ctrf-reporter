@@ -42,7 +42,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'io.github.alexshamrai:junit-ctrf-reporter:0.4.1'
+    implementation 'io.github.alexshamrai:junit-ctrf-reporter:0.4.2'
 }
 ```
 
@@ -54,7 +54,7 @@ Add to your `pom.xml` file:
 <dependency>
     <groupId>io.github.alexshamrai</groupId>
     <artifactId>junit-ctrf-reporter</artifactId>
-    <version>0.4.1</version>
+    <version>0.4.2</version>
 </dependency>
 ```
 
