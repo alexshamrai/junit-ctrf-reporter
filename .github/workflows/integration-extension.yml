@@ -42,7 +42,7 @@ jobs:
         if: always()
 
       - name: Publish CTRF Test Report
-        uses: ctrf-io/github-test-reporter@v1.0.25
+        uses: ctrf-io/github-test-reporter@v1.0.26
         with:
           report-path: ${{ env.CTRF_REPORT_PATH }}
 
