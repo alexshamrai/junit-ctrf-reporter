@@ -53,4 +53,29 @@ class EnvironmentHealthTrackerTest {
         EnvironmentHealthTracker.markEnvironmentUnhealthy();
         assertThat(EnvironmentHealthTracker.isEnvironmentHealthy()).isFalse();
     }
+
+    @Test
+    @DisplayName("isEnvironmentVariableUnhealthy should check ENV_HEALTHY environment variable")
+    void isEnvironmentVariableUnhealthy_checksEnvVariable() {
+        var result = EnvironmentHealthTracker.isEnvironmentVariableUnhealthy();
+
+        var envHealthy = System.getenv("ENV_HEALTHY");
+        var expected = envHealthy != null && "false".equalsIgnoreCase(envHealthy);
+
+        assertThat(result)
+            .as("isEnvironmentVariableUnhealthy should match ENV_HEALTHY environment variable")
+            .isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("isEnvironmentVariableUnhealthy should return false when ENV_HEALTHY is not set")
+    void isEnvironmentVariableUnhealthy_returnsFalseWhenNotSet() {
+        var envHealthy = System.getenv("ENV_HEALTHY");
+
+        if (envHealthy == null || !"false".equalsIgnoreCase(envHealthy)) {
+            assertThat(EnvironmentHealthTracker.isEnvironmentVariableUnhealthy())
+                .as("isEnvironmentVariableUnhealthy should return false when ENV_HEALTHY is not 'false'")
+                .isFalse();
+        }
+    }
 }
