@@ -245,4 +245,65 @@ class CtrfReportManagerTest {
             verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(true));
         }
     }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("finishTestRun should re-read ENV_HEALTHY and mark unhealthy if set to false")
+    void finishTestRun_reReadsEnvHealthy() {
+        when(ctrfReportFileService.getExistingStartTime()).thenReturn(1000L);
+        when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
+        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
+
+        // Start with healthy state
+        reportManager.startTestRun("Listener");
+
+        try (MockedStatic<SummaryUtil> summaryUtil = Mockito.mockStatic(SummaryUtil.class);
+             MockedStatic<EnvironmentHealthTracker> healthTracker = Mockito.mockStatic(EnvironmentHealthTracker.class)) {
+
+            var mockReport = CtrfJson.builder().build();
+            summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
+
+            // Mock ENV_HEALTHY being set to false during test execution
+            healthTracker.when(EnvironmentHealthTracker::isEnvironmentVariableUnhealthy).thenReturn(true);
+
+            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(false))).thenReturn(mockReport);
+
+            reportManager.finishTestRun(Optional.empty());
+
+            // Verify that ENV_HEALTHY was re-read (via isEnvironmentVariableUnhealthy call)
+            healthTracker.verify(EnvironmentHealthTracker::isEnvironmentVariableUnhealthy);
+            // Verify report was generated with unhealthy state
+            verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(false));
+        }
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("finishTestRun should respect programmatic markEnvironmentUnhealthy call")
+    void finishTestRun_respectsProgrammaticHealthChange() {
+        when(ctrfReportFileService.getExistingStartTime()).thenReturn(1000L);
+        when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
+        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
+
+        // Start with healthy state
+        reportManager.startTestRun("Listener");
+
+        // Programmatically mark unhealthy during test execution
+        reportManager.markEnvironmentUnhealthyInternal();
+
+        try (MockedStatic<SummaryUtil> summaryUtil = Mockito.mockStatic(SummaryUtil.class);
+             MockedStatic<EnvironmentHealthTracker> healthTracker = Mockito.mockStatic(EnvironmentHealthTracker.class)) {
+
+            var mockReport = CtrfJson.builder().build();
+            summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
+
+            // ENV_HEALTHY is not set (remains healthy from environment perspective)
+            healthTracker.when(EnvironmentHealthTracker::isEnvironmentVariableUnhealthy).thenReturn(false);
+
+            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(false))).thenReturn(mockReport);
+
+            reportManager.finishTestRun(Optional.empty());
+
+            // Verify report was generated with unhealthy state from programmatic call
+            verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(false));
+        }
+    }
 }

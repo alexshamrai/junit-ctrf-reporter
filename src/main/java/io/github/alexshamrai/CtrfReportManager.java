@@ -39,7 +39,9 @@ public final class CtrfReportManager {
         this.testProcessor = new TestProcessor(configReader);
         this.suiteExecutionErrorHandler = new SuiteExecutionErrorHandler(testProcessor);
         this.ctrfJsonComposer = null;
-        initializeEnvironmentHealth();
+        if (EnvironmentHealthTracker.isEnvironmentVariableUnhealthy()) {
+            isEnvironmentHealthy.set(false);
+        }
     }
 
     /**
@@ -57,13 +59,6 @@ public final class CtrfReportManager {
 
     public static CtrfReportManager getInstance() {
         return INSTANCE;
-    }
-
-    private void initializeEnvironmentHealth() {
-        String envHealthy = System.getenv("ENV_HEALTHY");
-        if (envHealthy != null && "false".equalsIgnoreCase(envHealthy)) {
-            isEnvironmentHealthy.set(false);
-        }
     }
 
     void markEnvironmentUnhealthyInternal() {
@@ -147,6 +142,11 @@ public final class CtrfReportManager {
             ExtensionContext context = contextOpt.get();
             long lastTestStopTime = tests.get(tests.size() - 1).getStop();
             suiteExecutionErrorHandler.handleExecutionError(context, lastTestStopTime, testRunStopTime).ifPresent(tests::add);
+        }
+
+        // Re-read ENV_HEALTHY at the end of test run to catch any changes made during execution
+        if (EnvironmentHealthTracker.isEnvironmentVariableUnhealthy()) {
+            isEnvironmentHealthy.set(false);
         }
 
         var composer = this.ctrfJsonComposer;

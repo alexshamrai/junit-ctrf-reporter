@@ -62,4 +62,20 @@ public final class EnvironmentHealthTracker {
     public static boolean isEnvironmentHealthy() {
         return CtrfReportManager.getInstance().isEnvironmentHealthyInternal();
     }
+
+    /**
+     * Package-private method to check the ENV_HEALTHY environment variable
+     * and return whether it indicates an unhealthy environment.
+     * <p>
+     * This method is called internally by the library at initialization
+     * and before report generation to ensure ENV_HEALTHY changes are captured.
+     * <p>
+     * Not part of the public API - only for internal library use.
+     *
+     * @return true if ENV_HEALTHY is set to "false", false otherwise
+     */
+    static boolean isEnvironmentVariableUnhealthy() {
+        String envHealthy = System.getenv("ENV_HEALTHY");
+        return envHealthy != null && "false".equalsIgnoreCase(envHealthy);
+    }
 }
