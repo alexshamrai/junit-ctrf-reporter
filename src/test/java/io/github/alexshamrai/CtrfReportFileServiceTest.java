@@ -151,6 +151,29 @@ public class CtrfReportFileServiceTest {
     }
 
     @Test
+    void shouldReturnEmptyListWhenReportHasNullResults() {
+        var ctrfJsonWithNullResults = CtrfJson.builder().results(null).build();
+
+        ctrfReportFileService.writeResultsToFile(ctrfJsonWithNullResults);
+
+        var existingTests = ctrfReportFileService.getExistingTests();
+
+        assertThat(existingTests).isEmpty();
+    }
+
+    @Test
+    void shouldReturnEmptyListWhenReportHasNullTestsList() {
+        var results = Results.builder().tests(null).build();
+        var ctrfJsonWithNullTests = CtrfJson.builder().results(results).build();
+
+        ctrfReportFileService.writeResultsToFile(ctrfJsonWithNullTests);
+
+        var existingTests = ctrfReportFileService.getExistingTests();
+
+        assertThat(existingTests).isEmpty();
+    }
+
+    @Test
     void shouldReturnNullWhenReportFileDoesNotExist() {
         var startTime = ctrfReportFileService.getExistingStartTime();
 

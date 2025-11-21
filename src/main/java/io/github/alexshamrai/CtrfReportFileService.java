@@ -57,7 +57,11 @@ public class CtrfReportFileService {
      */
     public List<Test> getExistingTests() {
         CtrfJson existingReport = readExistingReport();
-        return existingReport != null ? existingReport.getResults().getTests() : Collections.emptyList();
+        return existingReport != null
+            && existingReport.getResults() != null
+            && existingReport.getResults().getTests() != null
+            ? existingReport.getResults().getTests()
+            : Collections.emptyList();
     }
 
     /**
