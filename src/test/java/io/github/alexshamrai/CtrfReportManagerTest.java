@@ -1,5 +1,6 @@
 package io.github.alexshamrai;
 
+import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
 import io.github.alexshamrai.ctrf.model.Summary;
 import io.github.alexshamrai.ctrf.model.Test;
@@ -34,6 +35,8 @@ import static org.mockito.Mockito.when;
 class CtrfReportManagerTest {
 
     @Mock
+    private ConfigReader configReader;
+    @Mock
     private CtrfReportFileService ctrfReportFileService;
     @Mock
     private TestProcessor testProcessor;
@@ -51,6 +54,7 @@ class CtrfReportManagerTest {
         MockitoAnnotations.openMocks(this);
         // Create a new, clean instance for each test using the new constructor
         reportManager = new CtrfReportManager(
+            configReader,
             ctrfReportFileService,
             testProcessor,
             suiteExecutionErrorHandler,

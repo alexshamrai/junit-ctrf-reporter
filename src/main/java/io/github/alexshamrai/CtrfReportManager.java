@@ -28,13 +28,14 @@ public final class CtrfReportManager {
     private String generator;
     private final AtomicBoolean isEnvironmentHealthy = new AtomicBoolean(true);
 
+    private final ConfigReader configReader;
     private final CtrfReportFileService ctrfReportFileService;
     private final TestProcessor testProcessor;
     private final SuiteExecutionErrorHandler suiteExecutionErrorHandler;
     private final CtrfJsonComposer ctrfJsonComposer;
 
     private CtrfReportManager() {
-        var configReader = new ConfigReader();
+        this.configReader = new ConfigReader();
         this.ctrfReportFileService = new CtrfReportFileService(configReader);
         this.testProcessor = new TestProcessor(configReader);
         this.suiteExecutionErrorHandler = new SuiteExecutionErrorHandler(testProcessor);
@@ -47,10 +48,12 @@ public final class CtrfReportManager {
     /**
      * Package-private constructor for testing purposes, allowing dependency injection.
      */
-    CtrfReportManager(CtrfReportFileService ctrfReportFileService,
+    CtrfReportManager(ConfigReader configReader,
+                      CtrfReportFileService ctrfReportFileService,
                       TestProcessor testProcessor,
                       SuiteExecutionErrorHandler suiteExecutionErrorHandler,
                       CtrfJsonComposer ctrfJsonComposer) {
+        this.configReader = configReader;
         this.ctrfReportFileService = ctrfReportFileService;
         this.testProcessor = testProcessor;
         this.suiteExecutionErrorHandler = suiteExecutionErrorHandler;
@@ -151,9 +154,8 @@ public final class CtrfReportManager {
 
         var composer = this.ctrfJsonComposer;
         if (composer == null) {
-            var configReader = new ConfigReader();
             var startupProcessor = new StartupDurationProcessor();
-            composer = new CtrfJsonComposer(configReader, startupProcessor, this.generator);
+            composer = new CtrfJsonComposer(this.configReader, startupProcessor, this.generator);
         }
 
         var summary = SummaryUtil.createSummary(tests, testRunStartTime, testRunStopTime);
