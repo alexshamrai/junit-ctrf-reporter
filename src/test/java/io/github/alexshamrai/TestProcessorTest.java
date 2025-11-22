@@ -67,11 +67,7 @@ public class TestProcessorTest {
         long startTime = System.currentTimeMillis();
         long stopTime = startTime + 1000;
 
-        var details = TestDetails.builder()
-            .tags(tags)
-            .filePath(filePath)
-            .startTime(startTime)
-            .build();
+        var details = new TestDetails(startTime, tags, filePath, null, null);
 
         var result = testProcessor.createTest(displayName, details, stopTime);
 

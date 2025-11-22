@@ -77,10 +77,10 @@ public class CtrfExtensionTest {
         verify(reportManager).onTestStart(captor.capture());
 
         TestDetails details = captor.getValue();
-        assertEquals(TEST_UNIQUE_ID, details.getUniqueId());
-        assertEquals(TEST_DISPLAY_NAME, details.getDisplayName());
-        assertEquals(this.getClass().getName(), details.getFilePath());
-        assertTrue(details.getTags().contains("smoke-test"));
+        assertEquals(TEST_UNIQUE_ID, details.uniqueId());
+        assertEquals(TEST_DISPLAY_NAME, details.displayName());
+        assertEquals(this.getClass().getName(), details.filePath());
+        assertTrue(details.tags().contains("smoke-test"));
     }
 
     @Test
@@ -114,8 +114,8 @@ public class CtrfExtensionTest {
         verify(reportManager).onTestSkipped(detailsCaptor.capture(), reasonCaptor.capture());
 
         TestDetails details = detailsCaptor.getValue();
-        assertEquals(TEST_UNIQUE_ID, details.getUniqueId());
-        assertEquals(TEST_DISPLAY_NAME, details.getDisplayName());
+        assertEquals(TEST_UNIQUE_ID, details.uniqueId());
+        assertEquals(TEST_DISPLAY_NAME, details.displayName());
         assertEquals(reason, reasonCaptor.getValue());
     }
 }

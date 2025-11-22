@@ -97,11 +97,11 @@ public class CtrfListenerTest {
         verify(reportManager).onTestStart(captor.capture());
 
         TestDetails details = captor.getValue();
-        assertEquals(TEST_UNIQUE_ID, details.getUniqueId());
-        assertEquals(TEST_DISPLAY_NAME, details.getDisplayName());
-        assertEquals(TEST_CLASS_NAME, details.getFilePath());
-        assertEquals(1, details.getTags().size());
-        assertTrue(details.getTags().stream().anyMatch(tag -> tag.contains("smoke-test")));
+        assertEquals(TEST_UNIQUE_ID, details.uniqueId());
+        assertEquals(TEST_DISPLAY_NAME, details.displayName());
+        assertEquals(TEST_CLASS_NAME, details.filePath());
+        assertEquals(1, details.tags().size());
+        assertTrue(details.tags().stream().anyMatch(tag -> tag.contains("smoke-test")));
     }
 
     @Test
@@ -179,9 +179,9 @@ public class CtrfListenerTest {
         verify(reportManager).onTestSkipped(detailsCaptor.capture(), reasonCaptor.capture());
 
         TestDetails details = detailsCaptor.getValue();
-        assertEquals(TEST_UNIQUE_ID, details.getUniqueId());
-        assertEquals(TEST_DISPLAY_NAME, details.getDisplayName());
-        assertEquals(TEST_CLASS_NAME, details.getFilePath());
+        assertEquals(TEST_UNIQUE_ID, details.uniqueId());
+        assertEquals(TEST_DISPLAY_NAME, details.displayName());
+        assertEquals(TEST_CLASS_NAME, details.filePath());
         assertEquals(Optional.of(reason), reasonCaptor.getValue());
     }
 
@@ -218,7 +218,7 @@ public class CtrfListenerTest {
         verify(reportManager).onTestStart(captor.capture());
 
         TestDetails details = captor.getValue();
-        assertEquals(TEST_CLASS_NAME, details.getFilePath());
+        assertEquals(TEST_CLASS_NAME, details.filePath());
     }
 
     @Test
@@ -232,7 +232,7 @@ public class CtrfListenerTest {
         verify(reportManager).onTestStart(captor.capture());
 
         TestDetails details = captor.getValue();
-        assertEquals(TEST_CLASS_NAME, details.getFilePath());
+        assertEquals(TEST_CLASS_NAME, details.filePath());
     }
 
     @Test
@@ -246,7 +246,7 @@ public class CtrfListenerTest {
         verify(reportManager).onTestStart(captor.capture());
 
         TestDetails details = captor.getValue();
-        assertEquals(unknownSource.toString(), details.getFilePath());
+        assertEquals(unknownSource.toString(), details.filePath());
     }
 
     @Test
@@ -259,7 +259,7 @@ public class CtrfListenerTest {
         verify(reportManager).onTestStart(captor.capture());
 
         TestDetails details = captor.getValue();
-        assertNull(details.getFilePath());
+        assertNull(details.filePath());
     }
 
     @Test
@@ -273,6 +273,6 @@ public class CtrfListenerTest {
         verify(reportManager).onTestStart(captor.capture());
 
         TestDetails details = captor.getValue();
-        assertTrue(details.getTags().isEmpty());
+        assertTrue(details.tags().isEmpty());
     }
 }

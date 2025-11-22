@@ -38,11 +38,11 @@ public class TestProcessor {
     public Test createTest(String displayName, TestDetails details, long stopTime) {
         return Test.builder()
             .name(displayName) // Use the displayName parameter
-            .tags(details.getTags() != null ? new ArrayList<>(details.getTags()) : new ArrayList<>())
-            .filepath(details.getFilePath())
-            .start(details.getStartTime())
+            .tags(details.tags() != null ? new ArrayList<>(details.tags()) : new ArrayList<>())
+            .filepath(details.filePath())
+            .start(details.startTime())
             .stop(stopTime)
-            .duration(stopTime - details.getStartTime())
+            .duration(stopTime - details.startTime())
             .threadId(Thread.currentThread().getName())
             .build();
     }
