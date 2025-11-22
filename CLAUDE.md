@@ -97,14 +97,17 @@ Test Execution
 [CtrfExtension | CtrfListener] (observers)
     ↓
 CtrfReportManager (singleton coordinator)
-    ├─ Stores test details in ConcurrentHashMap during execution
-    ├─ Processes test results into CTRF Test objects
-    └─ Triggers report composition on test run completion
+    ├─ Delegates to TestStateTracker for state management
+    ├─ Delegates to FlakyTestDetector for flaky test detection
+    ├─ Delegates to TestRerunHandler for rerun scenarios
+    └─ Delegates to ReportOrchestrator for report generation
     ↓
-CtrfJsonComposer (assembles JSON structure)
-    ├─ Composes Tool metadata (JUnit version)
-    ├─ Composes Environment metadata (build, repo, OS info)
-    └─ Creates CtrfJson with Summary
+TestProcessor (converts test data)
+    └─ Creates CTRF Test objects from JUnit execution data
+    ↓
+ReportOrchestrator (generates report)
+    ├─ Uses CtrfJsonComposer for JSON structure
+    └─ Uses CtrfReportFileService for file I/O
     ↓
 CtrfReportFileService (filesystem I/O)
     └─ Writes JSON to configured path (default: ctrf-report.json)
@@ -114,7 +117,11 @@ CtrfReportFileService (filesystem I/O)
 
 | Component                       | Responsibility                                                                                        |
 |---------------------------------|-------------------------------------------------------------------------------------------------------|
-| **CtrfReportManager**           | Singleton orchestrator; manages test lifecycle events and triggers report generation                  |
+| **CtrfReportManager**           | Singleton coordinator; delegates test lifecycle events to specialized components (simplified from 195 to 186 lines) |
+| **TestStateTracker**            | Manages test state collections (CopyOnWriteArrayList, ConcurrentHashMap); thread-safe test storage    |
+| **FlakyTestDetector**           | Stateless utility for detecting flaky tests based on retry patterns and previous failures             |
+| **TestRerunHandler**            | Loads existing test data from previous runs; manages rerun scenarios                                  |
+| **ReportOrchestrator**          | Coordinates report generation; delegates to CtrfJsonComposer and CtrfReportFileService                |
 | **EnvironmentHealthTracker**    | Public API for tracking test environment health status                                                |
 | **TestProcessor**               | Converts JUnit test execution data (status, duration, failures) into CTRF Test objects                |
 | **CtrfJsonComposer**            | Assembles final CTRF JSON structure with metadata (tool, environment, summary)                        |
@@ -148,13 +155,13 @@ CtrfJson (root)
 
 ### Concurrency Design
 
-The library handles parallel test execution using thread-safe collections:
+The library handles parallel test execution using thread-safe collections managed by **TestStateTracker**:
 
-- `CopyOnWriteArrayList<Test>` for test results (read-heavy workload)
+- `CopyOnWriteArrayList<Test>` for test results (read-heavy workload, optimized for concurrent reads)
 - `ConcurrentHashMap<String, TestDetails>` for in-progress test tracking
 - `AtomicBoolean` for ensuring single execution of startup/shutdown logic
 
-**No explicit locks are used.** Thread safety is achieved through concurrent data structures and atomic operations.
+**No explicit locks are used.** Thread safety is achieved through concurrent data structures and atomic operations. **FlakyTestDetector** is stateless with pure functions, making it inherently thread-safe.
 
 ### Configuration
 
@@ -191,7 +198,11 @@ src/main/java/io/github/alexshamrai/
 ├── model/
 │   └── TestDetails.java           # Internal DTO for test data
 ├── util/                          # Utilities (SummaryUtil, TestDetailsUtil)
-├── CtrfReportManager.java         # Singleton coordinator
+├── CtrfReportManager.java         # Singleton coordinator (delegates to specialized classes)
+├── TestStateTracker.java          # Manages test state collections
+├── FlakyTestDetector.java         # Detects flaky tests
+├── TestRerunHandler.java          # Handles test rerun scenarios
+├── ReportOrchestrator.java        # Orchestrates report generation
 ├── EnvironmentHealthTracker.java  # Public API for environment health tracking
 ├── CtrfJsonComposer.java          # JSON structure assembly
 ├── CtrfReportFileService.java     # File I/O operations
