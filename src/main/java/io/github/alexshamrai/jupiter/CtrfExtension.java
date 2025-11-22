@@ -1,6 +1,7 @@
 package io.github.alexshamrai.jupiter;
 
 import io.github.alexshamrai.CtrfReportManager;
+import io.github.alexshamrai.adapter.ExtensionContextAdapter;
 import io.github.alexshamrai.model.TestDetails;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -68,11 +69,6 @@ public class CtrfExtension implements TestRunExtension, BeforeEachCallback, Test
     }
 
     private TestDetails createTestDetails(ExtensionContext context) {
-        return TestDetails.builder()
-            .uniqueId(context.getUniqueId())
-            .displayName(context.getDisplayName())
-            .tags(context.getTags())
-            .filePath(context.getTestClass().map(Class::getName).orElse(null))
-            .build();
+        return TestDetails.fromAdapter(new ExtensionContextAdapter(context));
     }
 }

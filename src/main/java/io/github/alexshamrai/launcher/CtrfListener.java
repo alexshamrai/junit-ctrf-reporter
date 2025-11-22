@@ -1,17 +1,14 @@
 package io.github.alexshamrai.launcher;
 
 import io.github.alexshamrai.CtrfReportManager;
+import io.github.alexshamrai.adapter.TestIdentifierAdapter;
 import io.github.alexshamrai.model.TestDetails;
 import org.junit.platform.engine.TestExecutionResult;
-import org.junit.platform.engine.TestSource;
-import org.junit.platform.engine.support.descriptor.ClassSource;
-import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.TestExecutionListener;
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.TestPlan;
 
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * JUnit Platform TestExecutionListener that generates test reports in the CTRF (Common Test Report Format) format.
@@ -91,22 +88,6 @@ public class CtrfListener implements TestExecutionListener {
     }
 
     private TestDetails createTestDetails(TestIdentifier testIdentifier) {
-        return TestDetails.builder()
-            .uniqueId(testIdentifier.getUniqueId())
-            .displayName(testIdentifier.getDisplayName())
-            .tags(testIdentifier.getTags().stream().map(Object::toString).collect(Collectors.toSet()))
-            .filePath(extractFilePathFromSource(testIdentifier.getSource()))
-            .build();
-    }
-
-    private String extractFilePathFromSource(Optional<TestSource> sourceOpt) {
-        return sourceOpt.map(source -> {
-            if (source instanceof MethodSource) {
-                return ((MethodSource) source).getClassName();
-            } else if (source instanceof ClassSource) {
-                return ((ClassSource) source).getClassName();
-            }
-            return source.toString();
-        }).orElse(null);
+        return TestDetails.fromAdapter(new TestIdentifierAdapter(testIdentifier));
     }
 }

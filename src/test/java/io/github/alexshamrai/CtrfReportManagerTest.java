@@ -16,6 +16,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.util.Collections;
 import java.util.Optional;
+import java.util.Set;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
@@ -80,7 +81,7 @@ class CtrfReportManagerTest {
     @org.junit.jupiter.api.Test
     @DisplayName("onTestStart should store test details in the map")
     void onTestStart_storesDetails() {
-        var details = TestDetails.builder().uniqueId("id-1").displayName("Test Details").build();
+        var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Test Details");
         var testResult = new Test();
         
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(testResult);
@@ -94,7 +95,7 @@ class CtrfReportManagerTest {
     @org.junit.jupiter.api.Test
     @DisplayName("onTestSuccess should process a successful test result")
     void onTestSuccess_processesResult() {
-        var details = TestDetails.builder().uniqueId("id-1").displayName("Success Test").build();
+        var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Success Test");
         var testResult = new Test();
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(testResult);
 
@@ -109,7 +110,7 @@ class CtrfReportManagerTest {
     @org.junit.jupiter.api.Test
     @DisplayName("onTestFailure should process a failed test result")
     void onTestFailure_processesResult() {
-        var details = TestDetails.builder().uniqueId("id-1").displayName("Failure Test").build();
+        var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Failure Test");
         var testResult = new Test();
         var cause = new RuntimeException("error");
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(testResult);
@@ -124,7 +125,7 @@ class CtrfReportManagerTest {
     @org.junit.jupiter.api.Test
     @DisplayName("onTestSkipped should create a skipped test")
     void onTestSkipped_createsSkippedTest() {
-        var details = TestDetails.builder().uniqueId("id-1").displayName("Skipped Test").build();
+        var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Skipped Test");
         var testResult = new Test();
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(testResult);
 
@@ -140,7 +141,7 @@ class CtrfReportManagerTest {
         // Mock the first run
         var firstRun = Test.builder().name("Rerun Test").status(FAILED).build();
         when(testProcessor.createTest(eq("Rerun Test"), any(TestDetails.class), anyLong())).thenReturn(firstRun);
-        var details1 = TestDetails.builder().uniqueId("id-1").displayName("Rerun Test").build();
+        var details1 = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Rerun Test");
         reportManager.onTestStart(details1);
         reportManager.onTestFailure("id-1", new RuntimeException());
 
@@ -148,7 +149,7 @@ class CtrfReportManagerTest {
         var secondRun = new Test();
         secondRun.setName("Rerun Test");
         when(testProcessor.createTest(eq("Rerun Test"), any(TestDetails.class), anyLong())).thenReturn(secondRun);
-        var details2 = TestDetails.builder().uniqueId("id-2").displayName("Rerun Test").build();
+        var details2 = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-2", "Rerun Test");
         reportManager.onTestStart(details2);
         reportManager.onTestSuccess("id-2");
 
@@ -162,7 +163,7 @@ class CtrfReportManagerTest {
         var testResult = new Test();
         when(testProcessor.createTest(anyString(), any(), anyLong())).thenReturn(testResult);
         when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
-        reportManager.onTestStart(TestDetails.builder().uniqueId("id-1").displayName("test").build());
+        reportManager.onTestStart(new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "test"));
         reportManager.onTestSuccess("id-1");
 
         reportManager.startTestRun("Listener");
@@ -198,7 +199,7 @@ class CtrfReportManagerTest {
         var testResult = Test.builder().stop(12345L).build();
         when(testProcessor.createTest(anyString(), any(), anyLong())).thenReturn(testResult);
         when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
-        reportManager.onTestStart(TestDetails.builder().uniqueId("id-1").displayName("test").build());
+        reportManager.onTestStart(new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "test"));
         reportManager.onTestSuccess("id-1");
 
         when(extensionContext.getExecutionException()).thenReturn(Optional.of(new RuntimeException()));

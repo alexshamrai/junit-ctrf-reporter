@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,10 +38,7 @@ class TestStateTrackerTest {
     @org.junit.jupiter.api.Test
     @DisplayName("Should store and retrieve test details")
     void shouldStoreAndRetrieveTestDetails() {
-        var details = TestDetails.builder()
-            .uniqueId("id-1")
-            .displayName("Test 1")
-            .build();
+        var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Test 1");
 
         tracker.putTestDetails("id-1", details);
         var retrieved = tracker.removeTestDetails("id-1");
@@ -71,7 +69,7 @@ class TestStateTrackerTest {
     @DisplayName("Should clear all state")
     void shouldClearAllState() {
         var test = Test.builder().name("test1").build();
-        var details = TestDetails.builder().uniqueId("id-1").build();
+        var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Test");
 
         tracker.addTest(test);
         tracker.putTestDetails("id-1", details);

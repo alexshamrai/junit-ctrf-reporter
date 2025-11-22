@@ -6,6 +6,7 @@ import io.github.alexshamrai.model.TestDetails;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
@@ -89,15 +90,11 @@ public final class CtrfReportManager {
     }
 
     public void onTestStart(TestDetails testDetails) {
-        testDetails.setStartTime(System.currentTimeMillis());
-        stateTracker.putTestDetails(testDetails.getUniqueId(), testDetails);
+        stateTracker.putTestDetails(testDetails.uniqueId(), testDetails);
     }
 
     public void onTestSkipped(TestDetails testDetails, Optional<String> reason) {
-        long time = System.currentTimeMillis();
-        testDetails.setStartTime(time);
-
-        var test = testProcessor.createTest(testDetails.getDisplayName(), testDetails, time);
+        var test = testProcessor.createTest(testDetails.displayName(), testDetails, testDetails.startTime());
         test.setStatus(SKIPPED);
         reason.ifPresent(test::setMessage);
         stateTracker.addTest(test);
@@ -107,10 +104,10 @@ public final class CtrfReportManager {
         long stopTime = System.currentTimeMillis();
         TestDetails details = stateTracker.removeTestDetails(uniqueId);
         if (details == null) {
-            details = TestDetails.builder().displayName("Unknown Test").startTime(stopTime).build();
+            details = new TestDetails(stopTime, Set.of(), null, uniqueId, "Unknown Test");
         }
 
-        var newTest = testProcessor.createTest(details.getDisplayName(), details, stopTime);
+        var newTest = testProcessor.createTest(details.displayName(), details, stopTime);
         newTest.setStatus(status);
         cause.ifPresent(c -> testProcessor.setFailureDetails(newTest, c));
 
