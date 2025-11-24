@@ -205,4 +205,77 @@ public class CtrfReportFileServiceTest {
 
         assertThat(existingStartTime).isNull();
     }
+
+    @Test
+    void shouldCacheReportAndReadFileOnlyOnce() {
+        // Setup a report with all data
+        var test1 = io.github.alexshamrai.ctrf.model.Test.builder().name("Test1").build();
+        var test2 = io.github.alexshamrai.ctrf.model.Test.builder().name("Test2").build();
+        var testsList = List.of(test1, test2);
+        var expectedStartTime = 1234567890L;
+        var summary = io.github.alexshamrai.ctrf.model.Summary.builder().start(expectedStartTime).build();
+        var environment = io.github.alexshamrai.ctrf.model.Environment.builder().healthy(false).build();
+        var results = Results.builder()
+            .tests(testsList)
+            .summary(summary)
+            .environment(environment)
+            .build();
+        var fullReport = CtrfJson.builder().results(results).build();
+
+        ctrfReportFileService.writeResultsToFile(fullReport);
+
+        // Clear the output stream to track only the read operations
+        errContent.reset();
+        var outContent = new ByteArrayOutputStream();
+        var originalOut = System.out;
+        System.setOut(new PrintStream(outContent));
+
+        try {
+            // Call all three getter methods
+            var existingTests = ctrfReportFileService.getExistingTests();
+            var existingStartTime = ctrfReportFileService.getExistingStartTime();
+            var existingHealth = ctrfReportFileService.getExistingEnvironmentHealth();
+
+            // Verify all values are correct
+            assertThat(existingTests).hasSize(2);
+            assertThat(existingStartTime).isEqualTo(expectedStartTime);
+            assertThat(existingHealth).isFalse();
+
+            // Verify the "File already exists" message appears only once
+            var output = outContent.toString();
+            var messageCount = output.split("File already exists", -1).length - 1;
+            assertThat(messageCount).isEqualTo(1);
+        } finally {
+            System.setOut(originalOut);
+        }
+    }
+
+    @Test
+    void shouldCacheNullResultWhenFileDoesNotExist() {
+        // Don't create any file, so readExistingReport returns null
+
+        // Clear the output stream
+        errContent.reset();
+
+        // Call all three getter methods multiple times
+        var tests1 = ctrfReportFileService.getExistingTests();
+        var startTime1 = ctrfReportFileService.getExistingStartTime();
+        var health1 = ctrfReportFileService.getExistingEnvironmentHealth();
+
+        var tests2 = ctrfReportFileService.getExistingTests();
+        var startTime2 = ctrfReportFileService.getExistingStartTime();
+        var health2 = ctrfReportFileService.getExistingEnvironmentHealth();
+
+        // Verify all values are correct defaults
+        assertThat(tests1).isEmpty();
+        assertThat(startTime1).isNull();
+        assertThat(health1).isTrue();
+
+        assertThat(tests2).isEmpty();
+        assertThat(startTime2).isNull();
+        assertThat(health2).isTrue();
+
+        // Verify no errors were logged multiple times
+        assertThat(errContent.toString()).isEmpty();
+    }
 }

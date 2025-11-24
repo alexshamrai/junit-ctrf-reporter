@@ -25,6 +25,8 @@ public class CtrfReportFileService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ConfigReader configReader;
+    private CtrfJson cachedReport;
+    private boolean reportReadAttempted = false;
 
     /**
      * Writes the provided CTRF JSON object to a file.
@@ -56,7 +58,7 @@ public class CtrfReportFileService {
      * @return List of tests from the existing report, or an empty list if no report exists
      */
     public List<Test> getExistingTests() {
-        CtrfJson existingReport = readExistingReport();
+        CtrfJson existingReport = getExistingReportCached();
         return existingReport != null
             && existingReport.getResults() != null
             && existingReport.getResults().getTests() != null
@@ -72,7 +74,7 @@ public class CtrfReportFileService {
      * @return Long representing the start time from the existing report, or null if not available
      */
     public Long getExistingStartTime() {
-        CtrfJson existingReport = readExistingReport();
+        var existingReport = getExistingReportCached();
         if (existingReport != null && existingReport.getResults() != null
             && existingReport.getResults().getSummary() != null) {
             return existingReport.getResults().getSummary().getStart();
@@ -88,7 +90,7 @@ public class CtrfReportFileService {
      * @return Boolean representing the health status from the existing report, or true if not available
      */
     public boolean getExistingEnvironmentHealth() {
-        var existingReport = readExistingReport();
+        var existingReport = getExistingReportCached();
         if (existingReport != null && existingReport.getResults() != null
             && existingReport.getResults().getEnvironment() != null) {
             return existingReport.getResults().getEnvironment().isHealthy();
@@ -96,11 +98,14 @@ public class CtrfReportFileService {
         return true;
     }
 
-    /**
-     * Reads an existing CTRF JSON report file if it exists.
-     *
-     * @return CtrfJson object containing the report data, or null if the file doesn't exist or can't be read
-     */
+    private CtrfJson getExistingReportCached() {
+        if (!reportReadAttempted) {
+            cachedReport = readExistingReport();
+            reportReadAttempted = true;
+        }
+        return cachedReport;
+    }
+
     private CtrfJson readExistingReport() {
         var filePath = configReader.getReportPath();
         var path = Paths.get(filePath);
