@@ -155,14 +155,94 @@ public class CtrfListenerTest {
     }
 
     @Test
-    void executionFinished_shouldIgnoreNonTestIdentifiers() {
+    void executionFinished_shouldIgnoreNonTestNonContainerFailures() {
         when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(false);
 
         ctrfListener.executionFinished(testIdentifier, testExecutionResult);
 
         verify(reportManager, never()).onTestSuccess(any());
         verify(reportManager, never()).onTestFailure(any(), any());
         verify(reportManager, never()).onTestAborted(any(), any());
+    }
+
+    @Test
+    void executionFinished_shouldHandleContainerFailure() {
+        ClassSource classSource = ClassSource.from(TEST_CLASS_NAME);
+        var cause = new RuntimeException("Context initialization failed");
+
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testIdentifier.getSource()).thenReturn(Optional.of(classSource));
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.FAILED);
+        when(testExecutionResult.getThrowable()).thenReturn(Optional.of(cause));
+
+        // First, trigger executionStarted to record container start time
+        ctrfListener.executionStarted(testIdentifier);
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestStart(detailsCaptor.capture());
+
+        TestDetails details = detailsCaptor.getValue();
+        assertEquals("initializationError", details.displayName());
+        assertEquals(TEST_CLASS_NAME, details.filePath());
+        assertTrue(details.uniqueId().endsWith("/initializationError"));
+
+        verify(reportManager).onTestFailure(eq(details.uniqueId()), eq(cause));
+    }
+
+    @Test
+    void executionFinished_shouldIgnoreContainerSuccess() {
+        ClassSource classSource = ClassSource.from(TEST_CLASS_NAME);
+
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testIdentifier.getSource()).thenReturn(Optional.of(classSource));
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.SUCCESSFUL);
+
+        ctrfListener.executionStarted(testIdentifier);
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
+
+        verify(reportManager, never()).onTestStart(any());
+        verify(reportManager, never()).onTestFailure(any(), any());
+    }
+
+    @Test
+    void executionFinished_shouldIgnoreNonClassContainerFailure() {
+        // Container without ClassSource (e.g., engine or package container) should be ignored
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testIdentifier.getSource()).thenReturn(Optional.empty());
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.FAILED);
+
+        ctrfListener.executionStarted(testIdentifier);
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
+
+        verify(reportManager, never()).onTestStart(any());
+        verify(reportManager, never()).onTestFailure(any(), any());
+    }
+
+    @Test
+    void executionFinished_shouldHandleContainerFailureWithoutStartTime() {
+        ClassSource classSource = ClassSource.from(TEST_CLASS_NAME);
+        var cause = new RuntimeException("Context initialization failed");
+
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testIdentifier.getSource()).thenReturn(Optional.of(classSource));
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.FAILED);
+        when(testExecutionResult.getThrowable()).thenReturn(Optional.of(cause));
+
+        // No executionStarted call, so no tracked start time
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestStart(detailsCaptor.capture());
+
+        TestDetails details = detailsCaptor.getValue();
+        assertEquals("initializationError", details.displayName());
+        assertTrue(details.startTime() > 0);
     }
 
     @Test

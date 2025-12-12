@@ -5,9 +5,11 @@ import io.github.alexshamrai.adapter.ExtensionContextAdapter;
 import io.github.alexshamrai.model.TestDetails;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.LifecycleMethodExecutionExceptionHandler;
 import org.junit.jupiter.api.extension.TestWatcher;
 
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * JUnit 5 extension that generates test reports in the CTRF (Common Test Report Format) format.
@@ -28,10 +30,12 @@ import java.util.Optional;
  * The extension can be configured through a {@code ctrf.properties} file placed in the classpath.
  * See the README for all available configuration options.
  */
-public class CtrfExtension implements TestRunExtension, BeforeEachCallback, TestWatcher {
+public class CtrfExtension implements TestRunExtension, BeforeEachCallback, TestWatcher,
+                                      LifecycleMethodExecutionExceptionHandler {
 
     private final CtrfReportManager reportManager = CtrfReportManager.getInstance();
     private static final String GENERATED_BY = "io.github.alexshamrai.jupiter.CtrfExtension";
+    private static final String INITIALIZATION_ERROR = "initializationError";
 
     @Override
     public void beforeAllTests(ExtensionContext context) {
@@ -66,6 +70,40 @@ public class CtrfExtension implements TestRunExtension, BeforeEachCallback, Test
     @Override
     public void testDisabled(ExtensionContext context, Optional<String> reason) {
         reportManager.onTestSkipped(createTestDetails(context), reason);
+    }
+
+    /**
+     * Handles exceptions thrown during {@code @BeforeAll} method execution.
+     * <p>
+     * Creates a synthetic "initializationError" test entry to capture the failure,
+     * matching the behavior of JUnit's XML reporter and the CtrfListener implementation.
+     *
+     * @param context the current extension context
+     * @param throwable the exception thrown during @BeforeAll execution
+     * @throws Throwable re-throws the original exception after recording it
+     */
+    @Override
+    public void handleBeforeAllMethodExecutionException(ExtensionContext context, Throwable throwable)
+            throws Throwable {
+        String className = context.getTestClass()
+            .map(Class::getName)
+            .orElse(context.getDisplayName());
+
+        String uniqueId = context.getUniqueId() + "/" + INITIALIZATION_ERROR;
+        Set<String> tags = context.getTags();
+
+        TestDetails details = new TestDetails(
+            System.currentTimeMillis(),
+            tags,
+            className,
+            uniqueId,
+            INITIALIZATION_ERROR
+        );
+
+        reportManager.onTestStart(details);
+        reportManager.onTestFailure(uniqueId, throwable);
+
+        throw throwable;
     }
 
     private TestDetails createTestDetails(ExtensionContext context) {

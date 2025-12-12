@@ -28,7 +28,6 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -186,6 +185,7 @@ class CtrfReportManagerTest {
     void finishTestRun_handlesInitializationError() {
         when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
         when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
+        when(extensionContext.getExecutionException()).thenReturn(Optional.of(new RuntimeException()));
 
         reportManager.startTestRun("Listener");
         reportManager.finishTestRun(Optional.of(extensionContext));
@@ -194,8 +194,8 @@ class CtrfReportManagerTest {
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("finishTestRun should handle execution error on suite-level exception")
-    void finishTestRun_handlesExecutionError() {
+    @DisplayName("finishTestRun should handle initialization error even when tests ran")
+    void finishTestRun_handlesInitializationErrorWithExistingTests() {
         var testResult = Test.builder().stop(12345L).build();
         when(testProcessor.createTest(anyString(), any(), anyLong())).thenReturn(testResult);
         when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
@@ -207,8 +207,8 @@ class CtrfReportManagerTest {
         reportManager.startTestRun("Listener");
         reportManager.finishTestRun(Optional.of(extensionContext));
 
-        verify(suiteExecutionErrorHandler).handleExecutionError(eq(extensionContext), eq(12345L), anyLong());
-        verify(suiteExecutionErrorHandler, never()).handleInitializationError(any(), anyLong(), anyLong());
+        // Should use last test stop time as start time for initialization error
+        verify(suiteExecutionErrorHandler).handleInitializationError(eq(extensionContext), eq(12345L), anyLong());
     }
 
     @org.junit.jupiter.api.Test

@@ -40,6 +40,31 @@ The solution uses JUnit 5 for unit testing. Run the tests with:
 ```
 For integration tests info refer to [INTEGRATION_TESTS.md](INTEGRATION_TESTS.md)
 
+### Publishing to Local Maven Repository
+
+To test local changes in another project, publish the SNAPSHOT version to your local Maven repository:
+
+```bash
+./gradlew clean publishToMavenLocal
+```
+
+This publishes to `~/.m2/repository/io/github/alexshamrai/junit-ctrf-reporter/<version>/`
+
+Then in your test project, add:
+
+```gradle
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation 'io.github.alexshamrai:junit-ctrf-reporter:0.4.5-SNAPSHOT'
+}
+```
+
+**Note:** `mavenLocal()` must come before `mavenCentral()` to ensure the local SNAPSHOT is picked up first.
+
 ### Code Quality Checks
 
 The project uses checkstyle for code quality. Run the checks with:

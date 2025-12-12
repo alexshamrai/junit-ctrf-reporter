@@ -17,7 +17,6 @@ package io.github.alexshamrai;
  * Once marked as unhealthy, the environment remains unhealthy for the entire test run.
  * The unhealthy state is also preserved across test reruns when using the same report file.
  *
- * @since 0.4.2
  */
 public final class EnvironmentHealthTracker {
 
@@ -40,7 +39,6 @@ public final class EnvironmentHealthTracker {
      * Once marked unhealthy, the environment cannot be marked healthy again
      * during the same test run.
      *
-     * @since 0.4.2
      */
     public static void markEnvironmentUnhealthy() {
         CtrfReportManager.getInstance().markEnvironmentUnhealthyInternal();
@@ -57,7 +55,6 @@ public final class EnvironmentHealthTracker {
      * </ul>
      *
      * @return {@code true} if the environment is healthy, {@code false} otherwise
-     * @since 0.4.2
      */
     public static boolean isEnvironmentHealthy() {
         return CtrfReportManager.getInstance().isEnvironmentHealthyInternal();
