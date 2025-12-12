@@ -45,9 +45,9 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         var summary = report.getResults().getSummary();
         assertThat(summary).isNotNull();
 
-        assertThat(summary.getTests()).isEqualTo(20);
+        assertThat(summary.getTests()).isEqualTo(24);
         assertThat(summary.getPassed()).isEqualTo(13);
-        assertThat(summary.getFailed()).isEqualTo(5);
+        assertThat(summary.getFailed()).isEqualTo(9);
         assertThat(summary.getSkipped()).isEqualTo(2);
         assertThat(summary.getPending()).isEqualTo(0);
         assertThat(summary.getOther()).isEqualTo(0);
@@ -164,6 +164,92 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assertThat(environment.isHealthy())
             .as("Environment health should be false")
             .isFalse();
+    }
+
+    @Test
+    void verifyInitializationErrorIsCaptured() {
+        var tests = report.getResults().getTests();
+        assertThat(tests).isNotNull().isNotEmpty();
+
+        // Look for the specific InitializationErrorTest (not AnotherInitializationErrorTest)
+        var initErrorTest = tests.stream()
+            .filter(test -> "initializationError".equals(test.getName()))
+            .filter(test -> test.getFilepath() != null
+                && test.getFilepath().contains("InitializationErrorTest")
+                && !test.getFilepath().contains("Another"))
+            .findFirst();
+
+        assertThat(initErrorTest)
+            .as("initializationError test from InitializationErrorTest should be present in the report")
+            .isPresent();
+
+        var test = initErrorTest.get();
+        assertThat(test.getStatus())
+            .as("initializationError should have FAILED status")
+            .isEqualTo(TestStatus.FAILED);
+
+        assertThat(test.getMessage())
+            .as("initializationError should have an error message")
+            .isNotNull()
+            .contains("Simulated initialization failure");
+
+        assertThat(test.getFilepath())
+            .as("initializationError should have filepath pointing to InitializationErrorTest")
+            .contains("InitializationErrorTest");
+    }
+
+    @Test
+    void verifyMultipleInitializationErrorsAreCaptured() {
+        var tests = report.getResults().getTests();
+        assertThat(tests).isNotNull().isNotEmpty();
+
+        // Find all initializationError entries
+        var initErrorTests = tests.stream()
+            .filter(test -> "initializationError".equals(test.getName()))
+            .toList();
+
+        // Should have entries from both test classes (with retry, 4 total)
+        assertThat(initErrorTests)
+            .as("Should have multiple initializationError entries from different test classes")
+            .hasSizeGreaterThanOrEqualTo(2);
+
+        // Get distinct filepaths to verify different classes are captured
+        var distinctFilepaths = initErrorTests.stream()
+            .map(io.github.alexshamrai.ctrf.model.Test::getFilepath)
+            .distinct()
+            .toList();
+
+        assertThat(distinctFilepaths)
+            .as("initializationError should come from 2 different test classes")
+            .hasSize(2);
+
+        // Verify InitializationErrorTest is captured
+        assertThat(distinctFilepaths)
+            .as("Should have initializationError from InitializationErrorTest")
+            .anyMatch(path -> path.contains("InitializationErrorTest") && !path.contains("Another"));
+
+        // Verify AnotherInitializationErrorTest is captured
+        assertThat(distinctFilepaths)
+            .as("Should have initializationError from AnotherInitializationErrorTest")
+            .anyMatch(path -> path.contains("AnotherInitializationErrorTest"));
+
+        // Verify distinct error messages
+        var distinctMessages = initErrorTests.stream()
+            .map(io.github.alexshamrai.ctrf.model.Test::getMessage)
+            .distinct()
+            .toList();
+
+        assertThat(distinctMessages)
+            .as("Should have 2 distinct error messages from different test classes")
+            .hasSize(2);
+
+        assertThat(distinctMessages)
+            .as("Should contain the original initialization error message")
+            .anyMatch(msg -> msg.contains("Simulated initialization failure"));
+
+        assertThat(distinctMessages)
+            .as("Should contain the second initialization error message")
+            .anyMatch(msg -> msg.contains("Another initialization failure"));
     }
 }
 

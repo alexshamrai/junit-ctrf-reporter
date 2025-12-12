@@ -5,6 +5,7 @@ import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.model.TestDetails;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,7 +27,6 @@ import static io.github.alexshamrai.ctrf.model.Test.TestStatus.SKIPPED;
  *   <li>{@link ReportOrchestrator} - generates and writes final reports</li>
  * </ul>
  *
- * @since 0.1.0
  */
 public final class CtrfReportManager {
 
@@ -148,28 +148,10 @@ public final class CtrfReportManager {
         }
 
         long testRunStopTime = System.currentTimeMillis();
-        var tests = stateTracker.getAllTests();
 
-        // Handle suite-level errors
-        if (tests.isEmpty()) {
-            contextOpt.ifPresentOrElse(
-                context -> suiteExecutionErrorHandler.handleInitializationError(context, testRunStartTime, testRunStopTime)
-                    .ifPresent(stateTracker::addTest),
-                () -> { /* Listener has no context for this, can add a synthetic test if needed */ }
-            );
-        } else if (contextOpt.flatMap(ExtensionContext::getExecutionException).isPresent()) {
-            ExtensionContext context = contextOpt.get();
-            long lastTestStopTime = tests.get(tests.size() - 1).getStop();
-            suiteExecutionErrorHandler.handleExecutionError(context, lastTestStopTime, testRunStopTime)
-                .ifPresent(stateTracker::addTest);
-        }
+        captureUncaughtInitializationError(contextOpt, stateTracker.getAllTests(), testRunStopTime);
+        refreshEnvironmentHealthFromEnvVar();
 
-        // Re-read ENV_HEALTHY at the end of test run to catch any changes made during execution
-        if (EnvironmentHealthTracker.isEnvironmentVariableUnhealthy()) {
-            isEnvironmentHealthy.set(false);
-        }
-
-        // Generate and write report
         reportOrchestrator.generateAndWriteReport(
             stateTracker.getAllTests(),
             testRunStartTime,
@@ -179,5 +161,30 @@ public final class CtrfReportManager {
         );
 
         stateTracker.clear();
+    }
+
+    private void refreshEnvironmentHealthFromEnvVar() {
+        if (EnvironmentHealthTracker.isEnvironmentVariableUnhealthy()) {
+            isEnvironmentHealthy.set(false);
+        }
+    }
+
+    private void captureUncaughtInitializationError(Optional<ExtensionContext> contextOpt,
+                                                    List<Test> tests,
+                                                    long testRunStopTime) {
+        if (contextOpt.flatMap(ExtensionContext::getExecutionException).isEmpty()) {
+            return;
+        }
+
+        boolean alreadyCaptured = tests.stream()
+            .anyMatch(t -> "initializationError".equals(t.getName()));
+        if (alreadyCaptured) {
+            return;
+        }
+
+        ExtensionContext context = contextOpt.get();
+        long startTime = tests.isEmpty() ? testRunStartTime : tests.get(tests.size() - 1).getStop();
+        suiteExecutionErrorHandler.handleInitializationError(context, startTime, testRunStopTime)
+            .ifPresent(stateTracker::addTest);
     }
 }

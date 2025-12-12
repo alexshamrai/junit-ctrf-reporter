@@ -16,6 +16,7 @@ import java.util.Collections;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -117,5 +118,53 @@ public class CtrfExtensionTest {
         assertEquals(TEST_UNIQUE_ID, details.uniqueId());
         assertEquals(TEST_DISPLAY_NAME, details.displayName());
         assertEquals(reason, reasonCaptor.getValue());
+    }
+
+    @Test
+    void handleBeforeAllMethodExecutionException_shouldCaptureInitializationError() {
+        var cause = new RuntimeException("Spring context failed to load");
+
+        assertThrows(RuntimeException.class, () ->
+            ctrfExtension.handleBeforeAllMethodExecutionException(extensionContext, cause)
+        );
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestStart(detailsCaptor.capture());
+
+        TestDetails details = detailsCaptor.getValue();
+        assertEquals("initializationError", details.displayName());
+        assertEquals(this.getClass().getName(), details.filePath());
+        assertTrue(details.uniqueId().endsWith("/initializationError"));
+        assertTrue(details.tags().contains("smoke-test"));
+
+        verify(reportManager).onTestFailure(eq(details.uniqueId()), eq(cause));
+    }
+
+    @Test
+    void handleBeforeAllMethodExecutionException_shouldRethrowException() {
+        var cause = new IllegalStateException("Configuration error");
+
+        var thrown = assertThrows(IllegalStateException.class, () ->
+            ctrfExtension.handleBeforeAllMethodExecutionException(extensionContext, cause)
+        );
+
+        assertEquals(cause, thrown);
+    }
+
+    @Test
+    void handleBeforeAllMethodExecutionException_shouldHandleMissingTestClass() {
+        when(extensionContext.getTestClass()).thenReturn(Optional.empty());
+        var cause = new RuntimeException("Initialization failed");
+
+        assertThrows(RuntimeException.class, () ->
+            ctrfExtension.handleBeforeAllMethodExecutionException(extensionContext, cause)
+        );
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestStart(detailsCaptor.capture());
+
+        TestDetails details = detailsCaptor.getValue();
+        // When test class is not available, should fall back to display name
+        assertEquals(TEST_DISPLAY_NAME, details.filePath());
     }
 }
