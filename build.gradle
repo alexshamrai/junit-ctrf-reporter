@@ -2,7 +2,7 @@ plugins {
     id 'java'
     id 'signing'
     id 'checkstyle'
-    id 'com.vanniktech.maven.publish' version '0.35.0'
+    id 'com.vanniktech.maven.publish' version '0.36.0'
 }
 
 group = 'io.github.alexshamrai'
@@ -28,16 +28,16 @@ ext {
     projectVersion = '0.4.6-SNAPSHOT'
     releaseVersion = '0.4.5'
 
-    junitVersion = '6.0.1'
+    junitVersion = '6.0.3'
     lombokVersion = '1.18.42'
-    jaksonVersion = '2.20.1'
+    jaksonVersion = '2.21.0'
     ownerVersion = '1.0.12'
     mockitoVersion = '5.21.0'
-    assertjVersion = '3.27.6'
+    assertjVersion = '3.27.7'
 
     slf4jVersion = '2.0.17'
-    logbackVersion = '1.5.22'
-    jacksonModuleJsonSchemaVersion = '2.20.1'
+    logbackVersion = '1.5.32'
+    jacksonModuleJsonSchemaVersion = '2.21.0'
     jsonSchemaValidatorVersion = '2.2.14'
 }
 
@@ -62,7 +62,7 @@ test {
 }
 
 checkstyle {
-    toolVersion = '12.3.0'
+    toolVersion = '12.3.1'
     configFile = file("${project.rootDir}/config/checkstyle/checkstyle.xml")
 }
 
