@@ -30,14 +30,14 @@ ext {
 
     junitVersion = '6.0.3'
     lombokVersion = '1.18.42'
-    jaksonVersion = '2.21.0'
+    jaksonVersion = '2.21.1'
     ownerVersion = '1.0.12'
-    mockitoVersion = '5.21.0'
+    mockitoVersion = '5.22.0'
     assertjVersion = '3.27.7'
 
     slf4jVersion = '2.0.17'
     logbackVersion = '1.5.32'
-    jacksonModuleJsonSchemaVersion = '2.21.0'
+    jacksonModuleJsonSchemaVersion = '2.21.1'
     jsonSchemaValidatorVersion = '2.2.14'
 }
 
