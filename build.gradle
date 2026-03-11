@@ -29,10 +29,10 @@ ext {
     releaseVersion = '0.4.5'
 
     junitVersion = '6.0.3'
-    lombokVersion = '1.18.42'
+    lombokVersion = '1.18.44'
     jaksonVersion = '2.21.1'
     ownerVersion = '1.0.12'
-    mockitoVersion = '5.22.0'
+    mockitoVersion = '5.23.0'
     assertjVersion = '3.27.7'
 
     slf4jVersion = '2.0.17'
@@ -62,7 +62,7 @@ test {
 }
 
 checkstyle {
-    toolVersion = '13.2.0'
+    toolVersion = '13.3.0'
     configFile = file("${project.rootDir}/config/checkstyle/checkstyle.xml")
 }
 
