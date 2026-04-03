@@ -42,11 +42,12 @@ jobs:
         if: always()
 
       - name: Publish CTRF Test Report
-        uses: ctrf-io/github-test-reporter@v1.0.27
+        uses: alexshamrai/github-test-reporter@feature/timeline-visualization
         with:
           report-path: ${{ env.CTRF_REPORT_PATH }}
 
           summary-report: true
+          timeline-report: true
           test-report: true
           fail-rate-report: true
           failed-folded-report: true
