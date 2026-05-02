@@ -29,15 +29,15 @@ ext {
     releaseVersion = '0.4.5'
 
     junitVersion = '6.0.3'
-    lombokVersion = '1.18.44'
-    jaksonVersion = '2.21.2'
+    lombokVersion = '1.18.46'
+    jaksonVersion = '2.21.3'
     ownerVersion = '1.0.12'
     mockitoVersion = '5.23.0'
     assertjVersion = '3.27.7'
 
     slf4jVersion = '2.0.17'
     logbackVersion = '1.5.32'
-    jacksonModuleJsonSchemaVersion = '2.21.2'
+    jacksonModuleJsonSchemaVersion = '2.21.3'
     jsonSchemaValidatorVersion = '2.2.14'
 }
 
@@ -62,7 +62,7 @@ test {
 }
 
 checkstyle {
-    toolVersion = '13.3.0'
+    toolVersion = '13.4.2'
     configFile = file("${project.rootDir}/config/checkstyle/checkstyle.xml")
 }
 
