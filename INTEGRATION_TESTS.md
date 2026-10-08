@@ -52,6 +52,7 @@ public abstract class BaseFakeTest {
 #### Test Status Verification
 
 - **DummySuccessTest**: Contains tests that pass successfully
+- **AssumptionTest**: Contains a test aborted by a failed assumption; it is reported as skipped with `rawStatus` "aborted"
 - **DummyFailedTest**: Contains tests that intentionally fail
 - **DummyDisabledTest**: Contains tests marked with `@Disabled`
 

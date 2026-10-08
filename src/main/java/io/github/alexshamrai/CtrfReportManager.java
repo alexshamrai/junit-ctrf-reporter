@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
@@ -31,6 +32,7 @@ import static io.github.alexshamrai.ctrf.model.Test.TestStatus.SKIPPED;
 public final class CtrfReportManager {
 
     private static final CtrfReportManager INSTANCE = new CtrfReportManager();
+    private static final String ABORTED = "aborted";
 
     private final TestStateTracker stateTracker;
     private final TestRerunHandler rerunHandler;
@@ -100,7 +102,7 @@ public final class CtrfReportManager {
         stateTracker.addTest(test);
     }
 
-    private void processTestResult(String uniqueId, Optional<Throwable> cause, Test.TestStatus status) {
+    private void processTestResult(String uniqueId, Test.TestStatus status, Consumer<Test> outcomeDetails) {
         long stopTime = System.currentTimeMillis();
         TestDetails details = stateTracker.removeTestDetails(uniqueId);
         if (details == null) {
@@ -109,22 +111,38 @@ public final class CtrfReportManager {
 
         var newTest = testProcessor.createTest(details.displayName(), details, stopTime);
         newTest.setStatus(status);
-        cause.ifPresent(c -> testProcessor.setFailureDetails(newTest, c));
+        outcomeDetails.accept(newTest);
 
         FlakyTestDetector.detectAndMarkFlaky(newTest, stateTracker.getAllTests());
         stateTracker.addTest(newTest);
     }
 
     public void onTestSuccess(String uniqueId) {
-        processTestResult(uniqueId, Optional.empty(), PASSED);
+        processTestResult(uniqueId, PASSED, test -> { });
     }
 
     public void onTestFailure(String uniqueId, Throwable cause) {
-        processTestResult(uniqueId, Optional.ofNullable(cause), FAILED);
+        processTestResult(uniqueId, FAILED, test -> {
+            if (cause != null) {
+                testProcessor.setFailureDetails(test, cause);
+            }
+        });
     }
 
+    /**
+     * Records a test that JUnit aborted, typically because an assumption failed. Like Gradle and Surefire,
+     * the report counts it as skipped; {@code rawStatus} keeps JUnit's "aborted" and {@code message} the reason.
+     *
+     * @param uniqueId the JUnit unique ID of the test
+     * @param cause    the exception that aborted the test, or {@code null}
+     */
     public void onTestAborted(String uniqueId, Throwable cause) {
-        processTestResult(uniqueId, Optional.ofNullable(cause), FAILED);
+        processTestResult(uniqueId, SKIPPED, test -> {
+            test.setRawStatus(ABORTED);
+            if (cause != null) {
+                test.setMessage(cause.getMessage());
+            }
+        });
     }
 
     public void startTestRun(String generator) {

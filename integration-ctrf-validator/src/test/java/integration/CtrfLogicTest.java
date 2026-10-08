@@ -45,10 +45,11 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         var summary = report.getResults().getSummary();
         assertThat(summary).isNotNull();
 
-        assertThat(summary.getTests()).isEqualTo(24);
+        // 24 entries from the other fake tests, plus AssumptionTest's aborted test, which counts as skipped
+        assertThat(summary.getTests()).isEqualTo(25);
         assertThat(summary.getPassed()).isEqualTo(13);
         assertThat(summary.getFailed()).isEqualTo(9);
-        assertThat(summary.getSkipped()).isEqualTo(2);
+        assertThat(summary.getSkipped()).isEqualTo(3);
         assertThat(summary.getPending()).isEqualTo(0);
         assertThat(summary.getOther()).isEqualTo(0);
         assertThat(summary.getStart()).isGreaterThan(0);
@@ -250,6 +251,20 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assertThat(distinctMessages)
             .as("Should contain the second initialization error message")
             .anyMatch(msg -> msg.contains("Another initialization failure"));
+    }
+
+    @Test
+    void verifyFailedAssumptionIsReportedAsSkipped() {
+        var abortedTest = report.getResults().getTests().stream()
+            .filter(test -> "requiresUnavailableService()".equals(test.getName()))
+            .findFirst();
+
+        assertThat(abortedTest)
+            .as("The test aborted by a failed assumption should be in the report")
+            .isPresent();
+        assertThat(abortedTest.get().getStatus()).isEqualTo(TestStatus.SKIPPED);
+        assertThat(abortedTest.get().getRawStatus()).isEqualTo("aborted");
+        assertThat(abortedTest.get().getMessage()).contains("Simulated assumption failure");
     }
 }
 

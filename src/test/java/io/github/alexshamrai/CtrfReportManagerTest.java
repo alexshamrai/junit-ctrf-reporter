@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -132,6 +133,22 @@ class CtrfReportManagerTest {
 
         assertEquals(Test.TestStatus.SKIPPED, testResult.getStatus());
         assertEquals("reason", testResult.getMessage());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("onTestAborted should record the test as skipped with the assumption message")
+    void onTestAborted_recordsSkippedTestWithAssumptionMessage() {
+        var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Aborted Test");
+        var testResult = new Test();
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(testResult);
+
+        reportManager.onTestStart(details);
+        reportManager.onTestAborted("id-1", new RuntimeException("Assumption failed: Docker not available"));
+
+        assertEquals(Test.TestStatus.SKIPPED, testResult.getStatus());
+        assertEquals("aborted", testResult.getRawStatus());
+        assertEquals("Assumption failed: Docker not available", testResult.getMessage());
+        verify(testProcessor, never()).setFailureDetails(any(), any());
     }
 
     @org.junit.jupiter.api.Test
