@@ -157,11 +157,11 @@ public class CtrfExtensionTest {
         verify(reportManager).onTestStart(detailsCaptor.capture());
         TestDetails details = detailsCaptor.getValue();
         assertEquals("initializationError", details.displayName());
-        assertEquals(TEST_UNIQUE_ID + "/initializationError", details.uniqueId());
+        assertEquals(TEST_UNIQUE_ID, details.uniqueId(), "a class failure is identified by the class itself");
         assertEquals(this.getClass().getName(), details.filePath());
         assertEquals(1_000L, details.startTime());
         assertTrue(details.tags().contains("smoke-test"));
-        verify(reportManager).onTestFailure(TEST_UNIQUE_ID + "/initializationError", cause);
+        verify(reportManager).onTestFailure(TEST_UNIQUE_ID, cause);
     }
 
     @Test
@@ -177,8 +177,8 @@ public class CtrfExtensionTest {
         var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
         verify(reportManager).onTestStart(detailsCaptor.capture());
         assertEquals("teardownError", detailsCaptor.getValue().displayName());
-        assertEquals(TEST_UNIQUE_ID + "/teardownError", detailsCaptor.getValue().uniqueId());
-        verify(reportManager).onTestFailure(TEST_UNIQUE_ID + "/teardownError", cause);
+        assertEquals(TEST_UNIQUE_ID, detailsCaptor.getValue().uniqueId(), "a class failure is identified by the class itself");
+        verify(reportManager).onTestFailure(TEST_UNIQUE_ID, cause);
     }
 
     @Test

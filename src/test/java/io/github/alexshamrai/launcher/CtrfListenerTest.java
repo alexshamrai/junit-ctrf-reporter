@@ -189,7 +189,7 @@ public class CtrfListenerTest {
         TestDetails details = detailsCaptor.getValue();
         assertEquals("initializationError", details.displayName());
         assertEquals(TEST_CLASS_NAME, details.filePath());
-        assertTrue(details.uniqueId().endsWith("/initializationError"));
+        assertEquals(TEST_UNIQUE_ID, details.uniqueId(), "a class failure is identified by the class itself");
 
         verify(reportManager).onTestFailure(eq(details.uniqueId()), eq(cause));
     }
@@ -270,8 +270,8 @@ public class CtrfListenerTest {
         verify(reportManager, times(2)).onTestStart(detailsCaptor.capture());
         TestDetails details = detailsCaptor.getAllValues().get(1);
         assertEquals("teardownError", details.displayName());
-        assertEquals(TEST_UNIQUE_ID + "/teardownError", details.uniqueId());
-        verify(reportManager).onTestFailure(TEST_UNIQUE_ID + "/teardownError", cause);
+        assertEquals(TEST_UNIQUE_ID, details.uniqueId(), "a class failure is identified by the class itself");
+        verify(reportManager).onTestFailure(TEST_UNIQUE_ID, cause);
     }
 
     @Test

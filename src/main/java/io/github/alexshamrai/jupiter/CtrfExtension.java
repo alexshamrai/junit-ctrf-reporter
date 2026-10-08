@@ -26,12 +26,21 @@ import java.util.Optional;
  * }
  * </pre>
  * <p>
- * A failure of a whole test class is reported as one failed entry for that class: "initializationError"
- * when the class failed before any of its tests started (for example in {@code @BeforeAll} or in another
- * extension's setup), "teardownError" when it failed afterwards (for example in {@code @AfterAll}).
- * The extension cannot see failures of containers below class level, such as a {@code @MethodSource}
- * that throws, nor teardown failures of extensions registered before it; the JUnit Platform listener
- * {@code io.github.alexshamrai.launcher.CtrfListener} reports those.
+ * A failure of a whole test class is reported as one failed entry for that class, identified by the class's
+ * unique ID: "initializationError" when the class failed before any of its tests started (for example in
+ * {@code @BeforeAll} or in another extension's {@code BeforeAllCallback}), "teardownError" when it failed
+ * afterwards (for example in {@code @AfterAll}).
+ * <p>
+ * The extension learns about a class failure only when JUnit runs the class's {@code AfterAllCallback}s,
+ * so it cannot see:
+ * <ul>
+ *   <li>a class that could not be created: with {@code @TestInstance(Lifecycle.PER_CLASS)}, a failing
+ *       constructor or {@code TestInstancePostProcessor} (for example a Spring context that fails to load)
+ *       stops the class before any callback runs, and the report shows no failure for it;</li>
+ *   <li>failures of containers below class level, such as a {@code @MethodSource} that throws;</li>
+ *   <li>teardown failures of extensions registered before it, whose callbacks run after its own.</li>
+ * </ul>
+ * The JUnit Platform listener {@code io.github.alexshamrai.launcher.CtrfListener} reports all of these.
  * <p>
  * The extension can be configured through a {@code ctrf.properties} file placed in the classpath.
  * See the README for all available configuration options.
@@ -53,7 +62,8 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
 
     /**
      * Reports the class as failed if it failed outside its tests. Runs after the class's {@code @AfterAll}
-     * methods, and also when its setup failed.
+     * methods, and also when a {@code @BeforeAll} method or a {@code BeforeAllCallback} failed, but not when
+     * the class could not be created (see the class documentation).
      *
      * @param context the context of the finished test class
      */
@@ -102,7 +112,7 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
         ClassState state = classStateOf(context);
         String name = state != null && state.childrenStarted() ? TEARDOWN_ERROR : INITIALIZATION_ERROR;
         long startTime = state != null ? state.startTime() : System.currentTimeMillis();
-        String uniqueId = context.getUniqueId() + "/" + name;
+        String uniqueId = context.getUniqueId();
         String className = context.getTestClass()
             .map(Class::getName)
             .orElse(context.getDisplayName());
