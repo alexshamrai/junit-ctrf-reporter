@@ -2,6 +2,8 @@
 
 This document provides a detailed, actionable plan for addressing code quality issues, bugs, and architectural improvements identified in the codebase review.
 
+> **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
+
 ## How to Use This Plan
 
 Each improvement item includes:
@@ -10,18 +12,100 @@ Each improvement item includes:
 - **Prompt**: Detailed instructions for implementation
 - **Acceptance Criteria**: How to verify the fix is complete
 - **Files Affected**: Which files need changes
+- **Status** (added 2026-10-08): Done / Partially done / Open / Re-evaluated / Superseded / Stale, relative to `master`
+
+---
+
+## Review Update — 2026-10-08
+
+Scope: `master` @ `69fa713`. This branch is based on v0.4.3, so file paths and line numbers in items added or updated on this date refer to `master`, not to the code on this branch.
+
+### How the findings were verified
+
+Each new item was reproduced, not inferred from reading:
+- A launcher-based harness (`LauncherFactory` with an explicitly registered `CtrfListener` and deterministic class order) ran small fake test classes on JUnit 6.1.3. Each CTRF report was compared with JUnit's own `SummaryGeneratingListener` counts.
+- A real Gradle run of `:integration-tests-listener:test` on a copy of the repository, with `maxParallelForks` 1 and 2.
+- A minimal Maven consumer (JUnit 5.11.4 + `junit-ctrf-reporter:0.4.5` from Maven Central), and a Gradle consumer resolving `testRuntimeClasspath`.
+- Generated reports validated against the official CTRF schema (`ctrf-io/ctrf`, `schema/ctrf.schema.json`, spec 0.1.0 released 2026-10-03) with a draft-07 validator.
+- Event throughput measured by driving `CtrfReportManager` through its public API.
+- Parallel stress runs (1,000 tests on 8–9 threads) with only the listener and with only the extension (CB-2).
+
+All 131 unit tests pass on `master`, and none of them cover these defects. TI-5 turns the scenarios into regression tests.
+
+### Status of the original items on `master`
+
+| Item | Status | Note |
+|---|---|---|
+| CB-1 NPE in `getExistingTests()` | Done | `cbd61a4` |
+| CB-2 Nested run ends the outer run (was: race in `finishTestRun()`) | Re-scoped, lowered to Medium | The thread race isn't reachable; a nested JUnit run ending the outer run is (verified) |
+| CB-3 Multiple `ConfigReader`s | Done | `030842d` |
+| HP-1 Singleton | Open | Simplified by HP-10 |
+| HP-2 God class | Mostly done | `c6b2650`; `CtrfReportManager` is still ~190 lines and kept the name-based flaky logic (CB-7) |
+| HP-3 Logging | Open, approach changed | Use `java.util.logging`, not SLF4J (MP-9) |
+| HP-4 `TestDetailsUtil` duplication | Done | `b49d2c1` (adapters), `16e61f3` (record) |
+| MP-1 Single-pass `SummaryUtil` | Done | `64f5bdd` |
+| MP-2 Cache existing report | Done, caused a regression | `c7772e5`: the cache is never invalidated, so same-JVM reruns lose results (CB-6c) |
+| MP-3 `CopyOnWriteArrayList` | Open, raised to High | Measured: 80k tests take 48 s; HP-6 resolves it |
+| MP-4 Input validation | Open, constraint added | Must never throw into JUnit callbacks (MP-7) |
+| CQ-1 Feature envy | Superseded | Extracted as `FlakyTestDetector`; the name-based design shown there is the CB-7 bug |
+| CQ-2 Value objects | Open (Low) | Don't call the value object `TestIdentifier` (clashes with JUnit's class) |
+| CQ-3 Long parameter lists | Stale | The referenced path and method don't exist on `master` |
+| CQ-4 Magic constants | Open | `"initializationError"` is defined in four places |
+| TI-1 Concurrency tests | Open, needs update | Sample code uses removed APIs; real data loss is across JVMs (TI-5) |
+| TI-2 File-system error tests | Open | Add the MP-5 cases |
+| TI-3 Health-test isolation | Partially done | Reset hook in `@BeforeEach`/`@AfterEach`; still a shared singleton |
+| DI-1 Javadoc | Open | Sample Javadoc repeats the wrong flaky rule |
+| DI-2 Architecture doc | Open | Should describe the target architecture below |
+| SP-1 Path validation | Re-evaluated: not recommended | Not a trust boundary; rejecting `..` breaks multi-module setups |
+| SP-2 Benchmarks | Open | Baseline numbers are in MP-3 |
+
+### New items (verified unless marked otherwise)
+
+| Item | Priority | Summary |
+|---|---|---|
+| [CB-4](#cb-4-stop-forcing-junit-runtime-dependencies-on-consumers) | Critical | Published JUnit dependencies break JUnit 5 Maven builds and silently upgrade Gradle users to JUnit 6 |
+| [CB-5](#cb-5-report-every-failed-container-not-only-class-level-ones) | Critical | Failed non-class containers vanish, so the report can be green while the build is red |
+| [CB-6](#cb-6-rework-report-persistence-forks-accumulation-same-jvm-reruns) | Critical | One shared report file: forks overwrite each other, separate runs pile up, same-JVM reruns lose results |
+| [CB-7](#cb-7-identify-tests-by-uniqueid-not-display-name) | Critical | Retries/flaky matched by display name, giving false flaky flags in a single run without retries |
+| [HP-5](#hp-5-conform-to-the-official-ctrf-schema) | High | Output fails the official CTRF schema (`filepath`, `buildNumber` type) |
+| [HP-6](#hp-6-one-test-object-per-logical-test-fold-retry-attempts) | High | Each attempt is reported as a separate test; summary inflated; `retryAttempts` missing |
+| [HP-7](#hp-7-report-aborted-tests-failed-assumptions-as-skipped) | High | Failed assumptions are reported as failed |
+| [HP-8](#hp-8-report-tests-inside-skipped-containers) | High | Tests inside skipped containers (e.g. a `@Disabled` class) vanish |
+| [HP-9](#hp-9-extension-must-not-lose-test-identity-unknown-test) | High | The extension reports "Unknown Test" when an earlier extension's `beforeEach` fails |
+| [HP-10](#hp-10-make-the-testexecutionlistener-the-single-core-integration-point) | High | Make the listener the single core integration point |
+| [MP-5](#mp-5-read-previous-reports-tolerantly) | Medium | Reading a previous report is brittle: unknown fields drop history, missing `healthy` means unhealthy |
+| [MP-6](#mp-6-replace-deprecated-extensioncontextstorecloseableresource) | Medium | Deprecated `CloseableResource`; JUnit 6 already logs a warning for every extension user |
+| [MP-7](#mp-7-never-let-reporter-errors-fail-or-mask-user-tests) | Medium | Reporter errors can fail or mask user tests (by inspection) |
+| [MP-8](#mp-8-separate-message-from-trace-bound-the-trace-size) | Medium | `message` holds the stack trace; `trace` is unbounded |
+| [MP-9](#mp-9-dependency-and-configuration-hygiene-owner-env-vars-jackson) | Medium | `owner` is unmaintained, env-var configuration is unusable, Jackson lands on users' classpaths |
+| [TI-4](#ti-4-validate-integration-output-against-the-official-schema-and-junits-own-counts) | High | Validator uses a loosened schema and a draft-04 validator; some assertions pass silently |
+| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) | High | Regression tests for every verified scenario |
+| [DI-3](#di-3-fix-incorrect-documentation) | Medium | Incorrect or missing docs (README scopes, one entry point at a time, `CtrfListener` Javadoc, CLAUDE.md) |
+
+### Target architecture
+
+Most new items come from three design choices. Fixing those once is cheaper than fixing each symptom separately:
+
+1. **One integration point: the `TestExecutionListener` (HP-10).** It sees every engine, the `TestPlan` (suite hierarchy, and the descendants of skipped containers), and container failures of every source type. Gradle, Surefire and JUnit's own `LegacyXmlReportGeneratingListener` all work this way. The Jupiter extension structurally cannot see skipped containers or most container failures.
+2. **Identity is JUnit's `uniqueId`; analysis happens once at the end (CB-7, HP-6, MP-3).** Record attempts in a `ConcurrentHashMap<testId, List<Attempt>>`, which costs O(1) per event. One O(n) pass at the end folds them into spec-shaped test objects (`testId`, `suite`, `retries`, `retryAttempts`, `flaky`).
+3. **No read-modify-write of one shared file (CB-6).** Each JVM writes its own shard atomically. A merge step builds the final report, either a small merger shipped with the library or `ctrf merge <dir>` from `ctrf-io/ctrf-cli`. The spec models this directly with `runId` and `shardId`.
+
+On top of that: force no JUnit or Jackson versions on users (CB-4, MP-9), and validate against the pinned official schema in CI (HP-5, TI-4).
+
+Context: `ctrf-io/junit-to-ctrf` already converts the JUnit XML that Gradle and Surefire write. Those files are written per class, so forks can't clobber each other, and skipped classes are expanded. This library's advantages are tags, thread IDs, exact timings and the environment-health flag, so it should first be at least as correct as that conversion.
 
 ---
 
 ## Table of Contents
 
-1. [Critical Bugs](#critical-bugs)
-2. [High Priority Design Issues](#high-priority-design-issues)
-3. [Medium Priority Improvements](#medium-priority-improvements)
-4. [Code Smells & Quality Issues](#code-smells--quality-issues)
-5. [Testing Improvements](#testing-improvements)
-6. [Documentation Improvements](#documentation-improvements)
-7. [Security & Performance](#security--performance)
+1. [Review Update — 2026-10-08](#review-update--2026-10-08)
+2. [Critical Bugs](#critical-bugs)
+3. [High Priority Design Issues](#high-priority-design-issues)
+4. [Medium Priority Improvements](#medium-priority-improvements)
+5. [Code Smells & Quality Issues](#code-smells--quality-issues)
+6. [Testing Improvements](#testing-improvements)
+7. [Documentation Improvements](#documentation-improvements)
+8. [Security & Performance](#security--performance)
 
 ---
 
@@ -32,6 +116,7 @@ Each improvement item includes:
 **Priority**: Critical
 **Complexity**: Simple
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportFileService.java`
+**Status**: Done on `master` (`cbd61a4`)
 
 #### Prompt
 ```
@@ -80,64 +165,55 @@ public List<Test> getExistingTests() {
 
 ---
 
-### CB-2: Fix Race Condition in CtrfReportManager.finishTestRun()
+### CB-2: A Nested JUnit Run Ends the Outer Run (re-scoped from "Race Condition in finishTestRun()")
 
-**Priority**: Critical
+**Priority**: Medium (lowered from Critical on 2026-10-08)
 **Complexity**: Moderate
-**Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java`
+**Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java`, `launcher/CtrfListener.java`, `jupiter/TestRunExtension.java`
+**Status**: Re-scoped 2026-10-08 (verified)
+
+#### Review Note (2026-10-08)
+The original item assumed that test callbacks can run while `finishTestRun()` executes, so results added between the CAS and `clear()` would be lost. With a single entry point that can't happen. JUnit calls `testPlanExecutionFinished` (listener), and closes the root store (extension), only after every test on every thread has finished. Verified: 10 runs of 1,000 tests on 8–9 parallel threads (5 with only the listener, 5 with only the extension) each reported 1,000 of 1,000 tests.
+
+Results are lost when a test starts its own JUnit run in the same JVM. That's common in projects that test JUnit extensions or tooling through `LauncherFactory`. The nested launcher registers `CtrfListener` again via `META-INF/services`, and all state lives in one JVM-wide singleton, so the nested run's `testPlanExecutionFinished` ends the outer run.
+
+Verified with the listener only, using three classes run in order:
+- A: two tests;
+- B: one test that runs `FastTest` through `LauncherFactory.create()`;
+- C: two tests.
+
+JUnit counted 5 tests. The CTRF report contains `outerA1()`, `outerA2()`, and the nested run's `fastOne()` and `fastTwo()`. `runsNestedLauncher()`, `outerC1()` and `outerC2()` are missing. The loss doesn't depend on timing.
+
+The original fix, taking a snapshot right after the CAS, doesn't help: the run is ended by the wrong caller, not by a race.
 
 #### Prompt
-```
-Fix the race condition in CtrfReportManager.finishTestRun() where test results can be lost.
+````
+Make sure only the run that started reporting can end it.
 
-Current issue:
-The method uses compareAndSet to ensure single execution, but between the CAS check and tests.clear(),
-other threads can add test results that will then be lost:
-
-```java
-if (!isTestRunStarted.compareAndSet(true, false)) {
-    return;
-}
-// ... long operations including file I/O ...
-tests.clear(); // <- Results added after CAS but before here are lost
-```
+Problem: CtrfReportManager keeps one JVM-wide run (the isTestRunStarted flag), and every CtrfListener
+instance calls startTestRun/finishTestRun. When a test runs JUnit itself
+(LauncherFactory.create().execute(...)), the nested launcher gets its own CtrfListener via ServiceLoader:
+- nested testPlanExecutionStarted -> startTestRun is ignored, because a run is already active;
+- the nested tests are recorded into the outer run;
+- nested testPlanExecutionFinished -> finishTestRun ends the OUTER run (writes the report, clears state);
+- the outer tests that follow are recorded but never written, because the outer finishTestRun returns
+  early.
 
 Requirements:
-1. Take a snapshot of the tests list immediately after the CAS operation
-2. Use the snapshot for all report generation operations
-3. Clear the original list only after snapshot is taken
-4. Document the threading model in javadoc
-5. Add concurrent test to verify no results are lost when:
-   - finishTestRun() is called
-   - Another thread calls onTestSuccess() simultaneously
-
-Solution approach:
-```java
-if (!isTestRunStarted.compareAndSet(true, false)) {
-    return;
-}
-
-// Take snapshot immediately to avoid race condition
-List<Test> testSnapshot = new ArrayList<>(tests);
-tests.clear();
-
-// Use testSnapshot for all remaining operations
-handleRerunsAndFlaky(testSnapshot);
-// ... rest of the method using testSnapshot
-```
-
-Alternative approach:
-Document that finishTestRun() must only be called after all test execution callbacks are complete,
-and add a check to verify no tests are in progress.
-```
+1. Remember who started the active run: the TestPlan for the listener, the root ExtensionContext for
+   the extension. Only that owner may end the run. A nested run's start and finish are no-ops.
+2. Decide what happens to tests from nested runs: ignore them (they are usually fixtures of tooling
+   tests) or attribute them to the outer run. Ignoring is the safer default. Document the choice.
+3. Stay compatible with sequential runs in one JVM (CB-6c): once the owning run finishes, the next one
+   may start a new run.
+4. Add the nested-run scenario as a regression test (TI-5).
+````
 
 #### Acceptance Criteria
-- [ ] Test results are captured atomically
-- [ ] No results lost when concurrent callbacks occur
-- [ ] Clear documentation of threading requirements
-- [ ] Concurrent test verifies thread safety
-- [ ] Integration tests pass with parallel execution
-- [ ] Performance impact is minimal
+- [ ] A nested JUnit run in the same JVM does not end the outer run
+- [ ] Every outer test appears in the report (`runsNestedLauncher()`, `outerC1()`, `outerC2()` in the scenario above)
+- [ ] Tests from nested runs are handled as documented
+- [ ] Sequential runs in one JVM still produce correct reports (CB-6)
 
 ---
 
@@ -146,6 +222,7 @@ and add a check to verify no tests are in progress.
 **Priority**: Critical
 **Complexity**: Simple
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java`
+**Status**: Done on `master` (`030842d`)
 
 #### Prompt
 ```
@@ -189,6 +266,264 @@ Verify that:
 
 ---
 
+### CB-4: Stop Forcing JUnit Runtime Dependencies on Consumers
+
+**Priority**: Critical
+**Complexity**: Moderate
+**Files**: `build.gradle`, `README.md`, `CtrfReportManager.java`, `SuiteExecutionErrorHandler.java`, new consumer-compatibility CI job
+**Status**: Open (verified 2026-10-08)
+
+#### Prompt
+````
+Remove JUnit from the library's published runtime dependencies, so adding the reporter never changes
+the consumer's JUnit versions.
+
+Problem (build.gradle:47-50 on master):
+    implementation platform("org.junit:junit-bom:${junitVersion}")
+    implementation "org.junit.jupiter:junit-jupiter-api"
+    implementation "org.junit.jupiter:junit-jupiter-engine"
+    implementation "org.junit.platform:junit-platform-launcher"
+
+These end up in the published metadata:
+- POM: junit-jupiter-api, junit-jupiter-engine and junit-platform-launcher at runtime scope, with
+  versions taken from an imported junit-bom.
+- Gradle module metadata: junit-bom as a platform dependency of runtimeElements.
+
+Verified with the released 0.4.5 (which pins JUnit 6.0.1):
+1. Maven project on JUnit 5.11.4, junit-jupiter declared first and the reporter second (both test
+   scope): `NoClassDefFoundError: org/junit/platform/engine/OutputDirectoryCreator`, "There was an
+   error in the forked process", 0 tests run, BUILD FAILURE. The dependency tree has
+   junit-platform-launcher 6.0.1 next to junit-platform-engine 1.11.4.
+2. Same project with the reporter declared first: the build passes, but it runs on JUnit 6.0.1 with
+   junit-jupiter-params 5.11.4.
+3. Gradle project on JUnit 5.11.4: every JUnit module resolves to 6.0.1 (BOM constraint).
+4. The README tells users to add the reporter with `implementation` (Gradle) and without
+   <scope>test</scope> (Maven). That puts the reporter, the JUnit engine, Jackson and owner on the
+   production runtime classpath.
+
+Requirements:
+1. Declare junit-jupiter-api and junit-platform-launcher as `compileOnly`; both are always present when
+   tests run on the JUnit Platform. Remove junit-jupiter-engine from the main configuration (keep it in
+   testImplementation). Keep the BOM out of the published metadata (`compileOnly platform(...)` and
+   `testImplementation platform(...)`).
+2. Code reachable from CtrfListener must not touch Jupiter types. Otherwise projects that run only
+   non-Jupiter engines (Vintage, Spock, Cucumber) break once junit-jupiter-api leaves the classpath.
+   Today CtrfReportManager.finishTestRun(Optional<ExtensionContext>) evaluates
+   `ExtensionContext::getExecutionException`. Linking that method reference needs the Jupiter class
+   even when the Optional is empty (expected NoClassDefFoundError; verify with a Vintage-only consumer).
+   Move Jupiter-specific handling into CtrfExtension.
+3. Fix the README snippets: `testImplementation` and `<scope>test</scope>`.
+4. Add a CI job with minimal consumer projects (Maven and Gradle) for JUnit 5.10.x, the latest 5.x and
+   6.x, consuming the library via publishToMavenLocal. Each runs one passing and one failing test and
+   checks that the CTRF file exists with the right counts. The job also catches accidental use of
+   JUnit 6-only APIs.
+5. Check the generated metadata with `./gradlew generatePomFileForMavenPublication
+   generateMetadataFileForMavenPublication`, then inspect build/publications/maven/pom-default.xml and
+   module.json.
+
+Repro (Maven consumer, maven-surefire-plugin 3.5.2, one trivial @Test, run `mvn test`):
+```xml
+<dependencies>
+  <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId>
+    <version>5.11.4</version><scope>test</scope></dependency>
+  <dependency><groupId>io.github.alexshamrai</groupId><artifactId>junit-ctrf-reporter</artifactId>
+    <version>0.4.5</version><scope>test</scope></dependency>
+</dependencies>
+```
+````
+
+#### Acceptance Criteria
+- [ ] The published POM contains no `org.junit` dependencies; `module.json` runtimeElements contains no `junit-bom` platform
+- [ ] Maven and Gradle consumers on JUnit 5.10, the latest 5.x and 6.x run their tests and produce a report, in either declaration order
+- [ ] A Vintage-only consumer using `CtrfListener` works without `junit-jupiter-api` on the classpath
+- [ ] README uses test-scoped coordinates
+- [ ] The consumer-compatibility job runs in CI on every PR
+
+---
+
+### CB-5: Report Every Failed Container, Not Only Class-Level Ones
+
+**Priority**: Critical
+**Complexity**: Moderate
+**Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `CtrfReportManager.java`, `SuiteExecutionErrorHandler.java`, integration fake tests and validator
+**Status**: Open (verified 2026-10-08)
+
+#### Prompt
+````
+Make sure every container failure ends up in the report as a failed entry. Today the report can show
+zero failures while the build fails.
+
+Problem:
+- CtrfListener.isContainerFailure (CtrfListener.java:107-111) only accepts containers whose source is a
+  ClassSource. Containers with a MethodSource are dropped: a @ParameterizedTest whose @MethodSource
+  throws or provides no arguments, a @TestFactory that throws, @TestTemplate providers. Engine-level
+  failures are dropped too.
+- CtrfExtension only records @BeforeAll failures (handleBeforeAllMethodExecutionException). At the end
+  of the run, CtrfReportManager.captureUncaughtInitializationError (CtrfReportManager.java:172-189)
+  looks only at the ExtensionContext of the first class that executed (captured by
+  TestRunExtension.beforeAll). So @AfterAll failures in any other class are lost.
+
+Verified (JUnit 6.1.3):
+- Listener: a class with `static Stream<Integer> data() { throw ... }` plus
+  `@ParameterizedTest @MethodSource("data")`, a @TestFactory that throws, and one passing class.
+  JUnit's SummaryGeneratingListener: containersFailed=2. CTRF: tests=2, passed=2, failed=0.
+- Extension: an @AfterAll failure in a class that is not the first to run, plus a throwing
+  @MethodSource. JUnit: containersFailed=2. Neither appears in the CTRF report.
+
+Requirements:
+1. Listener: in executionFinished, for every container with status FAILED (any source type, including
+   the engine), add a failed entry with the container's identity:
+   - testId = the container's uniqueId (CB-7);
+   - name = the container's display name (keeping "initializationError" for class containers for
+     backward compatibility is fine, but document it);
+   - suite = its ancestors; filePath = the source class; message/trace from the throwable.
+2. If the container failed after its children ran (e.g. @AfterAll, AfterAllCallback), still add the
+   entry, named so the phase is clear. Document the naming.
+3. For a container that finishes ABORTED, report its test descendants as skipped (shared with HP-8).
+4. Extension: implement handleAfterAllMethodExecutionException as the counterpart of the @BeforeAll
+   handler. Remove the first-class-only logic in captureUncaughtInitializationError, or track every
+   class context instead. Document what the extension cannot see; HP-10 makes the listener the
+   recommended path.
+5. Add fake tests to both integration modules: a broken @MethodSource, a throwing @TestFactory and an
+   @AfterAll failure. In the validator, assert that CTRF failed == JUnit failed tests + failed
+   containers (TI-4).
+````
+
+#### Acceptance Criteria
+- [ ] Every FAILED container in the test plan produces exactly one failed CTRF entry
+- [ ] CTRF `summary.failed > 0` whenever JUnit reports a failed test or container
+- [ ] `@AfterAll` failures are captured for every class, not only the first one
+- [ ] The integration validator cross-checks counts with JUnit's own results
+
+---
+
+### CB-6: Rework Report Persistence (Forks, Accumulation, Same-JVM Reruns)
+
+**Priority**: Critical
+**Complexity**: Complex
+**Files**: `CtrfReportFileService.java`, `CtrfReportManager.java`, `TestRerunHandler.java`, `ReportOrchestrator.java`, `config/CtrfConfig.java`, `README.md`
+**Status**: Open (verified 2026-10-08)
+
+#### Prompt
+````
+Replace the current model: read the existing report at start, then rewrite the whole file at the end.
+A single shared file gives wrong results in every situation where more than one run touches it.
+
+Root cause (master):
+- startTestRun loads the existing file and appends its tests to the current run
+  (CtrfReportManager.java:136), and reuses the file's start time and health flag.
+- The parsed file is cached for the life of the JVM and never invalidated
+  (CtrfReportFileService.java:101-107, introduced by MP-2).
+- finishTestRun writes the whole report and then clears in-memory state (CtrfReportManager.java:163).
+- The default path `ctrf-report.json` is relative to the test JVM's working directory, which is the
+  project directory, not build/. So `clean` does not remove it.
+
+Verified symptoms:
+a) Forked JVMs (Gradle maxParallelForks, Surefire forkCount): each fork rewrites the whole file and the
+   last writer wins. Real Gradle run of :integration-tests-listener:test, retries disabled:
+     maxParallelForks=1 -> CTRF has 19 of 19 tests (passed=12 failed=5 skipped=2)
+     maxParallelForks=2 -> CTRF has 9 of 19 tests (passed=6 failed=3 skipped=0)
+b) Independent runs accumulate (local re-runs, persistent CI workspaces such as Jenkins). The same
+   2-test class run twice in separate JVMs gives tests=4, every passing test retries=1 flaky=true, and
+   summary.start from the first run.
+c) Re-execution in the same JVM (Surefire rerunFailingTestsCount, programmatic launchers): after two
+   launcher.execute(...) calls on one launcher, the report contains only the second execution. The
+   first execution's results, the failure history and the flaky flag are all lost: the cached pre-run
+   read is reused, and state was cleared after the first write.
+d) The write is not atomic (objectMapper.writeValue(path.toFile(), ...)) and happens only at the very
+   end. A JVM killed mid-write leaves a truncated file. A crash before the end leaves either no report
+   or the previous run's report, which CI then publishes as current.
+
+Target design:
+1. Shards: each JVM writes its own file, `<dir>/ctrf-<runId>-<shardId>.json`. shardId = pid plus a
+   random suffix, or Gradle's `org.gradle.test.worker` system property when present. Write atomically:
+   a temp file in the same directory, then Files.move(ATOMIC_MOVE, REPLACE_EXISTING). Never
+   read-modify-write a shard. Fill the spec fields root `runId` and `environment.shardId`.
+2. Merge: build the final report from all shards with the same runId.
+   - Fold attempts across shards by testId (CB-7/HP-6).
+   - start = min(start), stop = max(stop), healthy = AND of all shards.
+   - Provide a small merger in the library (main class + API) that can run from a Gradle `finalizedBy`
+     task or via Maven exec at `post-integration-test`.
+   - Document `npx ctrf merge <dir>` (ctrf-io/ctrf-cli) as an alternative when no retry attempts need
+     folding across shards.
+3. Run identity: `ctrf.run.id`. Default it from CI variables (GITHUB_RUN_ID + GITHUB_RUN_ATTEMPT,
+   BUILD_TAG, CI_PIPELINE_ID), otherwise generate one. Ignore shards from other runs. This alone fixes (b).
+4. Stopgap if a single file has to stay the default for now:
+   - On finish, take an exclusive FileChannel.lock() on `<report>.lock` and re-read the current file
+     there (no cache).
+   - Merge only if its runId equals the current runId, otherwise overwrite. Merge by testId.
+   - Write atomically, then release the lock.
+   - Within one JVM, keep the accumulated state across executions of the same run instead of clearing it.
+   This fixes (a), (b) and (c), at the cost of serializing writers.
+5. Optionally default the output location to the build directory, but correctness must not depend on
+   the location; that is what runId is for.
+6. Keep the Gradle test-retry plugin working: retry rounds run in new JVMs of the same build, so they
+   must share the runId and fold into one test object (HP-6).
+7. Build the report from a snapshot of the collected attempts.
+````
+
+#### Acceptance Criteria
+- [ ] With `maxParallelForks=2` and `4`, the CTRF test count equals Gradle's JUnit XML count (19 of 19 for the listener module)
+- [ ] Re-running without `clean` produces a report for the latest run only
+- [ ] Two executions in one JVM: `stable()` is present, and `flakyOnce()` has `retries=1` and `flaky=true`
+- [ ] Killing the JVM during a write never leaves an unparsable report
+- [ ] Gradle test-retry rounds still fold into one test per logical test
+- [ ] README documents shards, the merge step, and `ctrf.run.id`
+
+---
+
+### CB-7: Identify Tests by uniqueId, Not Display Name
+
+**Priority**: Critical
+**Complexity**: Simple
+**Files**: `FlakyTestDetector.java`, `CtrfReportManager.java`, `TestProcessor.java`, `ctrf/model/Test.java`
+**Status**: Open (verified 2026-10-08)
+
+#### Prompt
+````
+Fix false "flaky" flags and retry counts by matching attempts on JUnit's uniqueId instead of the display
+name.
+
+Problem:
+- FlakyTestDetector.detectAndMarkFlaky (FlakyTestDetector.java:42) finds "previous attempts" with
+  findTestsByName, i.e. by display name. Display names collide all the time:
+    `[1] x = 1`            every parameterized test
+    `repetition 1 of 2`    every @RepeatedTest
+    `shouldWork()`         common method names
+    `initializationError`  every failing class
+- Line 51 also marks a passed test as flaky whenever retries > 0, even when no earlier attempt failed.
+  The spec (section 9.22) defines flaky as: final status passed AND one or more failed attempts before it.
+
+Verified in a single run, with no retries configured:
+- CollisionATest (shouldWork(), param(int) x2, @RepeatedTest(2), all failing) and CollisionBTest (same
+  names, all passing): all 5 CollisionBTest tests got retries=1 and flaky=true.
+- DupPass1Test.common() and DupPass2Test.common(), both passing: the second got retries=1, flaky=true.
+
+Requirements:
+1. Store the JUnit uniqueId on each CTRF test as `testId` (spec section 9.2). It is stable across runs and
+   retry rounds: `[engine:junit-jupiter]/[class:...]/[method:...]`, `[test-template-invocation:#1]`, ...
+2. Match earlier attempts by testId only. For tests loaded from older reports without a testId, fall back
+   to filePath/suite + name, never to the name alone.
+3. retries = number of earlier attempts with the same testId; flaky = final status passed AND at least
+   one earlier attempt failed. Remove the `|| retries > 0` condition.
+4. Unit tests:
+   - parameterized and repeated name collisions across classes;
+   - the same method name in two classes;
+   - passed then passed: not flaky, retries=1;
+   - failed then passed: flaky;
+   - failed then failed: not flaky, retries=1.
+5. Ship this as a small fix that keeps today's one-entry-per-attempt output; HP-6 then folds attempts
+   into a single test object.
+````
+
+#### Acceptance Criteria
+- [ ] The collision scenarios produce no `retries` or `flaky` values
+- [ ] The integration `FlakyTest` is still flaky with `retries=1`
+- [ ] Every test in the report has a `testId`
+- [ ] No code looks tests up by display name
+
+---
+
 ## High Priority Design Issues
 
 ### HP-1: Refactor Singleton Pattern in CtrfReportManager
@@ -196,6 +531,10 @@ Verify that:
 **Priority**: High
 **Complexity**: Complex
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java`, `CtrfExtension.java`, `CtrfListener.java`, test files
+**Status**: Open; simplified by HP-10
+
+#### Review Note (2026-10-08)
+Once the listener owns the run state (HP-10), the singleton is only needed behind `EnvironmentHealthTracker`'s static API. Until each scenario can get a fresh manager, the regression tests in TI-5 have to run scenarios in forked JVMs.
 
 #### Prompt
 ```
@@ -258,6 +597,10 @@ Implement proper singleton with:
 **Priority**: High
 **Complexity**: Complex
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java` + new files
+**Status**: Mostly done on `master` (`c6b2650`)
+
+#### Review Note (2026-10-08)
+`TestStateTracker`, `FlakyTestDetector`, `TestRerunHandler` and `ReportOrchestrator` exist on `master`. `CtrfReportManager` is still ~190 lines (the criterion was under 100). The extraction kept the name-based flaky detection, which is the CB-7 defect.
 
 #### Prompt
 ```
@@ -331,6 +674,10 @@ Each new class should be:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: `CtrfReportFileService.java`, `build.gradle`, and classes with System.out/err
+**Status**: Open; approach changed 2026-10-08
+
+#### Review Note (2026-10-08)
+On `master`, SLF4J and Logback are used only by the `integration-ctrf-validator` module, not by the library. Adding `slf4j-api` to a library that sits on every user's test classpath adds a dependency, and without a provider SLF4J 2 prints a "No SLF4J providers were found" warning. Use `java.util.logging` instead: no dependency, and the JUnit Platform itself logs through JUL. See MP-9. The rest of the prompt (log levels, no `System.out`/`System.err`) still applies.
 
 #### Prompt
 ```
@@ -396,6 +743,7 @@ Files to update:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: `TestDetailsUtil.java`, `CtrfExtension.java`, `CtrfListener.java`
+**Status**: Done on `master` (`b49d2c1` adapters, `16e61f3` record)
 
 #### Prompt
 ```
@@ -480,6 +828,238 @@ Benefits:
 
 ---
 
+### HP-5: Conform to the Official CTRF Schema
+
+**Priority**: High
+**Complexity**: Moderate
+**Files**: `ctrf/model/*.java`, `CtrfJsonComposer.java`, `config/CtrfConfig.java`, `config/ConfigReader.java`, `integration-ctrf-validator` (schema and validator)
+**Status**: Open (verified 2026-10-08)
+
+#### Prompt
+````
+Make every generated report valid against the official CTRF JSON schema, and validate against that
+schema in CI.
+
+Reference: https://github.com/ctrf-io/ctrf, files schema/ctrf.schema.json and spec/ctrf.md (spec 0.1.0,
+released 2026-10-03). The root, results, summary, environment and test objects all have
+additionalProperties: false. Unknown fields are only allowed inside `extra`.
+
+Verified: a typical report (2 classes, 10 tests, -Dctrf.build.number=123) has 11 validation errors:
+- 10 x "Additional properties are not allowed ('filepath' was unexpected)". The spec field is
+  `filePath` (ctrf/model/Test.java:34).
+- "'123' is not of type 'integer'" at /results/environment/buildNumber (Environment.java:20 is a String).
+The schema bundled in integration-ctrf-validator is a looser copy (no additionalProperties: false,
+buildNumber typed as string), so the same file passes it with 0 errors.
+
+Requirements:
+1. Serialize `filePath` (@JsonProperty("filePath")), and still accept the legacy `filepath` when reading
+   (@JsonAlias).
+2. Make buildNumber an Integer by parsing the configured value. If it isn't numeric, log a warning and
+   put the raw value into environment.extra instead of emitting invalid JSON.
+3. Make `suite` a List<String>, ordered top-level to immediate parent, filled from the TestPlan
+   ancestors (listener) or the ExtensionContext parents (extension).
+4. Set `specVersion` to the version actually targeted ("0.1.0"), as a constant updated deliberately.
+5. Add the spec fields other items need: testId (CB-7), retryAttempts (HP-6), summary.flaky and
+   summary.duration, root runId and environment.shardId (CB-6), rawStatus (HP-7).
+6. Replace the bundled schema with a pinned copy of the official one (record the commit), and validate
+   with a draft-07 capable validator such as com.networknt:json-schema-validator (TI-4).
+7. Add a fast unit test in the main module that serializes a fully populated CtrfJson and validates it
+   against the pinned schema.
+````
+
+#### Acceptance Criteria
+- [ ] Listener and extension integration reports validate against the pinned official schema with 0 errors
+- [ ] Reports that use the legacy `filepath` field can still be read
+- [ ] Non-numeric build numbers no longer produce invalid reports
+- [ ] `specVersion` matches the pinned schema version
+
+---
+
+### HP-6: One Test Object per Logical Test (Fold Retry Attempts)
+
+**Priority**: High
+**Complexity**: Moderate
+**Files**: `CtrfReportManager.java`, `FlakyTestDetector.java`, `TestStateTracker.java`, `util/SummaryUtil.java`, `ctrf/model/Test.java` and a new attempt model, `integration-ctrf-validator/src/test/java/integration/CtrfLogicTest.java`
+**Status**: Open (verified 2026-10-08)
+
+#### Prompt
+````
+Emit one test object per logical test, representing its final attempt, with earlier attempts in
+`retryAttempts`. Count only final attempts in the summary.
+
+Spec (sections 9.1, 9.20, 9.21): "The test object represents the final attempt in that execution. When
+retries occur, attempts completed before the final attempt are represented in retryAttempts." Also:
+"If retries is greater than 0, retryAttempts MUST be present." Today's output violates that MUST.
+
+Effect today, in this repository's integration run with retries: tests=24 and failed=9, although only
+4 tests actually fail. The spec-correct summary is tests=19, passed=13, failed=4, skipped=2, flaky=1.
+CtrfLogicTest.verifySummaryIsCorrect (lines 48-50) currently asserts the inflated numbers.
+
+Requirements:
+1. During execution, record attempts in a ConcurrentHashMap<String testId, List<Attempt>>: O(1) per
+   event, with no scan over earlier results. This replaces the per-event FlakyTestDetector scan and
+   resolves MP-3.
+2. At report time, in a single O(n) pass:
+   - the final attempt becomes the test object;
+   - earlier attempts go into retryAttempts, numbered contiguously from 1, each with status,
+     duration, start/stop and message/trace;
+   - retries = retryAttempts.size(); flaky as defined by the spec;
+   - the summary counts final attempts only and sets summary.flaky.
+3. Before folding, merge attempts from other shards and runs with the same runId (CB-6) by testId.
+4. Update CtrfLogicTest to the spec numbers, and assert retryAttempts for the flaky test and for
+   DummyFailedTest.
+5. Report consumers will see different test counts. Note this in the changelog and README, and bump the
+   minor version.
+````
+
+#### Acceptance Criteria
+- [ ] Each logical test appears exactly once in `results.tests`
+- [ ] Integration reports show tests=19, passed=13, failed=4, skipped=2, flaky=1
+- [ ] `retries` always equals `retryAttempts.size()`, and `retryAttempts` is absent when `retries` is 0
+- [ ] Reports validate against the official schema (HP-5)
+
+---
+
+### HP-7: Report Aborted Tests (Failed Assumptions) as Skipped
+
+**Priority**: High
+**Complexity**: Simple
+**Files**: `CtrfReportManager.java`, `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, unit tests, integration fake tests
+**Status**: Open (verified 2026-10-08)
+
+#### Prompt
+````
+Report JUnit's ABORTED status (failed assumptions) as `skipped`, not `failed`.
+
+Problem: CtrfReportManager.onTestAborted (CtrfReportManager.java:126-128) records the test as FAILED.
+Verified: a test calling `Assumptions.assumeTrue(false, "Docker not available on this agent")` gives
+JUnit aborted=1, but the CTRF report says failed=1, with a TestAbortedException trace. Gradle and
+Surefire report such tests as skipped, and CLAUDE.md documents ABORTED -> skipped.
+
+Requirements:
+1. Map ABORTED to `skipped`, set `rawStatus: "aborted"`, and put the assumption message in `message`.
+2. For an aborted container (an assumption in @BeforeAll), report its test descendants as skipped
+   (shared with HP-8).
+3. Add unit tests for both entry points, add an integration fake test with an assumption, and update
+   the validator counts.
+````
+
+#### Acceptance Criteria
+- [ ] Failed assumptions appear as skipped, with `rawStatus` "aborted" and the assumption message
+- [ ] `summary.failed` does not count aborted tests
+- [ ] The listener and the extension behave the same way
+
+---
+
+### HP-8: Report Tests Inside Skipped Containers
+
+**Priority**: High
+**Complexity**: Simple
+**Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java` (documented limitation), tests
+**Status**: Open (verified 2026-10-08)
+
+#### Prompt
+````
+When a whole container is skipped, report its tests as skipped instead of dropping them.
+
+Problem: CtrfListener.executionSkipped (CtrfListener.java:144) only handles identifiers where isTest()
+is true. When a container is skipped, JUnit reports only the container, and its children get no events
+at all.
+
+Verified: a @Disabled class and a class-level @EnabledOnOs(OS.WINDOWS) running on macOS (2 tests each),
+plus one passing class. JUnit: found=6, skipped=4. CTRF: tests=2, skipped=0. CtrfExtension has the same
+problem, because TestWatcher is never called for tests inside a disabled class.
+
+Requirements:
+1. Keep the TestPlan from testPlanExecutionStarted. In executionSkipped for a container, add every test
+   in testPlan.getDescendants(container) as skipped, with the container's reason as the message. This
+   is what JUnit's own SummaryGeneratingListener and Gradle do.
+2. Do the same for containers that finish ABORTED (HP-7).
+3. Extension: TestWatcher cannot see this case. Document the limitation (see HP-10).
+4. Add integration fake tests for a @Disabled class and a class with a class-level condition, and have
+   the validator compare skipped counts with JUnit's results.
+````
+
+#### Acceptance Criteria
+- [ ] Skipped counts match JUnit's `SummaryGeneratingListener` for disabled classes, class-level conditions and aborted containers
+- [ ] Each skipped test carries the container's reason
+
+---
+
+### HP-9: Extension Must Not Lose Test Identity ("Unknown Test")
+
+**Priority**: High
+**Complexity**: Simple
+**Files**: `jupiter/CtrfExtension.java`, `CtrfReportManager.java`
+**Status**: Open (verified 2026-10-08)
+
+#### Prompt
+````
+Stop reporting real tests as "Unknown Test".
+
+Problem: start details are recorded only in CtrfExtension.beforeEach. TestWatcher callbacks pass only
+the uniqueId, and CtrfReportManager.processTestResult (CtrfReportManager.java:105-108) invents
+`TestDetails(..., "Unknown Test")` when no start was recorded. That happens whenever
+CtrfExtension.beforeEach didn't run, for example when an extension registered earlier failed in its
+own beforeEach.
+
+Verified: `@ExtendWith({FailingBeforeEachExtension.class, CtrfExtension.class})` on a class with
+importantBusinessTest() produces an entry named 'Unknown Test', with duration 0 and no filePath.
+
+Requirements:
+1. TestWatcher callbacks pass full details built from the ExtensionContext (display name, tags, class,
+   uniqueId). Use the recorded start time if there is one, otherwise the stop time.
+2. Never invent a name when the context provides one.
+3. Add a unit test and a regression scenario (TI-5).
+````
+
+#### Acceptance Criteria
+- [ ] The scenario reports `importantBusinessTest()` with its class and tags
+- [ ] No "Unknown Test" entries appear when an `ExtensionContext` is available
+
+---
+
+### HP-10: Make the TestExecutionListener the Single Core Integration Point
+
+**Priority**: High
+**Complexity**: Complex
+**Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `jupiter/TestRunExtension.java`, `CtrfReportManager.java`, `EnvironmentHealthTracker.java`, `README.md`
+**Status**: Open (design item; motivated by the verified defects in CB-5, HP-8 and HP-9)
+
+#### Prompt
+````
+Move all reporting logic into the TestExecutionListener, and reduce CtrfExtension to a thin
+compatibility adapter (or deprecate it).
+
+Why: the listener sees everything a reporter needs:
+- all engines, not only Jupiter;
+- the TestPlan: the suite hierarchy for `suite`, and the descendants of skipped containers (HP-8);
+- container failures of every source type (CB-5);
+- dynamic tests.
+Gradle, Surefire and JUnit's own LegacyXmlReportGeneratingListener all work this way. The extension
+structurally cannot see skipped containers or most container failures. It also depends on its own
+beforeEach having run (HP-9), and ends the run through a deprecated store hook (MP-6).
+
+Requirements:
+1. Implement the full model in the listener: TestPlan-aware suite, testId, container failures, skipped
+   descendants, and the attempts map (HP-6).
+2. Keep CtrfExtension for backward compatibility, delegating with full context. Document the listener as
+   the recommended setup.
+3. Decide explicitly whether the jar ships META-INF/services/org.junit.platform.launcher.TestExecutionListener
+   (automatic activation behind a `ctrf.enabled` switch) or keeps opt-in registration. Shipping it
+   activates the listener for everyone with the jar on the test classpath, including CtrfExtension
+   users. Document the choice.
+4. With the listener owning the run state (CB-2 defines who may end a run), revisit HP-1: the singleton
+   is then only needed behind EnvironmentHealthTracker's static API.
+````
+
+#### Acceptance Criteria
+- [ ] All CB-5 and HP-8 scenarios pass with the listener
+- [ ] The listener reports non-Jupiter engines (e.g. Vintage)
+- [ ] README recommends one setup and explains the trade-offs
+
+---
+
 ## Medium Priority Improvements
 
 ### MP-1: Optimize SummaryUtil with Single-Pass Counting
@@ -487,6 +1067,7 @@ Benefits:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `src/main/java/io/github/alexshamrai/util/SummaryUtil.java`
+**Status**: Done on `master` (`64f5bdd`); `summary.flaky` is added by HP-6
 
 #### Prompt
 ```
@@ -562,6 +1143,10 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportFileService.java`
+**Status**: Done on `master` (`c7772e5`), but it caused a regression (CB-6c)
+
+#### Review Note (2026-10-08)
+`invalidateCache()` was never added, and the cache lives as long as the JVM. The criterion "No stale data issues" is not met. A second test plan executed in the same JVM (Surefire `rerunFailingTestsCount`, programmatic launchers) reuses the read made before the first run, and loses the first execution's results (verified). CB-6 replaces this mechanism.
 
 #### Prompt
 ```
@@ -646,9 +1231,28 @@ Read the report once in constructor or in a single initialization method called 
 
 ### MP-3: Replace CopyOnWriteArrayList with Better Alternative
 
-**Priority**: Medium
+**Priority**: High (raised from Medium on 2026-10-08)
 **Complexity**: Moderate
-**Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java`
+**Files**: `src/main/java/io/github/alexshamrai/TestStateTracker.java`, `FlakyTestDetector.java` (on `master`; the list moved out of `CtrfReportManager.java` in `c6b2650`)
+**Status**: Open; resolved by HP-6
+
+#### Review Note (2026-10-08)
+The analysis below assumes a single read at the end, which is wrong. Every test completion runs two O(n) operations:
+- `FlakyTestDetector.detectAndMarkFlaky` (`FlakyTestDetector.java:41-55`) streams over all completed tests.
+- `TestStateTracker.addTest` (`TestStateTracker.java:24, 32-34`) copies the whole array.
+
+`CopyOnWriteArrayList.add` copies under a lock, so parallel test threads also queue on it.
+
+Measured on `master` (single thread, unique names, no retries, `-Xmx2g`, JDK 21):
+
+| Tests | Event processing |
+|---|---|
+| 10,000 | 0.4 s |
+| 20,000 | 1.1 s |
+| 40,000 | 5.9 s |
+| 80,000 | 47.9 s |
+
+Swapping only the collection would keep the O(n) scan on every event. HP-6 removes both costs: an attempts map keyed by `testId`, folded once at the end. Implement HP-6 rather than benchmarking list types.
 
 #### Prompt
 ```
@@ -739,6 +1343,10 @@ If order doesn't matter: `ConcurrentLinkedQueue` (fastest for concurrent writes)
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: Multiple (ConfigReader, CtrfReportManager, model classes)
+**Status**: Open; constraint added 2026-10-08
+
+#### Review Note (2026-10-08)
+Validation must never throw into JUnit callbacks (`beforeEach`, `TestWatcher`, the store `close()`). An exception there fails or masks the user's tests (MP-7). For invalid configuration, log a warning and fall back to the default instead of throwing `IllegalArgumentException` as sketched below. Do not reject `..` in report paths (see SP-1).
 
 #### Prompt
 ```
@@ -852,6 +1460,184 @@ Files to update:
 
 ---
 
+### MP-5: Read Previous Reports Tolerantly
+
+**Priority**: Medium
+**Complexity**: Simple
+**Files**: `CtrfReportFileService.java`, `ctrf/model/Environment.java`, `ctrf/model/*.java`, `CtrfReportManager.java`
+**Status**: Open (verified 2026-10-08, except item 3)
+
+#### Prompt
+````
+Wherever a previously written report is still read (the CB-6 merge or the stopgap), reading must be
+tolerant.
+
+Findings:
+1. Unknown field (verified): an existing report with a root `runId`, which is valid per spec, fails to
+   parse with "Unrecognized field "runId" (class CtrfJson), not marked as ignorable". The earlier
+   results are dropped silently and the file is overwritten. The ObjectMapper keeps
+   FAIL_ON_UNKNOWN_PROPERTIES on (CtrfReportFileService.java:26).
+2. Missing `healthy` (verified): a previous report without environment.healthy (written by version
+   0.4.1 or earlier, or by another tool) makes the new run unhealthy. Environment.healthy is a primitive
+   boolean, which defaults to false (Environment.java:30).
+3. Null stop time (by inspection, not reproduced): CtrfReportManager.java:186 unboxes Test.getStop(),
+   which is a Long. A loaded test without `stop` causes a NullPointerException there.
+
+Requirements:
+1. Disable FAIL_ON_UNKNOWN_PROPERTIES, or use @JsonIgnoreProperties(ignoreUnknown = true). When unknown
+   fields must be written back, keep them in `extra` or via @JsonAnySetter/@JsonAnyGetter.
+2. Make `healthy` a Boolean. An absent value means unknown and must not make the run unhealthy.
+3. Make start/stop handling null-safe.
+4. If parsing fails, don't overwrite the unreadable file. Move it aside
+   (`<name>.corrupt-<timestamp>`) and log a warning.
+5. Add unit tests for each case (extends TI-2).
+````
+
+#### Acceptance Criteria
+- [ ] Reports with spec-valid but unknown fields are read without losing data
+- [ ] A missing `healthy` field does not mark the run unhealthy
+- [ ] Unparsable files are preserved, never silently overwritten
+
+---
+
+### MP-6: Replace Deprecated ExtensionContext.Store.CloseableResource
+
+**Priority**: Medium
+**Complexity**: Simple
+**Files**: `jupiter/TestRunExtension.java`
+**Status**: Open (verified 2026-10-08)
+
+#### Prompt
+````
+TestRunExtension.beforeAll (TestRunExtension.java:23) stores an anonymous
+ExtensionContext.Store.CloseableResource, and that resource's close() writes the report.
+
+Verified:
+- Compilation prints a deprecation note.
+- At runtime, JUnit 6 logs this for every user of CtrfExtension:
+  "WARNING: Type implements CloseableResource but not AutoCloseable: io.github.alexshamrai.jupiter.TestRunExtension$1"
+If a future JUnit release drops CloseableResource support, afterAllTests is never called and the
+extension silently stops writing reports.
+
+Requirements:
+1. Make the stored value implement AutoCloseable. JUnit 5.13 and later close AutoCloseable store values
+   by default.
+2. While JUnit versions older than 5.13 are still supported, implement both interfaces. Drop
+   CloseableResource once the minimum supported JUnit is 5.13 or later. The CB-4 consumer matrix checks
+   both.
+3. Assert in a test that no warning is logged and that the report is written.
+````
+
+#### Acceptance Criteria
+- [ ] No `CloseableResource` warning on JUnit 6
+- [ ] The report is still written on the oldest supported JUnit 5.x
+
+---
+
+### MP-7: Never Let Reporter Errors Fail or Mask User Tests
+
+**Priority**: Medium
+**Complexity**: Simple
+**Files**: `jupiter/CtrfExtension.java`, `jupiter/TestRunExtension.java`, `CtrfReportManager.java`
+**Status**: Open (by inspection, 2026-10-08)
+
+#### Prompt
+````
+A reporting library must never change a test's outcome.
+
+JUnit already guards listener callbacks and TestWatcher callbacks. Reading the code shows three places
+where an exception from reporter code still reaches JUnit:
+- CtrfExtension.beforeEach is a BeforeEachCallback, so an exception there fails the user's test.
+- CtrfExtension.handleBeforeAllMethodExecutionException calls reportManager.onTestFailure(...) before
+  `throw throwable`. If reporting throws, the user's original exception is replaced. Example:
+  setFailureDetails with a negative ctrf.max.message.length throws StringIndexOutOfBoundsException.
+- The store close() calls finishTestRun; a runtime exception there becomes an engine-level failure.
+
+Requirements:
+1. Wrap reporter work in these callbacks in try/catch and log failures. Don't swallow
+   VirtualMachineError.
+2. In handleBeforeAllMethodExecutionException, always rethrow the original throwable (try/finally).
+3. MP-4 validation: invalid configuration logs a warning and falls back to defaults; it never throws
+   into JUnit callbacks.
+4. Add unit tests with a throwing TestProcessor or file service: the user test's outcome and exception
+   must stay unchanged.
+````
+
+#### Acceptance Criteria
+- [ ] No reporter exception can change a test's status or exception
+- [ ] Reporter failures are logged with context
+
+---
+
+### MP-8: Separate `message` from `trace`; Bound the Trace Size
+
+**Priority**: Medium
+**Complexity**: Simple
+**Files**: `TestProcessor.java`, `config/CtrfConfig.java`, `config/ConfigReader.java`
+**Status**: Open (observed 2026-10-08)
+
+#### Prompt
+````
+Observed: TestProcessor.setFailureDetails puts the first ctrf.max.message.length characters of the
+printed stack trace into `message` (e.g. "org.opentest4j.AssertionFailedError: ...\n\tat ..."). `trace`
+has no size limit, so deep or recursive stack traces can make the report very large.
+
+Requirements:
+1. message = throwable.toString() (class and message), truncated to ctrf.max.message.length.
+2. trace = the stack trace truncated to a new `ctrf.max.trace.length` with a documented default. Keep
+   the head and the "Caused by" chain.
+3. Optional (spec fields): fill `line`, and possibly `snippet`, from the first stack frame inside the
+   test class.
+4. Update the unit tests and the README configuration table.
+````
+
+#### Acceptance Criteria
+- [ ] `message` contains the exception summary, not stack frames
+- [ ] `trace` respects the configured maximum
+
+---
+
+### MP-9: Dependency and Configuration Hygiene (owner, Env Vars, Jackson)
+
+**Priority**: Medium
+**Complexity**: Moderate
+**Files**: `config/CtrfConfig.java`, `config/ConfigReader.java`, `CtrfReportFileService.java`, `build.gradle`, `README.md`
+**Status**: Open (verified 2026-10-08, except item 3)
+
+#### Prompt
+````
+Reduce what the reporter brings onto users' test classpaths, and make configuration work the way it is
+documented.
+
+Findings:
+1. Environment variables (verified): the CtrfConfig Javadoc and CLAUDE.md document configuration via
+   environment variables, but only names containing dots work.
+   - `CTRF_REPORT_PATH=...` is ignored; the report went to ./ctrf-report.json instead.
+   - `env 'ctrf.report.path=...'` works, but POSIX shells can't export such a name:
+     "export: `ctrf.report.path=x': not a valid identifier".
+   So in practice environment-variable configuration is unusable.
+2. owner (verified): 1.0.12 is the last release (June 2020); the library is unmaintained.
+3. Jackson (a risk, not reproduced against a specific application): jackson-databind 2.22.x is a runtime
+   dependency, so on Gradle it raises the Jackson version on users' test runtime classpath.
+
+Requirements:
+1. Replace owner with a small loader: system property, then environment variable, then classpath
+   ctrf.properties, then the default. The environment lookup accepts both `ctrf.report.path` and
+   `CTRF_REPORT_PATH`. Keep every existing key working.
+2. Either drop Jackson, or shade and relocate it. The CTRF model is small: a ~150-line writer, plus a
+   reader only where CB-6 still needs one. At minimum, don't force a newer Jackson than needed.
+3. For logging (HP-3), use java.util.logging rather than adding SLF4J: no new dependency, and JUnit
+   itself logs through JUL.
+4. Document configuration precedence and environment variable names in the README.
+````
+
+#### Acceptance Criteria
+- [ ] `CTRF_REPORT_PATH` and the other `CTRF_*` variables work
+- [ ] No owner dependency; Jackson is removed or shaded
+- [ ] Published runtime dependencies are listed and justified in README or DEVELOPMENT.md
+
+---
+
 ## Code Smells & Quality Issues
 
 ### CQ-1: Extract Feature Envy from CtrfReportManager
@@ -859,6 +1645,10 @@ Files to update:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java` + new files
+**Status**: Superseded by CB-7 and HP-6. Do not implement the design below as written.
+
+#### Review Note (2026-10-08)
+This logic was extracted on `master` as `FlakyTestDetector`. The design below matches tests by display name (`findTestsByName`, and `mergeRerunResults` comparing names), which is exactly the CB-7 defect. Its `isFlaky` rule ("retries > 0 and passed", "different outcomes") also contradicts the spec definition: final status passed, and at least one earlier failed attempt. Identity and folding are specified in CB-7 and HP-6.
 
 #### Prompt
 ```
@@ -986,6 +1776,10 @@ Requirements:
 **Priority**: Low
 **Complexity**: Moderate
 **Files**: Multiple (model package, CtrfReportManager, TestDetails)
+**Status**: Open (Low)
+
+#### Review Note (2026-10-08)
+Don't name the value object `TestIdentifier`: it clashes with `org.junit.platform.launcher.TestIdentifier`, which `CtrfListener` and `TestIdentifierAdapter` already use. The identity concept itself is defined in CB-7 (`testId` = JUnit `uniqueId`). A name like `TestId` fits.
 
 #### Prompt
 ```
@@ -1175,6 +1969,10 @@ This is a significant refactoring - consider if the benefits outweigh the change
 **Priority**: Low
 **Complexity**: Simple
 **Files**: `src/main/java/io/github/alexshamrai/suite/SuiteExecutionErrorHandler.java`
+**Status**: Stale
+
+#### Review Note (2026-10-08)
+On `master` the class is `src/main/java/io/github/alexshamrai/SuiteExecutionErrorHandler.java` and has only `handleInitializationError(...)`; `handleExecutionError(...)` doesn't exist. If CB-5 and HP-10 move container-failure handling into the listener, this class will probably be removed. Revisit after those items.
 
 #### Prompt
 ```
@@ -1295,6 +2093,10 @@ Benefits:
 **Priority**: Low
 **Complexity**: Simple
 **Files**: `TestProcessor.java`, configuration files, multiple classes
+**Status**: Open
+
+#### Review Note (2026-10-08)
+On `master`, `"initializationError"` is defined as a constant in `CtrfExtension`, `CtrfListener` and `SuiteExecutionErrorHandler`, and used as a literal in `CtrfReportManager`. The CTRF status strings are already centralised by the `Test.TestStatus` enum and its `@JsonValue`, so no separate status constants are needed.
 
 #### Prompt
 ```
@@ -1421,6 +2223,10 @@ Requirements:
 **Priority**: High
 **Complexity**: Complex
 **Files**: New test file `src/test/java/io/github/alexshamrai/CtrfReportManagerConcurrencyTest.java`
+**Status**: Open; update the sample before implementing
+
+#### Review Note (2026-10-08)
+The sample code uses APIs that no longer exist: `onTestStart(String)`, `finishTestRun()` with no arguments, and a public no-argument constructor. On `master` the signatures are `onTestStart(TestDetails)` and `finishTestRun(Optional<ExtensionContext>)`. The data loss seen in practice happens across JVMs, across repeated executions (CB-6) and through nested JUnit runs (CB-2), not across threads. The CB-2 race that `testRaceConditionBetweenAddAndFinish` targets isn't reachable; it was checked under parallel load. TI-5 covers the real scenarios and is more valuable. Keep this item for the thread-level guarantees.
 
 #### Prompt
 ```
@@ -1682,6 +2488,10 @@ Tools to use:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `src/test/java/io/github/alexshamrai/CtrfReportFileServiceTest.java`
+**Status**: Open
+
+#### Review Note (2026-10-08)
+Add the MP-5 cases: spec-valid unknown fields such as a root `runId`, a missing `environment.healthy`, and an unparsable file that must be kept rather than overwritten. Also add an atomic-write case (CB-6d).
 
 #### Prompt
 ```
@@ -1850,6 +2660,10 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `src/test/java/io/github/alexshamrai/EnvironmentHealthTrackerTest.java`
+**Status**: Partially done on `master`
+
+#### Review Note (2026-10-08)
+On `master`, `EnvironmentHealthTrackerTest` calls `CtrfReportManager.getInstance().resetEnvironmentHealthForTesting()` in `@BeforeEach` and `@AfterEach` (approach 2 below). The tests still share the singleton, so the isolation goals remain open.
 
 #### Prompt
 ```
@@ -1966,6 +2780,108 @@ Benefits:
 
 ---
 
+### TI-4: Validate Integration Output Against the Official Schema and JUnit's Own Counts
+
+**Priority**: High
+**Complexity**: Moderate
+**Files**: `integration-ctrf-validator/build.gradle`, `integration-ctrf-validator/src/test/resources/schema/ctrf-schema.json`, `.../integration/BaseIntegrationTest.java`, `.../integration/CtrfLogicTest.java`, `.../integration/JsonSchemaValidator.java`, CI workflows
+**Status**: Open (verified 2026-10-08)
+
+#### Prompt
+````
+As it stands, the integration validator cannot detect CB-5, CB-6, HP-5 or HP-8. Make it able to.
+
+Problems:
+1. The bundled schema is a looser copy of the official one, so `filepath` and a string buildNumber pass
+   (HP-5).
+2. The validator library (com.github.java-json-tools:json-schema-validator 2.2.14) only supports
+   draft-04, while both schemas declare draft-07.
+3. CtrfLogicTest.verifyTestStatuses (lines 31-40) uses findFirst().ifPresent(...), so a missing test
+   passes silently. It also matches with contains(), so "Second failed test" (the display name of
+   secondFailedTest()) is never checked.
+4. BaseIntegrationTest.DEFAULT_REPORT_PATH (lines 14-15) is a sentence, not a path. Running
+   `./gradlew :integration-ctrf-validator:test` without -Dctrf.report.path therefore always fails.
+5. Several tests only pass with the exact CI parameters: exactly 2 threads, build name "system-build",
+   and ENV_HEALTHY=false for the listener.
+
+Requirements:
+1. Use a pinned copy of the official schema and a draft-07 validator (shared with HP-5).
+2. Cross-check against JUnit's own results for the same run: compare CTRF tests/failed/skipped with the
+   Gradle JUnit XML in build/test-results/test (sum of tests, failures, errors and skipped; folded per
+   logical test once HP-6 is done). This would have caught CB-5, CB-6a and HP-8 automatically.
+3. Assertions must require the test to be present, and match by testId (CB-7) rather than by a
+   display-name substring.
+4. Use a real default path, e.g. ../integration-tests-listener/build/test-results/ctrf-report.json, or
+   fail with a clear message.
+5. Make the CI-specific expectations configurable through system properties.
+6. Add a CI variant with maxParallelForks=2 (CB-6).
+````
+
+#### Acceptance Criteria
+- [ ] The validator fails on today's `master` output (`filepath`, `buildNumber`, data lost across forks)
+- [ ] The validator passes once HP-5 and CB-6 are fixed
+- [ ] The validator runs locally with documented defaults
+
+---
+
+### TI-5: Regression Tests for Every Verified Scenario
+
+**Priority**: High
+**Complexity**: Moderate
+**Files**: new tests under `src/test/java/io/github/alexshamrai/scenario/` (or a new integration module), fake test classes
+**Status**: Open (2026-10-08)
+
+#### Prompt
+````
+Turn the scenarios from the 2026-10-08 review into fast, deterministic regression tests.
+
+Harness used in the review. It runs the JUnit Platform in-process with an explicitly registered listener:
+```java
+Launcher launcher = LauncherFactory.create(LauncherConfig.builder()
+    .enableTestExecutionListenerAutoRegistration(false)
+    .addTestExecutionListeners(new CtrfListener())
+    .build());
+LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
+    .selectors(selectClass(CollisionATest.class), selectClass(CollisionBTest.class))
+    .configurationParameter("junit.jupiter.testclass.order.default",
+        "org.junit.jupiter.api.ClassOrderer$ClassName")
+    .build();
+SummaryGeneratingListener junitCounts = new SummaryGeneratingListener();
+launcher.execute(request, junitCounts);
+// Point ctrf.report.path at a temp file, then read the CTRF report and compare it
+// with junitCounts.getSummary().
+```
+Many fake classes fail on purpose. Put them in a package the build's own test task does not pick up,
+or exclude them.
+
+Scenarios, with the results expected after the fixes:
+| Scenario | Classes | Item |
+|---|---|---|
+| Name collisions across classes | CollisionATest (failing) and CollisionBTest (passing), both with shouldWork(), param(int) x2 and @RepeatedTest(2) | CB-7 |
+| Same method name, both passing | DupPass1Test.common(), DupPass2Test.common() | CB-7 |
+| Skipped containers | a @Disabled class; an @EnabledOnOs(OS.WINDOWS) class | HP-8 |
+| Assumption | assumeTrue(false, ...) | HP-7 |
+| Broken sources | an @MethodSource that throws; a @TestFactory that throws | CB-5 |
+| Same-JVM rerun | RerunTest: stable(), plus flakyOnce() that fails on its first call; two launcher.execute calls | CB-6c |
+| Two JVMs, one report | SlowTest and FastTest in two concurrent JVMs (ProcessBuilder) | CB-6a |
+| Accumulation | the same class run twice in separate JVMs | CB-6b |
+| Extension identity | @ExtendWith({FailingBeforeEachExtension.class, CtrfExtension.class}) | HP-9 |
+| Extension @AfterAll | @AfterAll throws in a class that is not the first to run | CB-5 |
+| Nested JUnit run | NestAOuterFirstTest, NestBLauncherTest (runs FastTest through LauncherFactory.create()), NestCOuterLastTest; CtrfListener registered via META-INF/services | CB-2 |
+| Tolerant read | previous report with a root runId; previous report without healthy | MP-5 |
+| Official schema | validate the output of every scenario | HP-5 |
+
+The CtrfReportManager singleton keeps state across scenarios within one JVM. Either give each scenario
+a fresh manager (HP-1), or run each scenario in a forked JVM.
+````
+
+#### Acceptance Criteria
+- [ ] Every scenario above has an automated test
+- [ ] The tests fail on today's `master` and pass after the corresponding fixes
+- [ ] The scenario suite runs in CI in under a minute
+
+---
+
 ## Documentation Improvements
 
 ### DI-1: Add Comprehensive Javadoc
@@ -1973,6 +2889,10 @@ Benefits:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: All public classes and methods
+**Status**: Open
+
+#### Review Note (2026-10-08)
+The sample class Javadoc below repeats the old flaky rule: "pass after previous failures (retries > 0) or if multiple executions have different outcomes". Use the spec definition instead: the final status is passed, and at least one earlier attempt failed (CB-7). The sample method signatures are also outdated (see the TI-1 note).
 
 #### Prompt
 ```
@@ -2188,6 +3108,10 @@ Guidelines:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: New file `ARCHITECTURE.md`
+**Status**: Open
+
+#### Review Note (2026-10-08)
+Describe the target architecture from the Review Update rather than the current design: listener first, attempts keyed by `testId`, shards plus a merge step. Drop the "Why CopyOnWriteArrayList?" section (see MP-3 and HP-6). Document the report semantics: one test per logical test, `retries`/`retryAttempts`, and the flaky definition.
 
 #### Prompt
 ```
@@ -2351,6 +3275,44 @@ Requirements:
 
 ---
 
+### DI-3: Fix Incorrect Documentation
+
+**Priority**: Medium
+**Complexity**: Simple
+**Files**: `README.md`, `launcher/CtrfListener.java`, `CLAUDE.md`, `config/CtrfConfig.java`
+**Status**: Open (verified 2026-10-08)
+
+#### Prompt
+````
+Fix documentation that is wrong today:
+1. README dependency snippets: `implementation` (Gradle) and Maven without <scope>test</scope> put the
+   reporter on the production classpath. Use testImplementation and test scope (CB-4).
+2. The CtrfListener class Javadoc (CtrfListener.java:26-27) suggests
+   `-Djunit.platform.launcher.listeners.discovery=io.github.alexshamrai.launcher.CtrfListener`. That is
+   not a JUnit configuration key; it is the name of a package inside junit-platform-launcher. The only
+   listener-related key is junit.platform.execution.listeners.deactivate. Document ServiceLoader
+   registration (META-INF/services) and programmatic registration instead.
+3. CLAUDE.md:
+   - "JUnit ABORTED -> skipped" doesn't match the code, which says failed. Fix the code (HP-7).
+   - The version "0.4.1 / 0.4.2-SNAPSHOT" doesn't match build.gradle (0.4.5 / 0.4.6-SNAPSHOT).
+   - "Concurrency Design": "read-heavy workload" and "No explicit locks" are wrong. The workload is
+     write-heavy, and CopyOnWriteArrayList.add takes a lock. Update after MP-3/HP-6.
+4. CtrfConfig Javadoc and CLAUDE.md: environment-variable configuration only works with dotted names
+   (MP-9). Document the real behaviour until it is fixed.
+5. README: once implemented, document the report semantics (one test per logical test,
+   retries/retryAttempts, the flaky definition) and the multi-fork setup (CB-6).
+6. README "Usage options": state that CtrfListener and CtrfExtension are alternatives. Use one or the
+   other; registering both in the same run is not supported.
+````
+
+#### Acceptance Criteria
+- [ ] Every documented setting and command works as written
+- [ ] README dependency snippets are test-scoped
+- [ ] README says to use either the listener or the extension, not both
+- [ ] CLAUDE.md matches the code
+
+---
+
 ## Security & Performance
 
 ### SP-1: Add Path Validation for Security
@@ -2358,6 +3320,10 @@ Requirements:
 **Priority**: Low
 **Complexity**: Simple
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportFileService.java`
+**Status**: Re-evaluated 2026-10-08: not recommended as specified
+
+#### Review Note (2026-10-08)
+The report path is not a trust boundary. It comes from the build owner's own configuration (system properties, environment, a classpath file), and whoever controls that configuration can already run arbitrary code in the build. Rejecting `..` would break legitimate multi-module setups: the test JVM's working directory is the module directory, so writing to a parent build directory needs `../`. Keep only clear error messages for paths that can't be written (MP-4), and drop the `SecurityException` checks below.
 
 #### Prompt
 ```
@@ -2560,6 +3526,10 @@ Requirements:
 **Priority**: Low
 **Complexity**: Moderate
 **Files**: New file `src/test/java/io/github/alexshamrai/benchmark/PerformanceBenchmarks.java`
+**Status**: Open
+
+#### Review Note (2026-10-08)
+Baseline numbers measured on `master` are in MP-3 (10k tests 0.4 s, 80k tests 47.9 s for event processing). The sample code uses outdated APIs (see the TI-1 note). The most useful benchmark is event processing against test count, which should be linear after HP-6.
 
 #### Prompt
 ```
@@ -2826,43 +3796,56 @@ Report Generation:
 
 ## Implementation Order
 
-For best results, implement in this order:
+Updated 2026-10-08. This replaces the original four-phase order, whose Phase 1 and most of Phase 2 are already done on `master`.
 
-### Phase 1: Critical Fixes (Week 1)
-1. CB-1: Fix NullPointerException
-2. CB-2: Fix race condition
-3. CB-3: Fix ConfigReader duplication
+### Already done on `master`
+CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 (its regression is tracked in CB-6), TI-3 (partially)
 
-### Phase 2: High Priority Refactoring (Weeks 2-3)
-4. HP-3: Implement logging
-5. HP-4: Fix TestDetailsUtil duplication
-6. HP-1: Refactor singleton pattern
-7. HP-2: Break up god class
+### Phase 1: Stop wrong results and broken builds (small, independent changes)
+1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix
+2. CB-7: Identify tests by `uniqueId` (`testId`) and fix the flaky rule
+3. CB-5: Report every failed container
+4. HP-8: Report tests inside skipped containers
+5. HP-7: Report aborted tests as skipped
+6. HP-9: Keep test identity in the extension
+7. TI-5: Write the regression scenario for each of the fixes above alongside it
 
-### Phase 3: Quality Improvements (Weeks 4-5)
-8. MP-1: Optimize SummaryUtil
-9. MP-2: Cache file reads
-10. MP-4: Add validation
-11. TI-1: Add concurrency tests
-12. DI-1: Add javadoc
+### Phase 2: Data model and persistence (changes the report shape, so bump the minor version)
+8. HP-6: One test object per logical test, with `retryAttempts` (also resolves MP-3)
+9. CB-6: Shards plus merge, run identity, atomic writes
+10. HP-5: Conform to the official schema
+11. TI-4: Validator using the official schema and a cross-check against JUnit's counts
+12. MP-5: Read previous reports tolerantly
 
-### Phase 4: Polish (Week 6)
-13. Remaining medium priority items
-14. Documentation improvements
-15. Performance benchmarks
-16. Security hardening
+### Phase 3: Architecture and robustness
+13. HP-10: Listener as the single core integration point, then revisit HP-1
+14. CB-2: Only the run that started reporting may end it (nested JUnit runs)
+15. MP-6: `AutoCloseable` instead of `CloseableResource`
+16. MP-7: Reporter errors never affect test outcomes
+17. MP-8: Separate `message` from `trace`
+18. MP-9: Dependency and configuration hygiene (includes HP-3, using JUL)
+
+### Phase 4: Polish
+19. DI-3, DI-1, DI-2: Documentation
+20. MP-4, CQ-2, CQ-4, TI-1, TI-2, SP-2
+
+### Not planned
+- CQ-1: superseded by CB-7 and HP-6
+- CQ-3: stale; revisit after CB-5 and HP-10
+- SP-1: not recommended as specified
 
 ---
 
 ## Notes
 
-- Each improvement can be implemented independently
+- The original items can be implemented independently. The 2026-10-08 items have dependencies, noted in each item: HP-6 builds on CB-7, CB-6's merge needs `testId`, and HP-8 shares code with CB-5 and HP-7.
 - Tests should be added/updated for each change
 - Document breaking changes in CHANGELOG
 - Consider semantic versioning for releases
 - Keep CLAUDE.md updated with architectural changes
+- File paths and line numbers in items added or updated on 2026-10-08 refer to `master` @ `69fa713`. This branch is based on v0.4.3.
 
 ---
 
 Generated: 2025-01-20
-Review Date: TBD
+Updated: 2026-10-08 (behaviour-focused review of `master` @ `69fa713`)
