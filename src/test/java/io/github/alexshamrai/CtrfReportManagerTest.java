@@ -138,19 +138,18 @@ class CtrfReportManagerTest {
     @DisplayName("Rerunning a test should set the retry count and flaky flag")
     void processTestResult_setsRetryCount() {
         // Mock the first run
-        var firstRun = Test.builder().name("Rerun Test").status(FAILED).build();
+        var firstRun = Test.builder().testId("id-1").name("Rerun Test").status(FAILED).build();
         when(testProcessor.createTest(eq("Rerun Test"), any(TestDetails.class), anyLong())).thenReturn(firstRun);
         var details1 = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Rerun Test");
         reportManager.onTestStart(details1);
         reportManager.onTestFailure("id-1", new RuntimeException());
 
-        // Mock the second run
-        var secondRun = new Test();
-        secondRun.setName("Rerun Test");
+        // Mock the second run: a rerun keeps the test's unique ID
+        var secondRun = Test.builder().testId("id-1").name("Rerun Test").build();
         when(testProcessor.createTest(eq("Rerun Test"), any(TestDetails.class), anyLong())).thenReturn(secondRun);
-        var details2 = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-2", "Rerun Test");
+        var details2 = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Rerun Test");
         reportManager.onTestStart(details2);
-        reportManager.onTestSuccess("id-2");
+        reportManager.onTestSuccess("id-1");
 
         assertEquals(1, secondRun.getRetries());
         assertTrue(secondRun.getFlaky());

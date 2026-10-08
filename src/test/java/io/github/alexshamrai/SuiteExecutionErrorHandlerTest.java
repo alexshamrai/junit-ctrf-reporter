@@ -87,4 +87,14 @@ public class SuiteExecutionErrorHandlerTest {
         assertEquals(null, test.getFilepath());
         assertEquals(TestStatus.FAILED, test.getStatus());
     }
+
+    @org.junit.jupiter.api.Test
+    void handleInitializationError_usesClassUniqueIdForTestId() {
+        when(extensionContext.getExecutionException()).thenReturn(Optional.of(new RuntimeException("Test exception")));
+        when(extensionContext.getUniqueId()).thenReturn("[engine:junit-jupiter]/[class:com.example.FailingTest]");
+
+        var test = errorHandler.handleInitializationError(extensionContext, 1_000L, 2_000L).orElseThrow();
+
+        assertEquals("[engine:junit-jupiter]/[class:com.example.FailingTest]/initializationError", test.getTestId());
+    }
 }

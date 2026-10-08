@@ -37,6 +37,7 @@ public class TestProcessor {
      */
     public Test createTest(String displayName, TestDetails details, long stopTime) {
         return Test.builder()
+            .testId(details.uniqueId())
             .name(displayName) // Use the displayName parameter
             .tags(details.tags() != null ? new ArrayList<>(details.tags()) : new ArrayList<>())
             .filepath(details.filePath())

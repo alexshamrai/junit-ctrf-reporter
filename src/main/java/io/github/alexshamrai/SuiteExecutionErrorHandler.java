@@ -39,6 +39,7 @@ public class SuiteExecutionErrorHandler {
                 .orElse(null);
 
             var failureTest = Test.builder()
+                .testId(context.getUniqueId() + "/" + INITIALIZATION_ERROR)
                 .name(INITIALIZATION_ERROR)
                 .filepath(filepath)
                 .status(TestStatus.FAILED)

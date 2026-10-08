@@ -11,10 +11,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class FlakyTestDetectorTest {
 
+    private static final String CLASS_A = "com.example.ATest";
+    private static final String CLASS_B = "com.example.BTest";
+    private static final String TEST_1 = "[engine:junit-jupiter]/[class:com.example.ATest]/[method:test1()]";
+
     @org.junit.jupiter.api.Test
     @DisplayName("Should not mark test as flaky when no previous tests exist")
     void shouldNotMarkFlakyWhenNoPreviousTests() {
-        var newTest = Test.builder().name("test1").status(PASSED).build();
+        var newTest = attempt(TEST_1, CLASS_A, "test1()", PASSED);
 
         FlakyTestDetector.detectAndMarkFlaky(newTest, List.of());
 
@@ -23,89 +27,121 @@ class FlakyTestDetectorTest {
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("Should set retry count when previous tests exist")
-    void shouldSetRetryCountWhenPreviousTestsExist() {
-        var previousTest1 = Test.builder().name("test1").status(FAILED).build();
-        var previousTest2 = Test.builder().name("test1").status(FAILED).build();
-        var newTest = Test.builder().name("test1").status(PASSED).build();
+    @DisplayName("Should count earlier attempts of the same test as retries")
+    void shouldCountEarlierAttemptsOfTheSameTestAsRetries() {
+        var first = attempt(TEST_1, CLASS_A, "test1()", FAILED);
+        var second = attempt(TEST_1, CLASS_A, "test1()", FAILED);
+        var newTest = attempt(TEST_1, CLASS_A, "test1()", PASSED);
 
-        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(previousTest1, previousTest2));
+        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(first, second));
 
         assertThat(newTest.getRetries()).isEqualTo(2);
+        assertThat(newTest.getFlaky()).isTrue();
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("Should mark test as flaky when passed after previous failures")
-    void shouldMarkFlakyWhenPassedAfterFailures() {
-        var previousTest = Test.builder().name("test1").status(FAILED).build();
-        var newTest = Test.builder().name("test1").status(PASSED).build();
+    @DisplayName("Should mark test as flaky when it passes after a failed attempt")
+    void shouldMarkFlakyWhenPassedAfterFailure() {
+        var previous = attempt(TEST_1, CLASS_A, "test1()", FAILED);
+        var newTest = attempt(TEST_1, CLASS_A, "test1()", PASSED);
 
-        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(previousTest));
+        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(previous));
 
         assertThat(newTest.getFlaky()).isTrue();
         assertThat(newTest.getRetries()).isEqualTo(1);
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("Should mark test as flaky when passed with retries > 0")
-    void shouldMarkFlakyWhenPassedWithRetries() {
-        var previousTest = Test.builder().name("test1").status(PASSED).build();
-        var newTest = Test.builder().name("test1").status(PASSED).build();
+    @DisplayName("Should not mark test as flaky when every earlier attempt passed")
+    void shouldNotMarkFlakyWhenPassedBefore() {
+        var previous = attempt(TEST_1, CLASS_A, "test1()", PASSED);
+        var newTest = attempt(TEST_1, CLASS_A, "test1()", PASSED);
 
-        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(previousTest));
+        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(previous));
 
-        assertThat(newTest.getFlaky()).isTrue();
+        assertThat(newTest.getFlaky()).isNull();
         assertThat(newTest.getRetries()).isEqualTo(1);
     }
 
     @org.junit.jupiter.api.Test
     @DisplayName("Should not mark failed test as flaky")
     void shouldNotMarkFailedTestAsFlaky() {
-        var previousTest = Test.builder().name("test1").status(FAILED).build();
-        var newTest = Test.builder().name("test1").status(FAILED).build();
+        var previous = attempt(TEST_1, CLASS_A, "test1()", FAILED);
+        var newTest = attempt(TEST_1, CLASS_A, "test1()", FAILED);
 
-        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(previousTest));
+        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(previous));
 
         assertThat(newTest.getFlaky()).isNull();
         assertThat(newTest.getRetries()).isEqualTo(1);
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("Should only count tests with same name")
-    void shouldOnlyCountTestsWithSameName() {
-        var otherTest1 = Test.builder().name("test2").status(FAILED).build();
-        var otherTest2 = Test.builder().name("test3").status(FAILED).build();
-        var newTest = Test.builder().name("test1").status(PASSED).build();
+    @DisplayName("Should not treat a test with the same method name in another class as a retry")
+    void shouldNotMatchSameMethodNameInAnotherClass() {
+        var otherClass = attempt("[engine:junit-jupiter]/[class:com.example.BTest]/[method:shouldWork()]",
+            CLASS_B, "shouldWork()", FAILED);
+        var newTest = attempt("[engine:junit-jupiter]/[class:com.example.ATest]/[method:shouldWork()]",
+            CLASS_A, "shouldWork()", PASSED);
 
-        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(otherTest1, otherTest2));
-
-        assertThat(newTest.getFlaky()).isNull();
-        assertThat(newTest.getRetries()).isNull();
-    }
-
-    @org.junit.jupiter.api.Test
-    @DisplayName("Should handle null test names gracefully")
-    void shouldHandleNullTestNames() {
-        var previousTest = Test.builder().name(null).status(FAILED).build();
-        var newTest = Test.builder().name("test1").status(PASSED).build();
-
-        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(previousTest));
+        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(otherClass));
 
         assertThat(newTest.getFlaky()).isNull();
         assertThat(newTest.getRetries()).isNull();
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("Should count multiple retries correctly")
-    void shouldCountMultipleRetriesCorrectly() {
-        var previousTest1 = Test.builder().name("test1").status(FAILED).build();
-        var previousTest2 = Test.builder().name("test1").status(FAILED).build();
-        var previousTest3 = Test.builder().name("test1").status(FAILED).build();
-        var newTest = Test.builder().name("test1").status(PASSED).build();
+    @DisplayName("Should not treat invocations of different parameterized tests as retries")
+    void shouldNotMatchInvocationsOfDifferentParameterizedTests() {
+        var otherMethod = attempt(
+            "[engine:junit-jupiter]/[class:com.example.ATest]/[test-template:first(int)]/[test-template-invocation:#1]",
+            CLASS_A, "[1] 1", FAILED);
+        var newTest = attempt(
+            "[engine:junit-jupiter]/[class:com.example.ATest]/[test-template:second(int)]/[test-template-invocation:#1]",
+            CLASS_A, "[1] 1", PASSED);
 
-        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(previousTest1, previousTest2, previousTest3));
+        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(otherMethod));
 
+        assertThat(newTest.getFlaky()).isNull();
+        assertThat(newTest.getRetries()).isNull();
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Should match a test from an older report without testId by file path and name")
+    void shouldMatchLegacyTestByFilePathAndName() {
+        var legacy = Test.builder().filepath(CLASS_A).name("test1()").status(FAILED).build();
+        var newTest = attempt(TEST_1, CLASS_A, "test1()", PASSED);
+
+        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(legacy));
+
+        assertThat(newTest.getRetries()).isEqualTo(1);
         assertThat(newTest.getFlaky()).isTrue();
-        assertThat(newTest.getRetries()).isEqualTo(3);
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Should not match a test from an older report that belongs to another file")
+    void shouldNotMatchLegacyTestFromAnotherFile() {
+        var legacy = Test.builder().filepath(CLASS_B).name("test1()").status(FAILED).build();
+        var newTest = attempt(TEST_1, CLASS_A, "test1()", PASSED);
+
+        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(legacy));
+
+        assertThat(newTest.getFlaky()).isNull();
+        assertThat(newTest.getRetries()).isNull();
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Should never match tests by name alone")
+    void shouldNotMatchByNameAlone() {
+        var legacy = Test.builder().name("test1()").status(FAILED).build();
+        var newTest = Test.builder().name("test1()").status(PASSED).build();
+
+        FlakyTestDetector.detectAndMarkFlaky(newTest, List.of(legacy));
+
+        assertThat(newTest.getFlaky()).isNull();
+        assertThat(newTest.getRetries()).isNull();
+    }
+
+    private static Test attempt(String testId, String filepath, String name, Test.TestStatus status) {
+        return Test.builder().testId(testId).filepath(filepath).name(name).status(status).build();
     }
 }
