@@ -9,6 +9,7 @@ import io.github.alexshamrai.util.SummaryUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -104,6 +105,35 @@ class CtrfReportManagerTest {
         verify(testProcessor).createTest(eq("Success Test"), any(TestDetails.class), anyLong());
         assertEquals(PASSED, testResult.getStatus());
         assertNull(testResult.getFlaky());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A result without a recorded start keeps the identity it was given, with start equal to stop")
+    void onTestSuccess_withoutRecordedStart_usesGivenIdentity() {
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(new Test());
+        var given = new TestDetails(5_000L, Set.of("payments"), "com.example.PaymentTest", "id-1", "importantBusinessTest()");
+
+        reportManager.onTestSuccess(given);
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        var stopCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(testProcessor).createTest(eq("importantBusinessTest()"), detailsCaptor.capture(), stopCaptor.capture());
+        assertEquals("com.example.PaymentTest", detailsCaptor.getValue().filePath());
+        assertEquals(Set.of("payments"), detailsCaptor.getValue().tags());
+        assertEquals(stopCaptor.getValue(), detailsCaptor.getValue().startTime());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A result with a recorded start keeps the recorded start time")
+    void onTestSuccess_withRecordedStart_usesRecordedStartTime() {
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(new Test());
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), "com.example.PaymentTest", "id-1", "importantBusinessTest()"));
+
+        reportManager.onTestSuccess(new TestDetails(5_000L, Set.of(), "com.example.PaymentTest", "id-1", "importantBusinessTest()"));
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(testProcessor).createTest(eq("importantBusinessTest()"), detailsCaptor.capture(), anyLong());
+        assertEquals(1_000L, detailsCaptor.getValue().startTime());
     }
 
     @org.junit.jupiter.api.Test

@@ -100,11 +100,15 @@ public final class CtrfReportManager {
         stateTracker.addTest(test);
     }
 
-    private void processTestResult(String uniqueId, Optional<Throwable> cause, Test.TestStatus status) {
+    /**
+     * Records a finished test. The start recorded by {@link #onTestStart} wins; when there is none, the test
+     * keeps the identity it was reported with and its start time is the stop time.
+     */
+    private void processTestResult(TestDetails reported, Optional<Throwable> cause, Test.TestStatus status) {
         long stopTime = System.currentTimeMillis();
-        TestDetails details = stateTracker.removeTestDetails(uniqueId);
+        TestDetails details = stateTracker.removeTestDetails(reported.uniqueId());
         if (details == null) {
-            details = new TestDetails(stopTime, Set.of(), null, uniqueId, "Unknown Test");
+            details = new TestDetails(stopTime, reported.tags(), reported.filePath(), reported.uniqueId(), reported.displayName());
         }
 
         var newTest = testProcessor.createTest(details.displayName(), details, stopTime);
@@ -116,15 +120,51 @@ public final class CtrfReportManager {
     }
 
     public void onTestSuccess(String uniqueId) {
-        processTestResult(uniqueId, Optional.empty(), PASSED);
+        onTestSuccess(unknownTest(uniqueId));
+    }
+
+    /**
+     * Records a passed test.
+     *
+     * @param testDetails the test's identity, used when no start was recorded for it
+     */
+    public void onTestSuccess(TestDetails testDetails) {
+        processTestResult(testDetails, Optional.empty(), PASSED);
     }
 
     public void onTestFailure(String uniqueId, Throwable cause) {
-        processTestResult(uniqueId, Optional.ofNullable(cause), FAILED);
+        onTestFailure(unknownTest(uniqueId), cause);
+    }
+
+    /**
+     * Records a failed test.
+     *
+     * @param testDetails the test's identity, used when no start was recorded for it
+     * @param cause       the failure, or {@code null}
+     */
+    public void onTestFailure(TestDetails testDetails, Throwable cause) {
+        processTestResult(testDetails, Optional.ofNullable(cause), FAILED);
     }
 
     public void onTestAborted(String uniqueId, Throwable cause) {
-        processTestResult(uniqueId, Optional.ofNullable(cause), FAILED);
+        onTestAborted(unknownTest(uniqueId), cause);
+    }
+
+    /**
+     * Records an aborted test.
+     *
+     * @param testDetails the test's identity, used when no start was recorded for it
+     * @param cause       the reason the test was aborted, or {@code null}
+     */
+    public void onTestAborted(TestDetails testDetails, Throwable cause) {
+        processTestResult(testDetails, Optional.ofNullable(cause), FAILED);
+    }
+
+    /**
+     * The identity of a test known only by its unique ID, for callers that recorded its start beforehand.
+     */
+    private static TestDetails unknownTest(String uniqueId) {
+        return new TestDetails(0L, Set.of(), null, uniqueId, "Unknown Test");
     }
 
     public void startTestRun(String generator) {

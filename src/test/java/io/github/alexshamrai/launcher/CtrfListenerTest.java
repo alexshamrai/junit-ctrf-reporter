@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -161,9 +162,9 @@ public class CtrfListenerTest {
 
         ctrfListener.executionFinished(testIdentifier, testExecutionResult);
 
-        verify(reportManager, never()).onTestSuccess(any());
-        verify(reportManager, never()).onTestFailure(any(), any());
-        verify(reportManager, never()).onTestAborted(any(), any());
+        verify(reportManager, never()).onTestSuccess(anyString());
+        verify(reportManager, never()).onTestFailure(anyString(), any());
+        verify(reportManager, never()).onTestAborted(anyString(), any());
     }
 
     @Test
@@ -205,7 +206,7 @@ public class CtrfListenerTest {
         ctrfListener.executionFinished(testIdentifier, testExecutionResult);
 
         verify(reportManager, never()).onTestStart(any());
-        verify(reportManager, never()).onTestFailure(any(), any());
+        verify(reportManager, never()).onTestFailure(anyString(), any());
     }
 
     @Test
@@ -220,7 +221,7 @@ public class CtrfListenerTest {
         ctrfListener.executionFinished(testIdentifier, testExecutionResult);
 
         verify(reportManager, never()).onTestStart(any());
-        verify(reportManager, never()).onTestFailure(any(), any());
+        verify(reportManager, never()).onTestFailure(anyString(), any());
     }
 
     @Test

@@ -52,19 +52,21 @@ public class CtrfExtension implements TestRunExtension, BeforeEachCallback, Test
         reportManager.onTestStart(createTestDetails(context));
     }
 
+    // The watcher callbacks pass the test's full identity: when another extension failed before this
+    // extension's beforeEach ran, no start was recorded and the identity would otherwise be lost.
     @Override
     public void testSuccessful(ExtensionContext context) {
-        reportManager.onTestSuccess(context.getUniqueId());
+        reportManager.onTestSuccess(createTestDetails(context));
     }
 
     @Override
     public void testFailed(ExtensionContext context, Throwable cause) {
-        reportManager.onTestFailure(context.getUniqueId(), cause);
+        reportManager.onTestFailure(createTestDetails(context), cause);
     }
 
     @Override
     public void testAborted(ExtensionContext context, Throwable cause) {
-        reportManager.onTestAborted(context.getUniqueId(), cause);
+        reportManager.onTestAborted(createTestDetails(context), cause);
     }
 
     @Override
