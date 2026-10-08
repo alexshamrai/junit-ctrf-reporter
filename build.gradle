@@ -29,6 +29,9 @@ ext {
     releaseVersion = '0.4.5'
 
     junitVersion = '6.1.3'
+    // The oldest JUnit the library supports (the compat matrix's lowest entry). Main code compiles
+    // against it, so an API that only newer JUnit versions have fails the build. renovate.json keeps it on 5.10.x.
+    junitMinVersion = '5.10.5'
     lombokVersion = '1.18.48'
     jaksonVersion = '2.22.2'
     ownerVersion = '1.0.12'
@@ -45,7 +48,7 @@ version = projectVersion
 
 dependencies {
     // JUnit comes from the consumer's own test runtime: compile against it, never publish it
-    compileOnly platform("org.junit:junit-bom:${junitVersion}")
+    compileOnly platform("org.junit:junit-bom:${junitMinVersion}")
     compileOnly "org.junit.jupiter:junit-jupiter-api"
     compileOnly "org.junit.platform:junit-platform-launcher"
     implementation "com.fasterxml.jackson.core:jackson-databind:${jaksonVersion}"

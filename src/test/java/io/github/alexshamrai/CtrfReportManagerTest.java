@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -175,6 +176,23 @@ class CtrfReportManagerTest {
             verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(true));
             verify(ctrfReportFileService).writeResultsToFile(mockReport);
         }
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("finishTestRun without a suite error should not record an initialization error")
+    void finishTestRun_withoutSuiteError_recordsNoInitializationError() {
+        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
+        reportManager.startTestRun("Listener");
+
+        try (MockedStatic<SummaryUtil> summaryUtil = Mockito.mockStatic(SummaryUtil.class)) {
+            summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
+            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(true)))
+                .thenReturn(CtrfJson.builder().build());
+
+            reportManager.finishTestRun();
+        }
+
+        verify(suiteExecutionErrorHandler, never()).handleInitializationError(any(), any(), anyLong(), anyLong());
     }
 
     @org.junit.jupiter.api.Test
