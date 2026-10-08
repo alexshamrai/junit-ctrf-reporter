@@ -8,6 +8,12 @@
     {
       "groupName": "all dependencies",
       "matchUpdateTypes": ["minor", "patch", "major"]
+    },
+    {
+      "description": "junitMinVersion in build.gradle is the oldest supported JUnit; only take its patch updates",
+      "matchPackageNames": ["org.junit:junit-bom"],
+      "matchCurrentValue": "/^5\\.10\\./",
+      "allowedVersions": "/^5\\.10\\./"
     }
   ]
 }
