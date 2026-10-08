@@ -95,6 +95,6 @@ public class SuiteExecutionErrorHandlerTest {
 
         var test = errorHandler.handleInitializationError(extensionContext, 1_000L, 2_000L).orElseThrow();
 
-        assertEquals("[engine:junit-jupiter]/[class:com.example.FailingTest]/initializationError", test.getTestId());
+        assertEquals("[engine:junit-jupiter]/[class:com.example.FailingTest]", test.getTestId());
     }
 }

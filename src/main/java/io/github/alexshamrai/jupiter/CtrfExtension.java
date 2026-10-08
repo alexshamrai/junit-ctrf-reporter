@@ -77,6 +77,7 @@ public class CtrfExtension implements TestRunExtension, BeforeEachCallback, Test
      * <p>
      * Creates a synthetic "initializationError" test entry to capture the failure,
      * matching the behavior of JUnit's XML reporter and the CtrfListener implementation.
+     * The entry's testId is the class's own unique ID.
      *
      * @param context the current extension context
      * @param throwable the exception thrown during @BeforeAll execution
@@ -89,7 +90,7 @@ public class CtrfExtension implements TestRunExtension, BeforeEachCallback, Test
             .map(Class::getName)
             .orElse(context.getDisplayName());
 
-        String uniqueId = context.getUniqueId() + "/" + INITIALIZATION_ERROR;
+        String uniqueId = context.getUniqueId();
         Set<String> tags = context.getTags();
 
         TestDetails details = new TestDetails(

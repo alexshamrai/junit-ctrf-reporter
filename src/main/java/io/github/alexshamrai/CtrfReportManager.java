@@ -176,13 +176,15 @@ public final class CtrfReportManager {
             return;
         }
 
+        // A class failure is identified by the class's own unique ID, so another class's failure does not hide it
+        ExtensionContext context = contextOpt.get();
+        String classTestId = context.getUniqueId();
         boolean alreadyCaptured = tests.stream()
-            .anyMatch(t -> "initializationError".equals(t.getName()));
+            .anyMatch(t -> classTestId.equals(t.getTestId()));
         if (alreadyCaptured) {
             return;
         }
 
-        ExtensionContext context = contextOpt.get();
         long startTime = tests.isEmpty() ? testRunStartTime : tests.get(tests.size() - 1).getStop();
         suiteExecutionErrorHandler.handleInitializationError(context, startTime, testRunStopTime)
             .ifPresent(stateTracker::addTest);

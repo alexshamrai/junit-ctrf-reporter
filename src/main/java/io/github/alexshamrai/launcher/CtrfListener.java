@@ -115,7 +115,7 @@ public class CtrfListener implements TestExecutionListener {
      * Spring context initialization errors, parameterized test setup failures).
      * <p>
      * Creates a synthetic "initializationError" test entry to capture the failure,
-     * matching the behavior of JUnit's XML reporter.
+     * matching the behavior of JUnit's XML reporter. The entry's testId is the class's own unique ID.
      */
     private void handleContainerFailure(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
         Long startTime = containerStartTimes.remove(testIdentifier.getUniqueId());
@@ -128,7 +128,7 @@ public class CtrfListener implements TestExecutionListener {
             .map(source -> ((ClassSource) source).getClassName())
             .orElse(testIdentifier.getDisplayName());
 
-        String uniqueId = testIdentifier.getUniqueId() + "/" + INITIALIZATION_ERROR;
+        String uniqueId = testIdentifier.getUniqueId();
 
         var tags = testIdentifier.getTags().stream()
             .map(Object::toString)

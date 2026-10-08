@@ -15,6 +15,7 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -28,11 +29,14 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class CtrfReportManagerTest {
+
+    private static final String FAILING_CLASS_ID = "[engine:junit-jupiter]/[class:com.example.FailingTest]";
 
     @Mock
     private ConfigReader configReader;
@@ -184,6 +188,7 @@ class CtrfReportManagerTest {
     void finishTestRun_handlesInitializationError() {
         when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
         when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
+        when(extensionContext.getUniqueId()).thenReturn(FAILING_CLASS_ID);
         when(extensionContext.getExecutionException()).thenReturn(Optional.of(new RuntimeException()));
 
         reportManager.startTestRun("Listener");
@@ -201,6 +206,7 @@ class CtrfReportManagerTest {
         reportManager.onTestStart(new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "test"));
         reportManager.onTestSuccess("id-1");
 
+        when(extensionContext.getUniqueId()).thenReturn(FAILING_CLASS_ID);
         when(extensionContext.getExecutionException()).thenReturn(Optional.of(new RuntimeException()));
 
         reportManager.startTestRun("Listener");
@@ -208,6 +214,48 @@ class CtrfReportManagerTest {
 
         // Should use last test stop time as start time for initialization error
         verify(suiteExecutionErrorHandler).handleInitializationError(eq(extensionContext), eq(12345L), anyLong());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("finishTestRun should record the suite error even when another class has an initializationError")
+    void finishTestRun_recordsSuiteErrorWhenAnotherClassHasAnInitializationError() {
+        var otherClassError = Test.builder()
+            .testId("[engine:junit-jupiter]/[class:com.example.OtherTest]")
+            .name("initializationError")
+            .status(FAILED)
+            .start(1_000L)
+            .stop(2_000L)
+            .build();
+        when(ctrfReportFileService.getExistingTests()).thenReturn(List.of(otherClassError));
+        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
+        when(extensionContext.getUniqueId()).thenReturn(FAILING_CLASS_ID);
+        when(extensionContext.getExecutionException()).thenReturn(Optional.of(new RuntimeException()));
+
+        reportManager.startTestRun("Extension");
+        reportManager.finishTestRun(Optional.of(extensionContext));
+
+        verify(suiteExecutionErrorHandler).handleInitializationError(eq(extensionContext), anyLong(), anyLong());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("finishTestRun should not record the suite error of a class twice")
+    void finishTestRun_doesNotRecordTheSuiteErrorOfAClassTwice() {
+        var sameClassError = Test.builder()
+            .testId(FAILING_CLASS_ID)
+            .name("initializationError")
+            .status(FAILED)
+            .start(1_000L)
+            .stop(2_000L)
+            .build();
+        when(ctrfReportFileService.getExistingTests()).thenReturn(List.of(sameClassError));
+        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
+        when(extensionContext.getUniqueId()).thenReturn(FAILING_CLASS_ID);
+        when(extensionContext.getExecutionException()).thenReturn(Optional.of(new RuntimeException()));
+
+        reportManager.startTestRun("Extension");
+        reportManager.finishTestRun(Optional.of(extensionContext));
+
+        verify(suiteExecutionErrorHandler, never()).handleInitializationError(any(), anyLong(), anyLong());
     }
 
     @org.junit.jupiter.api.Test

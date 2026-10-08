@@ -187,7 +187,7 @@ public class CtrfListenerTest {
         TestDetails details = detailsCaptor.getValue();
         assertEquals("initializationError", details.displayName());
         assertEquals(TEST_CLASS_NAME, details.filePath());
-        assertTrue(details.uniqueId().endsWith("/initializationError"));
+        assertEquals(TEST_UNIQUE_ID, details.uniqueId(), "a class failure is identified by the class itself");
 
         verify(reportManager).onTestFailure(eq(details.uniqueId()), eq(cause));
     }

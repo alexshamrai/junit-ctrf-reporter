@@ -251,5 +251,27 @@ public class CtrfLogicTest extends BaseIntegrationTest {
             .as("Should contain the second initialization error message")
             .anyMatch(msg -> msg.contains("Another initialization failure"));
     }
+
+    @Test
+    void verifyEveryTestHasATestId() {
+        var tests = report.getResults().getTests();
+        assertThat(tests).isNotNull().isNotEmpty();
+
+        assertThat(tests).allSatisfy(test ->
+            assertThat(test.getTestId()).as("testId of %s", test.getName()).isNotBlank());
+    }
+
+    @Test
+    void verifyInitializationErrorsAreIdentifiedByTheirClass() {
+        var initErrorTests = report.getResults().getTests().stream()
+            .filter(test -> "initializationError".equals(test.getName()))
+            .toList();
+        assertThat(initErrorTests).isNotEmpty();
+
+        assertThat(initErrorTests).allSatisfy(test ->
+            assertThat(test.getTestId())
+                .as("testId of the initializationError of %s", test.getFilepath())
+                .isEqualTo("[engine:junit-jupiter]/[class:" + test.getFilepath() + "]"));
+    }
 }
 

@@ -134,7 +134,7 @@ public class CtrfExtensionTest {
         TestDetails details = detailsCaptor.getValue();
         assertEquals("initializationError", details.displayName());
         assertEquals(this.getClass().getName(), details.filePath());
-        assertTrue(details.uniqueId().endsWith("/initializationError"));
+        assertEquals(TEST_UNIQUE_ID, details.uniqueId(), "a class failure is identified by the class itself");
         assertTrue(details.tags().contains("smoke-test"));
 
         verify(reportManager).onTestFailure(eq(details.uniqueId()), eq(cause));

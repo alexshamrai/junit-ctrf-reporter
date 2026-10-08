@@ -25,7 +25,7 @@ public class SuiteExecutionErrorHandler {
      * Handles errors that occur during test suite initialization (e.g., @BeforeAll failures).
      *
      * <p>Creates a synthetic "initializationError" test entry to capture the failure,
-     * matching the behavior of JUnit's XML reporter.</p>
+     * matching the behavior of JUnit's XML reporter. The entry's testId is the class's own unique ID.</p>
      *
      * @param context          the JUnit extension context containing execution information
      * @param testRunStartTime the timestamp when the test run started
@@ -39,7 +39,7 @@ public class SuiteExecutionErrorHandler {
                 .orElse(null);
 
             var failureTest = Test.builder()
-                .testId(context.getUniqueId() + "/" + INITIALIZATION_ERROR)
+                .testId(context.getUniqueId())
                 .name(INITIALIZATION_ERROR)
                 .filepath(filepath)
                 .status(TestStatus.FAILED)
