@@ -44,7 +44,10 @@ public class CtrfExtension implements TestRunExtension, BeforeEachCallback, Test
 
     @Override
     public void afterAllTests(ExtensionContext context) {
-        reportManager.finishTestRun(Optional.of(context));
+        context.getExecutionException().ifPresentOrElse(
+            error -> reportManager.finishTestRun(context.getTestClass().map(Class::getName).orElse(null), error),
+            reportManager::finishTestRun
+        );
     }
 
     @Override

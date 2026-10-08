@@ -3,7 +3,6 @@ package io.github.alexshamrai;
 import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.model.TestDetails;
-import org.junit.jupiter.api.extension.ExtensionContext;
 
 import java.util.List;
 import java.util.Optional;
@@ -142,14 +141,26 @@ public final class CtrfReportManager {
         }
     }
 
-    public void finishTestRun(Optional<ExtensionContext> contextOpt) {
+    public void finishTestRun() {
+        finishTestRun(null, null);
+    }
+
+    /**
+     * Finishes the test run and writes the report, recording an error that made the suite itself fail.
+     *
+     * @param suiteClassName the name of the test class whose execution failed, or {@code null} if unknown
+     * @param suiteError     the error that made the suite fail, or {@code null} if the suite did not fail
+     */
+    public void finishTestRun(String suiteClassName, Throwable suiteError) {
         if (!isTestRunStarted.compareAndSet(true, false)) {
             return;
         }
 
         long testRunStopTime = System.currentTimeMillis();
 
-        captureUncaughtInitializationError(contextOpt, stateTracker.getAllTests(), testRunStopTime);
+        if (suiteError != null) {
+            captureUncaughtInitializationError(suiteClassName, suiteError, stateTracker.getAllTests(), testRunStopTime);
+        }
         refreshEnvironmentHealthFromEnvVar();
 
         reportOrchestrator.generateAndWriteReport(
@@ -169,22 +180,18 @@ public final class CtrfReportManager {
         }
     }
 
-    private void captureUncaughtInitializationError(Optional<ExtensionContext> contextOpt,
+    private void captureUncaughtInitializationError(String suiteClassName,
+                                                    Throwable suiteError,
                                                     List<Test> tests,
                                                     long testRunStopTime) {
-        if (contextOpt.flatMap(ExtensionContext::getExecutionException).isEmpty()) {
-            return;
-        }
-
         boolean alreadyCaptured = tests.stream()
             .anyMatch(t -> "initializationError".equals(t.getName()));
         if (alreadyCaptured) {
             return;
         }
 
-        ExtensionContext context = contextOpt.get();
         long startTime = tests.isEmpty() ? testRunStartTime : tests.get(tests.size() - 1).getStop();
-        suiteExecutionErrorHandler.handleInitializationError(context, startTime, testRunStopTime)
-            .ifPresent(stateTracker::addTest);
+        stateTracker.addTest(
+            suiteExecutionErrorHandler.handleInitializationError(suiteClassName, suiteError, startTime, testRunStopTime));
     }
 }

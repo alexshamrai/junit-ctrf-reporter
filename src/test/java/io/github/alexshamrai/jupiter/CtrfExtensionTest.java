@@ -65,9 +65,22 @@ public class CtrfExtensionTest {
     }
 
     @Test
-    void afterAllTests_shouldDelegateToManager() {
+    void afterAllTests_withoutExecutionException_finishesRun() {
+        when(extensionContext.getExecutionException()).thenReturn(Optional.empty());
+
         ctrfExtension.afterAllTests(extensionContext);
-        verify(reportManager).finishTestRun(Optional.of(extensionContext));
+
+        verify(reportManager).finishTestRun();
+    }
+
+    @Test
+    void afterAllTests_withExecutionException_passesSuiteErrorToManager() {
+        var cause = new IllegalStateException("@AfterAll failed");
+        when(extensionContext.getExecutionException()).thenReturn(Optional.of(cause));
+
+        ctrfExtension.afterAllTests(extensionContext);
+
+        verify(reportManager).finishTestRun("io.github.alexshamrai.jupiter.CtrfExtensionTest", cause);
     }
 
     @Test

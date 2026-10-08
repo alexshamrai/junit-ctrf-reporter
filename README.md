@@ -30,7 +30,7 @@ CTRF is a universal JSON test report schema that addresses the lack of a standar
 
 ### Add Dependency
 
-To use the JUnit CTRF Extension in your project, add the following dependency:
+To use the JUnit CTRF Extension in your project, add the following test dependency:
 
 #### Gradle
 
@@ -42,7 +42,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'io.github.alexshamrai:junit-ctrf-reporter:0.4.5'
+    testImplementation 'io.github.alexshamrai:junit-ctrf-reporter:0.4.5'
 }
 ```
 
@@ -55,7 +55,20 @@ Add to your `pom.xml` file:
     <groupId>io.github.alexshamrai</groupId>
     <artifactId>junit-ctrf-reporter</artifactId>
     <version>0.4.5</version>
+    <scope>test</scope>
 </dependency>
+```
+
+#### JUnit version
+
+The reporter does not bring JUnit with it: it runs on the JUnit version your project already uses. It is tested with JUnit 5.10, 5.14 and 6.1.
+
+On Gradle 9 and later, the JUnit Platform launcher must be on the test runtime classpath, as Gradle requires:
+
+```groovy
+dependencies {
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
 ```
 
 ## Usage options
