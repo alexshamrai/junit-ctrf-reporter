@@ -27,7 +27,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -83,7 +85,7 @@ public class CtrfListenerTest {
     @Test
     void testPlanExecutionFinished_shouldDelegateToManager() {
         ctrfListener.testPlanExecutionFinished(testPlan);
-        verify(reportManager).finishTestRun(Optional.empty());
+        verify(reportManager).finishTestRun();
     }
 
     @Test
@@ -209,18 +211,67 @@ public class CtrfListenerTest {
     }
 
     @Test
-    void executionFinished_shouldIgnoreNonClassContainerFailure() {
-        // Container without ClassSource (e.g., engine or package container) should be ignored
+    void executionFinished_shouldReportFailedContainerWithoutClassSourceUnderItsDisplayName() {
+        var cause = new RuntimeException("Engine failed");
         when(testIdentifier.isTest()).thenReturn(false);
         when(testIdentifier.isContainer()).thenReturn(true);
         when(testIdentifier.getSource()).thenReturn(Optional.empty());
         when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.FAILED);
+        when(testExecutionResult.getThrowable()).thenReturn(Optional.of(cause));
 
         ctrfListener.executionStarted(testIdentifier);
         ctrfListener.executionFinished(testIdentifier, testExecutionResult);
 
-        verify(reportManager, never()).onTestStart(any());
-        verify(reportManager, never()).onTestFailure(any(), any());
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestStart(detailsCaptor.capture());
+        TestDetails details = detailsCaptor.getValue();
+        assertEquals(TEST_DISPLAY_NAME, details.displayName());
+        assertEquals(TEST_UNIQUE_ID, details.uniqueId());
+        assertNull(details.filePath());
+        verify(reportManager).onTestFailure(TEST_UNIQUE_ID, cause);
+    }
+
+    @Test
+    void executionFinished_shouldReportFailedMethodLevelContainerWithItsClassAsFilePath() {
+        var cause = new IllegalStateException("cannot load test data");
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testIdentifier.getSource()).thenReturn(Optional.of(MethodSource.from(TEST_CLASS_NAME, "usesData", "int")));
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.FAILED);
+        when(testExecutionResult.getThrowable()).thenReturn(Optional.of(cause));
+
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestStart(detailsCaptor.capture());
+        assertEquals(TEST_DISPLAY_NAME, detailsCaptor.getValue().displayName());
+        assertEquals(TEST_CLASS_NAME, detailsCaptor.getValue().filePath());
+        verify(reportManager).onTestFailure(TEST_UNIQUE_ID, cause);
+    }
+
+    @Test
+    void executionFinished_shouldNameClassFailureAfterItsTestsStartedTeardownError() {
+        var cause = new IllegalStateException("cleanup failed");
+        TestIdentifier childTest = mock(TestIdentifier.class);
+        when(childTest.isTest()).thenReturn(true);
+        when(childTest.getUniqueId()).thenReturn(TEST_UNIQUE_ID + "/[method:ok()]");
+        when(childTest.getParentId()).thenReturn(Optional.of(TEST_UNIQUE_ID));
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testIdentifier.getSource()).thenReturn(Optional.of(ClassSource.from(TEST_CLASS_NAME)));
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.FAILED);
+        when(testExecutionResult.getThrowable()).thenReturn(Optional.of(cause));
+
+        ctrfListener.executionStarted(testIdentifier);
+        ctrfListener.executionStarted(childTest);
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager, times(2)).onTestStart(detailsCaptor.capture());
+        TestDetails details = detailsCaptor.getAllValues().get(1);
+        assertEquals("teardownError", details.displayName());
+        assertEquals(TEST_UNIQUE_ID + "/teardownError", details.uniqueId());
+        verify(reportManager).onTestFailure(TEST_UNIQUE_ID + "/teardownError", cause);
     }
 
     @Test

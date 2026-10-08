@@ -60,6 +60,12 @@ public abstract class BaseFakeTest {
 - **FirstLongTest** and **SecondLongTest**: Contain tests with specific sleep durations (0.5s, 1s, 2s)
 - Used to verify that test durations are correctly captured in the report
 
+#### Container Failure Verification
+
+- **InitializationErrorTest** and **AnotherInitializationErrorTest**: fail in `@BeforeAll`; each is reported as an `initializationError` entry
+- **AfterAllFailureTest**: fails in `@AfterAll` after its test passed; reported as a `teardownError` entry
+- **BrokenSourceTest** (listener module only): a `@MethodSource` and a `@TestFactory` that throw; each is reported as a failed entry under its own name. The extension cannot see failures below class level, so the extension module has no such test
+
 ### Environment Health Testing
 
 The integration tests verify the environment health tracking feature using different approaches for each module:

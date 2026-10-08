@@ -4,13 +4,16 @@ import io.github.alexshamrai.CtrfReportManager;
 import io.github.alexshamrai.adapter.TestIdentifierAdapter;
 import io.github.alexshamrai.model.TestDetails;
 import org.junit.platform.engine.TestExecutionResult;
+import org.junit.platform.engine.TestSource;
 import org.junit.platform.engine.support.descriptor.ClassSource;
+import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.TestExecutionListener;
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.TestPlan;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -49,11 +52,18 @@ public class CtrfListener implements TestExecutionListener {
     private final CtrfReportManager reportManager = CtrfReportManager.getInstance();
     private static final String GENERATED_BY = "io.github.alexshamrai.launcher.CtrfListener";
     private static final String INITIALIZATION_ERROR = "initializationError";
+    private static final String TEARDOWN_ERROR = "teardownError";
 
     /**
-     * Tracks container start times for accurate duration calculation on initialization errors.
+     * Tracks container start times for accurate duration calculation of container failures.
      */
     private final Map<String, Long> containerStartTimes = new ConcurrentHashMap<>();
+
+    /**
+     * Containers whose tests or child containers have started. A class that fails after that
+     * failed in its teardown rather than in its setup.
+     */
+    private final Set<String> containersWithStartedChildren = ConcurrentHashMap.newKeySet();
 
     @Override
     public void testPlanExecutionStarted(TestPlan testPlan) {
@@ -62,11 +72,12 @@ public class CtrfListener implements TestExecutionListener {
 
     @Override
     public void testPlanExecutionFinished(TestPlan testPlan) {
-        reportManager.finishTestRun(Optional.empty());
+        reportManager.finishTestRun();
     }
 
     @Override
     public void executionStarted(TestIdentifier testIdentifier) {
+        testIdentifier.getParentId().ifPresent(containersWithStartedChildren::add);
         if (testIdentifier.isTest()) {
             reportManager.onTestStart(createTestDetails(testIdentifier));
         } else if (testIdentifier.isContainer()) {
@@ -78,10 +89,13 @@ public class CtrfListener implements TestExecutionListener {
     public void executionFinished(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
         if (testIdentifier.isTest()) {
             handleTestFinished(testIdentifier, testExecutionResult);
-        } else if (isContainerFailure(testIdentifier, testExecutionResult)) {
-            handleContainerFailure(testIdentifier, testExecutionResult);
-        } else {
-            containerStartTimes.remove(testIdentifier.getUniqueId());
+            return;
+        }
+        String uniqueId = testIdentifier.getUniqueId();
+        Long startTime = containerStartTimes.remove(uniqueId);
+        boolean childrenStarted = containersWithStartedChildren.remove(uniqueId);
+        if (testIdentifier.isContainer() && testExecutionResult.getStatus() == TestExecutionResult.Status.FAILED) {
+            handleContainerFailure(testIdentifier, testExecutionResult, startTime, childrenStarted);
         }
     }
 
@@ -101,43 +115,46 @@ public class CtrfListener implements TestExecutionListener {
     }
 
     /**
-     * Checks if this is a container-level failure that should be reported.
-     * Only report failures for class-level containers (not engine or package containers).
-     */
-    private boolean isContainerFailure(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
-        return testIdentifier.isContainer()
-            && testExecutionResult.getStatus() == TestExecutionResult.Status.FAILED
-            && testIdentifier.getSource().filter(ClassSource.class::isInstance).isPresent();
-    }
-
-    /**
-     * Handles failures that occur at the container level (e.g., @BeforeAll failures,
-     * Spring context initialization errors, parameterized test setup failures).
+     * Reports a failed container as a failed entry, so that failures outside tests are not lost:
+     * a class whose setup or teardown failed, a {@code @MethodSource} or {@code @TestFactory} that threw,
+     * a failing engine.
      * <p>
-     * Creates a synthetic "initializationError" test entry to capture the failure,
-     * matching the behavior of JUnit's XML reporter.
+     * A failed class is named "initializationError" when it failed before any of its tests or nested
+     * classes started (for example in {@code @BeforeAll}), matching JUnit's XML reporter, and "teardownError"
+     * when it failed afterwards (for example in {@code @AfterAll}). Any other container keeps its display name.
      */
-    private void handleContainerFailure(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
-        Long startTime = containerStartTimes.remove(testIdentifier.getUniqueId());
-        if (startTime == null) {
-            startTime = System.currentTimeMillis();
+    private void handleContainerFailure(TestIdentifier container, TestExecutionResult testExecutionResult,
+                                        Long startTime, boolean childrenStarted) {
+        boolean isClass = container.getSource().filter(ClassSource.class::isInstance).isPresent();
+        String name = container.getDisplayName();
+        String uniqueId = container.getUniqueId();
+        if (isClass) {
+            name = childrenStarted ? TEARDOWN_ERROR : INITIALIZATION_ERROR;
+            uniqueId = uniqueId + "/" + name;
         }
 
-        String className = testIdentifier.getSource()
-            .filter(ClassSource.class::isInstance)
-            .map(source -> ((ClassSource) source).getClassName())
-            .orElse(testIdentifier.getDisplayName());
+        String className = container.getSource()
+            .map(CtrfListener::classNameOf)
+            .orElse(null);
 
-        String uniqueId = testIdentifier.getUniqueId() + "/" + INITIALIZATION_ERROR;
-
-        var tags = testIdentifier.getTags().stream()
+        var tags = container.getTags().stream()
             .map(Object::toString)
             .collect(Collectors.toSet());
 
-        TestDetails details = new TestDetails(startTime, tags, className, uniqueId, INITIALIZATION_ERROR);
+        long start = startTime != null ? startTime : System.currentTimeMillis();
+        TestDetails details = new TestDetails(start, tags, className, uniqueId, name);
 
         reportManager.onTestStart(details);
         reportManager.onTestFailure(uniqueId, testExecutionResult.getThrowable().orElse(null));
+    }
+
+    private static String classNameOf(TestSource source) {
+        if (source instanceof ClassSource) {
+            return ((ClassSource) source).getClassName();
+        } else if (source instanceof MethodSource) {
+            return ((MethodSource) source).getClassName();
+        }
+        return null;
     }
 
     @Override

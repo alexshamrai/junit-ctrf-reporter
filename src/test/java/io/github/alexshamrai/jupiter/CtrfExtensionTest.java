@@ -16,9 +16,10 @@ import java.util.Collections;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -32,6 +33,9 @@ public class CtrfExtensionTest {
 
     @Mock
     private ExtensionContext extensionContext;
+
+    @Mock
+    private ExtensionContext.Store store;
 
     private CtrfExtension ctrfExtension;
     private MockedStatic<CtrfReportManager> mockedStaticManager;
@@ -50,6 +54,7 @@ public class CtrfExtensionTest {
         when(extensionContext.getUniqueId()).thenReturn(TEST_UNIQUE_ID);
         when(extensionContext.getTags()).thenReturn(Collections.singleton("smoke-test"));
         when(extensionContext.getTestClass()).thenReturn(Optional.of(this.getClass()));
+        when(extensionContext.getStore(any())).thenReturn(store);
     }
 
     @AfterEach
@@ -67,7 +72,7 @@ public class CtrfExtensionTest {
     @Test
     void afterAllTests_shouldDelegateToManager() {
         ctrfExtension.afterAllTests(extensionContext);
-        verify(reportManager).finishTestRun(Optional.of(extensionContext));
+        verify(reportManager).finishTestRun();
     }
 
     @Test
@@ -121,50 +126,71 @@ public class CtrfExtensionTest {
     }
 
     @Test
-    void handleBeforeAllMethodExecutionException_shouldCaptureInitializationError() {
-        var cause = new RuntimeException("Spring context failed to load");
+    void beforeEach_shouldMarkTheClassAsHavingStartedTests() {
+        var classState = new ClassState(1_000L);
+        when(store.get(TEST_UNIQUE_ID, ClassState.class)).thenReturn(classState);
 
-        assertThrows(RuntimeException.class, () ->
-            ctrfExtension.handleBeforeAllMethodExecutionException(extensionContext, cause)
-        );
+        ctrfExtension.beforeEach(extensionContext);
+
+        assertTrue(classState.childrenStarted());
+    }
+
+    @Test
+    void afterAll_withoutExecutionException_reportsNothing() {
+        when(extensionContext.getExecutionException()).thenReturn(Optional.empty());
+
+        ctrfExtension.afterAll(extensionContext);
+
+        verify(reportManager, never()).onTestStart(any());
+        verify(reportManager, never()).onTestFailure(any(), any());
+    }
+
+    @Test
+    void afterAll_whenClassFailedBeforeItsTestsStarted_shouldCaptureInitializationError() {
+        var cause = new RuntimeException("Spring context failed to load");
+        when(extensionContext.getExecutionException()).thenReturn(Optional.of(cause));
+        when(store.get(TEST_UNIQUE_ID, ClassState.class)).thenReturn(new ClassState(1_000L));
+
+        ctrfExtension.afterAll(extensionContext);
 
         var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
         verify(reportManager).onTestStart(detailsCaptor.capture());
-
         TestDetails details = detailsCaptor.getValue();
         assertEquals("initializationError", details.displayName());
+        assertEquals(TEST_UNIQUE_ID + "/initializationError", details.uniqueId());
         assertEquals(this.getClass().getName(), details.filePath());
-        assertTrue(details.uniqueId().endsWith("/initializationError"));
+        assertEquals(1_000L, details.startTime());
         assertTrue(details.tags().contains("smoke-test"));
-
-        verify(reportManager).onTestFailure(eq(details.uniqueId()), eq(cause));
+        verify(reportManager).onTestFailure(TEST_UNIQUE_ID + "/initializationError", cause);
     }
 
     @Test
-    void handleBeforeAllMethodExecutionException_shouldRethrowException() {
-        var cause = new IllegalStateException("Configuration error");
+    void afterAll_whenClassFailedAfterItsTestsStarted_shouldCaptureTeardownError() {
+        var cause = new IllegalStateException("cleanup failed");
+        var classState = new ClassState(1_000L);
+        classState.markChildrenStarted();
+        when(extensionContext.getExecutionException()).thenReturn(Optional.of(cause));
+        when(store.get(TEST_UNIQUE_ID, ClassState.class)).thenReturn(classState);
 
-        var thrown = assertThrows(IllegalStateException.class, () ->
-            ctrfExtension.handleBeforeAllMethodExecutionException(extensionContext, cause)
-        );
-
-        assertEquals(cause, thrown);
-    }
-
-    @Test
-    void handleBeforeAllMethodExecutionException_shouldHandleMissingTestClass() {
-        when(extensionContext.getTestClass()).thenReturn(Optional.empty());
-        var cause = new RuntimeException("Initialization failed");
-
-        assertThrows(RuntimeException.class, () ->
-            ctrfExtension.handleBeforeAllMethodExecutionException(extensionContext, cause)
-        );
+        ctrfExtension.afterAll(extensionContext);
 
         var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
         verify(reportManager).onTestStart(detailsCaptor.capture());
+        assertEquals("teardownError", detailsCaptor.getValue().displayName());
+        assertEquals(TEST_UNIQUE_ID + "/teardownError", detailsCaptor.getValue().uniqueId());
+        verify(reportManager).onTestFailure(TEST_UNIQUE_ID + "/teardownError", cause);
+    }
 
-        TestDetails details = detailsCaptor.getValue();
+    @Test
+    void afterAll_shouldHandleMissingTestClass() {
+        when(extensionContext.getTestClass()).thenReturn(Optional.empty());
+        when(extensionContext.getExecutionException()).thenReturn(Optional.of(new RuntimeException("Initialization failed")));
+
+        ctrfExtension.afterAll(extensionContext);
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestStart(detailsCaptor.capture());
         // When test class is not available, should fall back to display name
-        assertEquals(TEST_DISPLAY_NAME, details.filePath());
+        assertEquals(TEST_DISPLAY_NAME, detailsCaptor.getValue().filePath());
     }
 }

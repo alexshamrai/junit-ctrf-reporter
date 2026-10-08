@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class CtrfLogicTest extends BaseIntegrationTest {
 
@@ -45,9 +47,18 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         var summary = report.getResults().getSummary();
         assertThat(summary).isNotNull();
 
-        assertThat(summary.getTests()).isEqualTo(24);
-        assertThat(summary.getPassed()).isEqualTo(13);
-        assertThat(summary.getFailed()).isEqualTo(9);
+        // Both modules: 24 entries from the shared fake tests, plus AfterAllFailureTest's passing test
+        // and its teardownError, each run twice because the test-retry plugin reruns failed classes.
+        // The listener module also reports BrokenSourceTest's two failed containers, again twice.
+        if (isListenerReport()) {
+            assertThat(summary.getTests()).isEqualTo(32);
+            assertThat(summary.getPassed()).isEqualTo(15);
+            assertThat(summary.getFailed()).isEqualTo(15);
+        } else {
+            assertThat(summary.getTests()).isEqualTo(28);
+            assertThat(summary.getPassed()).isEqualTo(15);
+            assertThat(summary.getFailed()).isEqualTo(11);
+        }
         assertThat(summary.getSkipped()).isEqualTo(2);
         assertThat(summary.getPending()).isEqualTo(0);
         assertThat(summary.getOther()).isEqualTo(0);
@@ -250,6 +261,41 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assertThat(distinctMessages)
             .as("Should contain the second initialization error message")
             .anyMatch(msg -> msg.contains("Another initialization failure"));
+    }
+
+    @Test
+    void verifyAfterAllFailureIsReportedAsTeardownError() {
+        var entries = report.getResults().getTests().stream()
+            .filter(test -> test.getFilepath() != null && test.getFilepath().endsWith(".AfterAllFailureTest"))
+            .toList();
+
+        assertThat(entries)
+            .as("AfterAllFailureTest should report its passing test and the @AfterAll failure")
+            .extracting(io.github.alexshamrai.ctrf.model.Test::getName, io.github.alexshamrai.ctrf.model.Test::getStatus)
+            .contains(
+                tuple("testBeforeFailingTeardown()", TestStatus.PASSED),
+                tuple("teardownError", TestStatus.FAILED));
+        assertThat(entries)
+            .filteredOn(test -> "teardownError".equals(test.getName()))
+            .allSatisfy(test -> assertThat(test.getMessage()).contains("Simulated teardown failure"));
+    }
+
+    @Test
+    void verifyFailedContainersBelowClassLevelAreReported() {
+        assumeTrue(isListenerReport(), "Only the listener sees containers below class level");
+
+        var entries = report.getResults().getTests().stream()
+            .filter(test -> test.getFilepath() != null && test.getFilepath().endsWith(".BrokenSourceTest"))
+            .toList();
+
+        assertThat(entries)
+            .as("A failing @MethodSource and a failing @TestFactory should each be reported as failed")
+            .extracting(io.github.alexshamrai.ctrf.model.Test::getName, io.github.alexshamrai.ctrf.model.Test::getStatus)
+            .contains(tuple("usesData(int)", TestStatus.FAILED), tuple("factory()", TestStatus.FAILED));
+    }
+
+    private static boolean isListenerReport() {
+        return System.getProperty("ctrf.report.path", "").contains("listener");
     }
 }
 
