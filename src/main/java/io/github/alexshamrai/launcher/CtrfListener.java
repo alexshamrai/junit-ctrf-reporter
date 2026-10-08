@@ -5,6 +5,7 @@ import io.github.alexshamrai.adapter.TestIdentifierAdapter;
 import io.github.alexshamrai.model.TestDetails;
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.support.descriptor.ClassSource;
+import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.TestExecutionListener;
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.TestPlan;
@@ -14,6 +15,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * JUnit Platform TestExecutionListener that generates test reports in the CTRF (Common Test Report Format) format.
@@ -57,9 +59,10 @@ public class CtrfListener implements TestExecutionListener {
     private final Map<String, Long> containerStartTimes = new ConcurrentHashMap<>();
 
     /**
-     * Tests that started, so that tests inside an aborted container are only reported as skipped if they never ran.
+     * Tests and containers whose outcome is already handled: tests that started or were reported as skipped,
+     * and containers that ran. A container that is skipped or aborted later reports only what is left.
      */
-    private final Set<String> startedTests = ConcurrentHashMap.newKeySet();
+    private final Set<String> reportedIds = ConcurrentHashMap.newKeySet();
 
     private volatile TestPlan testPlan;
 
@@ -72,13 +75,13 @@ public class CtrfListener implements TestExecutionListener {
     @Override
     public void testPlanExecutionFinished(TestPlan testPlan) {
         reportManager.finishTestRun(Optional.empty());
-        startedTests.clear();
+        reportedIds.clear();
     }
 
     @Override
     public void executionStarted(TestIdentifier testIdentifier) {
         if (testIdentifier.isTest()) {
-            startedTests.add(testIdentifier.getUniqueId());
+            reportedIds.add(testIdentifier.getUniqueId());
             reportManager.onTestStart(createTestDetails(testIdentifier));
         } else if (testIdentifier.isContainer()) {
             containerStartTimes.put(testIdentifier.getUniqueId(), System.currentTimeMillis());
@@ -98,6 +101,8 @@ public class CtrfListener implements TestExecutionListener {
                 reportTestsNotStartedAsSkipped(testIdentifier, reason);
             }
         }
+        // It ran: an enclosing container aborted later must not report it as skipped
+        reportedIds.add(testIdentifier.getUniqueId());
     }
 
     private void handleTestFinished(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
@@ -158,7 +163,7 @@ public class CtrfListener implements TestExecutionListener {
     @Override
     public void executionSkipped(TestIdentifier testIdentifier, String reason) {
         if (testIdentifier.isTest()) {
-            reportManager.onTestSkipped(createTestDetails(testIdentifier), Optional.ofNullable(reason));
+            reportSkipped(testIdentifier, reason);
         } else {
             reportTestsNotStartedAsSkipped(testIdentifier, reason);
         }
@@ -166,17 +171,30 @@ public class CtrfListener implements TestExecutionListener {
 
     /**
      * When a container is skipped or aborted, JUnit reports only the container and none of the tests inside it.
-     * Report each of those tests that never started as skipped, with the container's reason, as Gradle does.
+     * Report each of those tests that nobody reported yet as skipped, with the container's reason, as Gradle does.
+     * A test method whose tests JUnit creates only while running it ({@code @ParameterizedTest},
+     * {@code @RepeatedTest}, {@code @TestFactory}) has no tests in the plan, so it is reported as one skipped entry.
      */
     private void reportTestsNotStartedAsSkipped(TestIdentifier container, String reason) {
         TestPlan plan = testPlan;
         if (plan == null) {
             return;
         }
-        plan.getDescendants(container).stream()
-            .filter(TestIdentifier::isTest)
-            .filter(test -> !startedTests.contains(test.getUniqueId()))
-            .forEach(test -> reportManager.onTestSkipped(createTestDetails(test), Optional.ofNullable(reason)));
+        Stream.concat(Stream.of(container), plan.getDescendants(container).stream())
+            .filter(identifier -> identifier.isTest() || isTestMethodWithoutTests(plan, identifier))
+            .forEach(identifier -> reportSkipped(identifier, reason));
+    }
+
+    private static boolean isTestMethodWithoutTests(TestPlan plan, TestIdentifier identifier) {
+        return identifier.isContainer()
+            && identifier.getSource().filter(MethodSource.class::isInstance).isPresent()
+            && plan.getDescendants(identifier).stream().noneMatch(TestIdentifier::isTest);
+    }
+
+    private void reportSkipped(TestIdentifier test, String reason) {
+        if (reportedIds.add(test.getUniqueId())) {
+            reportManager.onTestSkipped(createTestDetails(test), Optional.ofNullable(reason));
+        }
     }
 
     private TestDetails createTestDetails(TestIdentifier testIdentifier) {
