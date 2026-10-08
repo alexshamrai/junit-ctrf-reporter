@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Consumer-compatibility fixture for compat/run.sh: same project as pom.xml, but the reporter is
+     declared before JUnit. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>compat</groupId>
+    <artifactId>compat-maven-ctrf-first</artifactId>
+    <version>1</version>
+
+    <properties>
+        <maven.compiler.release>17</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <junit.version>6.1.3</junit.version>
+        <ctrf.version>0.0.0-compat-SNAPSHOT</ctrf.version>
+        <ctrf.repo>file:///dev/null</ctrf.repo>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>ctrf-compat</id>
+            <url>${ctrf.repo}</url>
+            <snapshots>
+                <enabled>true</enabled>
+                <updatePolicy>always</updatePolicy>
+            </snapshots>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.alexshamrai</groupId>
+            <artifactId>junit-ctrf-reporter</artifactId>
+            <version>${ctrf.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <ctrf.report.path>${project.build.directory}/ctrf-report.json</ctrf.report.path>
+                        <compat.out>${project.build.directory}/junit-versions.txt</compat.out>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

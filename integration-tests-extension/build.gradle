@@ -15,6 +15,7 @@ repositories {
 dependencies {
     testImplementation platform("org.junit:junit-bom:${rootProject.ext.junitVersion}")
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation project(':')
 }
 

@@ -1,0 +1,34 @@
+// Consumer-compatibility fixture for compat/run.sh: a Gradle project using CtrfExtension.
+plugins {
+    id 'java'
+}
+
+def junitVersion = providers.gradleProperty('junitVersion').get()
+def ctrfVersion = providers.gradleProperty('ctrfVersion').get()
+
+repositories {
+    maven { url = uri(providers.gradleProperty('ctrfRepo').get()) }
+    mavenCentral()
+}
+
+configurations.configureEach {
+    resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+}
+
+dependencies {
+    testImplementation platform("org.junit:junit-bom:${junitVersion}")
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation "io.github.alexshamrai:junit-ctrf-reporter:${ctrfVersion}"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+}
+
+test {
+    useJUnitPlatform()
+    ignoreFailures = true
+    systemProperty 'ctrf.report.path', layout.buildDirectory.file('ctrf-report.json').get().asFile.absolutePath
+    systemProperty 'compat.out', layout.buildDirectory.file('junit-versions.txt').get().asFile.absolutePath
+}

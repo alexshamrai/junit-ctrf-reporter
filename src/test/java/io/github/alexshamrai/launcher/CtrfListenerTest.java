@@ -83,7 +83,7 @@ public class CtrfListenerTest {
     @Test
     void testPlanExecutionFinished_shouldDelegateToManager() {
         ctrfListener.testPlanExecutionFinished(testPlan);
-        verify(reportManager).finishTestRun(Optional.empty());
+        verify(reportManager).finishTestRun();
     }
 
     @Test

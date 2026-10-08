@@ -8,7 +8,6 @@ import io.github.alexshamrai.model.TestDetails;
 import io.github.alexshamrai.util.SummaryUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -44,8 +43,6 @@ class CtrfReportManagerTest {
     private SuiteExecutionErrorHandler suiteExecutionErrorHandler;
     @Mock
     private CtrfJsonComposer ctrfJsonComposer;
-    @Mock
-    private ExtensionContext extensionContext;
 
     private CtrfReportManager reportManager;
 
@@ -172,7 +169,7 @@ class CtrfReportManagerTest {
             summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
             when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(true))).thenReturn(mockReport);
 
-            reportManager.finishTestRun(Optional.empty());
+            reportManager.finishTestRun();
 
             summaryUtil.verify(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong()));
             verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(true));
@@ -185,12 +182,15 @@ class CtrfReportManagerTest {
     void finishTestRun_handlesInitializationError() {
         when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
         when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
-        when(extensionContext.getExecutionException()).thenReturn(Optional.of(new RuntimeException()));
+        var cause = new RuntimeException("suite failed");
+        when(suiteExecutionErrorHandler.handleInitializationError(any(), any(), anyLong(), anyLong()))
+            .thenReturn(Test.builder().name("initializationError").status(FAILED).build());
 
-        reportManager.startTestRun("Listener");
-        reportManager.finishTestRun(Optional.of(extensionContext));
+        reportManager.startTestRun("Extension");
+        reportManager.finishTestRun("com.example.FailingTest", cause);
 
-        verify(suiteExecutionErrorHandler).handleInitializationError(eq(extensionContext), anyLong(), anyLong());
+        verify(suiteExecutionErrorHandler)
+            .handleInitializationError(eq("com.example.FailingTest"), eq(cause), anyLong(), anyLong());
     }
 
     @org.junit.jupiter.api.Test
@@ -201,14 +201,16 @@ class CtrfReportManagerTest {
         when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
         reportManager.onTestStart(new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "test"));
         reportManager.onTestSuccess("id-1");
+        var cause = new RuntimeException("suite failed");
+        when(suiteExecutionErrorHandler.handleInitializationError(any(), any(), anyLong(), anyLong()))
+            .thenReturn(Test.builder().name("initializationError").status(FAILED).build());
 
-        when(extensionContext.getExecutionException()).thenReturn(Optional.of(new RuntimeException()));
-
-        reportManager.startTestRun("Listener");
-        reportManager.finishTestRun(Optional.of(extensionContext));
+        reportManager.startTestRun("Extension");
+        reportManager.finishTestRun("com.example.FailingTest", cause);
 
         // Should use last test stop time as start time for initialization error
-        verify(suiteExecutionErrorHandler).handleInitializationError(eq(extensionContext), eq(12345L), anyLong());
+        verify(suiteExecutionErrorHandler)
+            .handleInitializationError(eq("com.example.FailingTest"), eq(cause), eq(12345L), anyLong());
     }
 
     @org.junit.jupiter.api.Test
@@ -225,7 +227,7 @@ class CtrfReportManagerTest {
             summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
             when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(false))).thenReturn(mockReport);
 
-            reportManager.finishTestRun(Optional.empty());
+            reportManager.finishTestRun();
 
             verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(false));
         }
@@ -245,7 +247,7 @@ class CtrfReportManagerTest {
             summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
             when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(true))).thenReturn(mockReport);
 
-            reportManager.finishTestRun(Optional.empty());
+            reportManager.finishTestRun();
 
             verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(true));
         }
@@ -272,7 +274,7 @@ class CtrfReportManagerTest {
 
             when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(false))).thenReturn(mockReport);
 
-            reportManager.finishTestRun(Optional.empty());
+            reportManager.finishTestRun();
 
             // Verify that ENV_HEALTHY was re-read (via isEnvironmentVariableUnhealthy call)
             healthTracker.verify(EnvironmentHealthTracker::isEnvironmentVariableUnhealthy);
@@ -305,7 +307,7 @@ class CtrfReportManagerTest {
 
             when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(false))).thenReturn(mockReport);
 
-            reportManager.finishTestRun(Optional.empty());
+            reportManager.finishTestRun();
 
             // Verify report was generated with unhealthy state from programmatic call
             verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(false));

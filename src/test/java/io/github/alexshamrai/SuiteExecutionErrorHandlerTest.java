@@ -3,29 +3,17 @@ package io.github.alexshamrai;
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.ctrf.model.Test.TestStatus;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.extension.ExtensionContext;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.util.Optional;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class SuiteExecutionErrorHandlerTest {
 
     @Mock
     private TestProcessor testProcessor;
-
-    @Mock
-    private ExtensionContext extensionContext;
 
     private SuiteExecutionErrorHandler errorHandler;
 
@@ -36,55 +24,25 @@ public class SuiteExecutionErrorHandlerTest {
     }
 
     @org.junit.jupiter.api.Test
-    void handleInitializationError_withException_returnsTest() {
-        var testException = new RuntimeException("Test exception");
-        when(extensionContext.getExecutionException()).thenReturn(Optional.of(testException));
-        when(extensionContext.getTestClass()).thenReturn(Optional.of(SuiteExecutionErrorHandlerTest.class));
-        var startTime = System.currentTimeMillis();
-        var stopTime = startTime + 1000;
+    void handleInitializationError_returnsFailedInitializationErrorTest() {
+        var cause = new RuntimeException("Test exception");
 
-        var result = errorHandler.handleInitializationError(extensionContext, startTime, stopTime);
+        Test test = errorHandler.handleInitializationError("com.example.FailingTest", cause, 1_000L, 2_000L);
 
-        assertTrue(result.isPresent());
-        var test = result.get();
         assertEquals("initializationError", test.getName());
-        assertEquals(SuiteExecutionErrorHandlerTest.class.getName(), test.getFilepath());
+        assertEquals("com.example.FailingTest", test.getFilepath());
         assertEquals(TestStatus.FAILED, test.getStatus());
-        assertEquals(startTime, test.getStart());
-        assertEquals(stopTime, test.getStop());
-        assertEquals(1000, test.getDuration());
-
-        var testCaptor = ArgumentCaptor.forClass(Test.class);
-        verify(testProcessor).setFailureDetails(testCaptor.capture(), eq(testException));
-        assertEquals(test, testCaptor.getValue());
+        assertEquals(1_000L, test.getStart());
+        assertEquals(2_000L, test.getStop());
+        assertEquals(1_000L, test.getDuration());
+        verify(testProcessor).setFailureDetails(test, cause);
     }
 
     @org.junit.jupiter.api.Test
-    void handleInitializationError_withoutException_returnsEmptyOptional() {
-        when(extensionContext.getExecutionException()).thenReturn(Optional.empty());
-        var startTime = System.currentTimeMillis();
-        var stopTime = startTime + 1000;
+    void handleInitializationError_withoutClassName_leavesFilepathEmpty() {
+        Test test = errorHandler.handleInitializationError(null, new RuntimeException("Test exception"), 1_000L, 2_000L);
 
-        var result = errorHandler.handleInitializationError(extensionContext, startTime, stopTime);
-
-        assertFalse(result.isPresent());
-        verify(testProcessor, never()).setFailureDetails(any(), any());
-    }
-
-    @org.junit.jupiter.api.Test
-    void handleInitializationError_withMissingTestClass_returnsTestWithNullFilepath() {
-        var testException = new RuntimeException("Test exception");
-        when(extensionContext.getExecutionException()).thenReturn(Optional.of(testException));
-        when(extensionContext.getTestClass()).thenReturn(Optional.empty());
-        var startTime = System.currentTimeMillis();
-        var stopTime = startTime + 1000;
-
-        var result = errorHandler.handleInitializationError(extensionContext, startTime, stopTime);
-
-        assertTrue(result.isPresent());
-        var test = result.get();
-        assertEquals("initializationError", test.getName());
-        assertEquals(null, test.getFilepath());
+        assertNull(test.getFilepath());
         assertEquals(TestStatus.FAILED, test.getStatus());
     }
 }

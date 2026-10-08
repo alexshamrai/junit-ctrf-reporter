@@ -62,7 +62,7 @@ public class CtrfListener implements TestExecutionListener {
 
     @Override
     public void testPlanExecutionFinished(TestPlan testPlan) {
-        reportManager.finishTestRun(Optional.empty());
+        reportManager.finishTestRun();
     }
 
     @Override
