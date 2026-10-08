@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class CtrfLogicTest extends BaseIntegrationTest {
 
@@ -45,10 +47,17 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         var summary = report.getResults().getSummary();
         assertThat(summary).isNotNull();
 
-        assertThat(summary.getTests()).isEqualTo(24);
+        // Both modules: 24 entries from the shared fake tests. The listener module also reports the four
+        // tests of DisabledClassTest and ConditionallySkippedClassTest as skipped.
+        if (isListenerReport()) {
+            assertThat(summary.getTests()).isEqualTo(28);
+            assertThat(summary.getSkipped()).isEqualTo(6);
+        } else {
+            assertThat(summary.getTests()).isEqualTo(24);
+            assertThat(summary.getSkipped()).isEqualTo(2);
+        }
         assertThat(summary.getPassed()).isEqualTo(13);
         assertThat(summary.getFailed()).isEqualTo(9);
-        assertThat(summary.getSkipped()).isEqualTo(2);
         assertThat(summary.getPending()).isEqualTo(0);
         assertThat(summary.getOther()).isEqualTo(0);
         assertThat(summary.getStart()).isGreaterThan(0);
@@ -250,6 +259,37 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assertThat(distinctMessages)
             .as("Should contain the second initialization error message")
             .anyMatch(msg -> msg.contains("Another initialization failure"));
+    }
+
+    @Test
+    void verifyTestsOfSkippedClassesAreReportedAsSkipped() {
+        assumeTrue(isListenerReport(), "Only the listener sees tests of classes that JUnit skips as a whole");
+
+        var tests = report.getResults().getTests();
+        var disabledClassTests = tests.stream()
+            .filter(test -> test.getFilepath() != null && test.getFilepath().endsWith(".DisabledClassTest"))
+            .toList();
+        assertThat(disabledClassTests)
+            .as("Each test of a @Disabled class should be skipped")
+            .extracting(io.github.alexshamrai.ctrf.model.Test::getName, io.github.alexshamrai.ctrf.model.Test::getStatus)
+            .containsExactlyInAnyOrder(
+                tuple("firstTestOfDisabledClass()", TestStatus.SKIPPED),
+                tuple("secondTestOfDisabledClass()", TestStatus.SKIPPED));
+        assertThat(disabledClassTests)
+            .as("Each skipped test should carry the class's reason")
+            .allSatisfy(test -> assertThat(test.getMessage()).contains("Simulated disabled class"));
+        assertThat(tests)
+            .filteredOn(test -> test.getFilepath() != null && test.getFilepath().endsWith(".ConditionallySkippedClassTest"))
+            .as("Each test of a class disabled by a condition should be skipped with the condition's reason")
+            .hasSize(2)
+            .allSatisfy(test -> {
+                assertThat(test.getStatus()).isEqualTo(TestStatus.SKIPPED);
+                assertThat(test.getMessage()).contains("ctrf.integration.never.set");
+            });
+    }
+
+    private static boolean isListenerReport() {
+        return System.getProperty("ctrf.report.path", "").contains("listener");
     }
 }
 

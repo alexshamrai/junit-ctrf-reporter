@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -279,12 +280,60 @@ public class CtrfListenerTest {
     }
 
     @Test
-    void executionSkipped_shouldIgnoreNonTestIdentifiers() {
+    void executionSkipped_shouldReportTestsOfASkippedContainerAsSkipped() {
+        TestIdentifier childTest = childTest("one()");
+        TestIdentifier nestedContainer = mock(TestIdentifier.class);
+        when(nestedContainer.isTest()).thenReturn(false);
         when(testIdentifier.isTest()).thenReturn(false);
+        when(testPlan.getDescendants(testIdentifier)).thenReturn(Set.of(childTest, nestedContainer));
 
-        ctrfListener.executionSkipped(testIdentifier, "reason");
+        ctrfListener.testPlanExecutionStarted(testPlan);
+        ctrfListener.executionSkipped(testIdentifier, "whole class disabled");
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestSkipped(detailsCaptor.capture(), eq(Optional.of("whole class disabled")));
+        assertEquals("one()", detailsCaptor.getValue().displayName());
+    }
+
+    @Test
+    void executionFinished_shouldReportTestsOfAnAbortedContainerAsSkipped() {
+        TestIdentifier childTest = childTest("one()");
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testPlan.getDescendants(testIdentifier)).thenReturn(Set.of(childTest));
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.ABORTED);
+        when(testExecutionResult.getThrowable())
+            .thenReturn(Optional.of(new RuntimeException("Assumption failed: Docker is not available")));
+
+        ctrfListener.testPlanExecutionStarted(testPlan);
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
+
+        verify(reportManager).onTestSkipped(any(TestDetails.class), eq(Optional.of("Assumption failed: Docker is not available")));
+    }
+
+    @Test
+    void executionFinished_shouldNotReportTestsThatAlreadyStartedWhenTheirContainerIsAborted() {
+        TestIdentifier childTest = childTest("one()");
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testPlan.getDescendants(testIdentifier)).thenReturn(Set.of(childTest));
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.ABORTED);
+
+        ctrfListener.testPlanExecutionStarted(testPlan);
+        ctrfListener.executionStarted(childTest);
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
 
         verify(reportManager, never()).onTestSkipped(any(), any());
+    }
+
+    private static TestIdentifier childTest(String displayName) {
+        TestIdentifier childTest = mock(TestIdentifier.class);
+        when(childTest.isTest()).thenReturn(true);
+        when(childTest.getUniqueId()).thenReturn(TEST_UNIQUE_ID + "/[method:" + displayName + "]");
+        when(childTest.getDisplayName()).thenReturn(displayName);
+        when(childTest.getTags()).thenReturn(Set.of());
+        when(childTest.getSource()).thenReturn(Optional.empty());
+        return childTest;
     }
 
     @Test

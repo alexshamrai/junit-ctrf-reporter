@@ -53,12 +53,16 @@ dependencies {
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
     testImplementation "org.junit.platform:junit-platform-launcher"
+    testImplementation "org.junit.jupiter:junit-jupiter-params"
     testImplementation "org.mockito:mockito-core:${mockitoVersion}"
     testImplementation "org.assertj:assertj-core:${assertjVersion}"
 }
 
 test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // Scenario fixtures fail on purpose; ScenarioRunner runs them in a separate JVM
+        excludeTags 'scenario-fixture'
+    }
 }
 
 checkstyle {

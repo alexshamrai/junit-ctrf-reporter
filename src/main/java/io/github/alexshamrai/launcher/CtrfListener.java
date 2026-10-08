@@ -11,6 +11,7 @@ import org.junit.platform.launcher.TestPlan;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -55,19 +56,29 @@ public class CtrfListener implements TestExecutionListener {
      */
     private final Map<String, Long> containerStartTimes = new ConcurrentHashMap<>();
 
+    /**
+     * Tests that started, so that tests inside an aborted container are only reported as skipped if they never ran.
+     */
+    private final Set<String> startedTests = ConcurrentHashMap.newKeySet();
+
+    private volatile TestPlan testPlan;
+
     @Override
     public void testPlanExecutionStarted(TestPlan testPlan) {
+        this.testPlan = testPlan;
         reportManager.startTestRun(GENERATED_BY);
     }
 
     @Override
     public void testPlanExecutionFinished(TestPlan testPlan) {
         reportManager.finishTestRun(Optional.empty());
+        startedTests.clear();
     }
 
     @Override
     public void executionStarted(TestIdentifier testIdentifier) {
         if (testIdentifier.isTest()) {
+            startedTests.add(testIdentifier.getUniqueId());
             reportManager.onTestStart(createTestDetails(testIdentifier));
         } else if (testIdentifier.isContainer()) {
             containerStartTimes.put(testIdentifier.getUniqueId(), System.currentTimeMillis());
@@ -82,6 +93,10 @@ public class CtrfListener implements TestExecutionListener {
             handleContainerFailure(testIdentifier, testExecutionResult);
         } else {
             containerStartTimes.remove(testIdentifier.getUniqueId());
+            if (testIdentifier.isContainer() && testExecutionResult.getStatus() == TestExecutionResult.Status.ABORTED) {
+                String reason = testExecutionResult.getThrowable().map(Throwable::getMessage).orElse(null);
+                reportTestsNotStartedAsSkipped(testIdentifier, reason);
+            }
         }
     }
 
@@ -144,7 +159,24 @@ public class CtrfListener implements TestExecutionListener {
     public void executionSkipped(TestIdentifier testIdentifier, String reason) {
         if (testIdentifier.isTest()) {
             reportManager.onTestSkipped(createTestDetails(testIdentifier), Optional.ofNullable(reason));
+        } else {
+            reportTestsNotStartedAsSkipped(testIdentifier, reason);
         }
+    }
+
+    /**
+     * When a container is skipped or aborted, JUnit reports only the container and none of the tests inside it.
+     * Report each of those tests that never started as skipped, with the container's reason, as Gradle does.
+     */
+    private void reportTestsNotStartedAsSkipped(TestIdentifier container, String reason) {
+        TestPlan plan = testPlan;
+        if (plan == null) {
+            return;
+        }
+        plan.getDescendants(container).stream()
+            .filter(TestIdentifier::isTest)
+            .filter(test -> !startedTests.contains(test.getUniqueId()))
+            .forEach(test -> reportManager.onTestSkipped(createTestDetails(test), Optional.ofNullable(reason)));
     }
 
     private TestDetails createTestDetails(TestIdentifier testIdentifier) {

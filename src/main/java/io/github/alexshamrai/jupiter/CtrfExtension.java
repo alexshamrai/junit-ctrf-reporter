@@ -27,6 +27,10 @@ import java.util.Set;
  * }
  * </pre>
  * <p>
+ * Tests of a class that JUnit skips as a whole, such as a {@code @Disabled} class or a class disabled by a
+ * class-level condition, never reach the extension and are missing from its report. The JUnit Platform
+ * listener {@code io.github.alexshamrai.launcher.CtrfListener} reports them as skipped.
+ * <p>
  * The extension can be configured through a {@code ctrf.properties} file placed in the classpath.
  * See the README for all available configuration options.
  */
