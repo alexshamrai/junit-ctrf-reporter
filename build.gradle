@@ -67,7 +67,7 @@ test {
 }
 
 checkstyle {
-    toolVersion = '13.11.0'
+    toolVersion = '14.3.0'
     configFile = file("${project.rootDir}/config/checkstyle/checkstyle.xml")
 }
 
