@@ -33,14 +33,14 @@ ext {
     // against it, so an API that only newer JUnit versions have fails the build. renovate.json keeps it on 5.10.x.
     junitMinVersion = '5.10.5'
     lombokVersion = '1.18.48'
-    jaksonVersion = '2.22.2'
+    jaksonVersion = '2.22.3'
     ownerVersion = '1.0.12'
-    mockitoVersion = '5.23.0'
+    mockitoVersion = '5.24.0'
     assertjVersion = '3.27.7'
 
-    slf4jVersion = '2.0.19'
-    logbackVersion = '1.6.3'
-    jacksonModuleJsonSchemaVersion = '2.22.2'
+    slf4jVersion = '2.0.20'
+    logbackVersion = '1.6.5'
+    jacksonModuleJsonSchemaVersion = '2.22.3'
     jsonSchemaValidatorVersion = '2.2.14'
 }
 

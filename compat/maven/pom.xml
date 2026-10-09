@@ -13,7 +13,7 @@
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>6.1.3</junit.version>
-        <ctrf.version>0.0.0-compat-SNAPSHOT</ctrf.version>
+        <ctrf.version>0.4.5</ctrf.version>
         <ctrf.repo>file:///dev/null</ctrf.repo>
     </properties>
 
@@ -48,7 +48,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.5.2</version>
+                <version>3.6.0</version>
                 <configuration>
                     <systemPropertyVariables>
                         <ctrf.report.path>${project.build.directory}/ctrf-report.json</ctrf.report.path>
