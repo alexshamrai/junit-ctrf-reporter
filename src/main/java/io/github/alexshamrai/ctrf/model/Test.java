@@ -17,6 +17,11 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Test {
 
+    /**
+     * Stable identifier of the logical test case (CTRF {@code testId}): the JUnit unique ID.
+     * Attempts of the same test share it across runs and retries.
+     */
+    private String testId;
     private String name;
     private TestStatus status;
     private long duration;
