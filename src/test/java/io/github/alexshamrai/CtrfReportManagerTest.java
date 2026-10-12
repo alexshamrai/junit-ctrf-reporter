@@ -27,7 +27,6 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,8 +40,6 @@ class CtrfReportManagerTest {
     @Mock
     private TestProcessor testProcessor;
     @Mock
-    private SuiteExecutionErrorHandler suiteExecutionErrorHandler;
-    @Mock
     private CtrfJsonComposer ctrfJsonComposer;
 
     private CtrfReportManager reportManager;
@@ -55,7 +52,6 @@ class CtrfReportManagerTest {
             configReader,
             ctrfReportFileService,
             testProcessor,
-            suiteExecutionErrorHandler,
             ctrfJsonComposer
         );
     }
@@ -176,59 +172,6 @@ class CtrfReportManagerTest {
             verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(true));
             verify(ctrfReportFileService).writeResultsToFile(mockReport);
         }
-    }
-
-    @org.junit.jupiter.api.Test
-    @DisplayName("finishTestRun without a suite error should not record an initialization error")
-    void finishTestRun_withoutSuiteError_recordsNoInitializationError() {
-        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
-        reportManager.startTestRun("Listener");
-
-        try (MockedStatic<SummaryUtil> summaryUtil = Mockito.mockStatic(SummaryUtil.class)) {
-            summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
-            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(true)))
-                .thenReturn(CtrfJson.builder().build());
-
-            reportManager.finishTestRun();
-        }
-
-        verify(suiteExecutionErrorHandler, never()).handleInitializationError(any(), any(), anyLong(), anyLong());
-    }
-
-    @org.junit.jupiter.api.Test
-    @DisplayName("finishTestRun should handle initialization error if no tests were run")
-    void finishTestRun_handlesInitializationError() {
-        when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
-        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
-        var cause = new RuntimeException("suite failed");
-        when(suiteExecutionErrorHandler.handleInitializationError(any(), any(), anyLong(), anyLong()))
-            .thenReturn(Test.builder().name("initializationError").status(FAILED).build());
-
-        reportManager.startTestRun("Extension");
-        reportManager.finishTestRun("com.example.FailingTest", cause);
-
-        verify(suiteExecutionErrorHandler)
-            .handleInitializationError(eq("com.example.FailingTest"), eq(cause), anyLong(), anyLong());
-    }
-
-    @org.junit.jupiter.api.Test
-    @DisplayName("finishTestRun should handle initialization error even when tests ran")
-    void finishTestRun_handlesInitializationErrorWithExistingTests() {
-        var testResult = Test.builder().stop(12345L).build();
-        when(testProcessor.createTest(anyString(), any(), anyLong())).thenReturn(testResult);
-        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
-        reportManager.onTestStart(new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "test"));
-        reportManager.onTestSuccess("id-1");
-        var cause = new RuntimeException("suite failed");
-        when(suiteExecutionErrorHandler.handleInitializationError(any(), any(), anyLong(), anyLong()))
-            .thenReturn(Test.builder().name("initializationError").status(FAILED).build());
-
-        reportManager.startTestRun("Extension");
-        reportManager.finishTestRun("com.example.FailingTest", cause);
-
-        // Should use last test stop time as start time for initialization error
-        verify(suiteExecutionErrorHandler)
-            .handleInitializationError(eq("com.example.FailingTest"), eq(cause), eq(12345L), anyLong());
     }
 
     @org.junit.jupiter.api.Test
