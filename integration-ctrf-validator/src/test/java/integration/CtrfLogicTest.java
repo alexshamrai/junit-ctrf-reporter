@@ -50,19 +50,20 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assertThat(summary).isNotNull();
 
         // Both modules: 24 entries from the shared fake tests, plus AfterAllFailureTest's passing test
-        // and its teardownError, each run twice because the test-retry plugin reruns failed classes.
+        // and its teardownError, each run twice because the test-retry plugin reruns failed classes, plus
+        // AssumptionTest's aborted test, which counts as skipped.
         // The listener module also reports BrokenSourceTest's two failed containers, again twice, and the
         // four tests of DisabledClassTest and ConditionallySkippedClassTest as skipped.
         if (isListenerReport()) {
-            assertThat(summary.getTests()).isEqualTo(36);
+            assertThat(summary.getTests()).isEqualTo(37);
             assertThat(summary.getPassed()).isEqualTo(15);
             assertThat(summary.getFailed()).isEqualTo(15);
-            assertThat(summary.getSkipped()).isEqualTo(6);
+            assertThat(summary.getSkipped()).isEqualTo(7);
         } else {
-            assertThat(summary.getTests()).isEqualTo(28);
+            assertThat(summary.getTests()).isEqualTo(29);
             assertThat(summary.getPassed()).isEqualTo(15);
             assertThat(summary.getFailed()).isEqualTo(11);
-            assertThat(summary.getSkipped()).isEqualTo(2);
+            assertThat(summary.getSkipped()).isEqualTo(3);
         }
         assertThat(summary.getPending()).isEqualTo(0);
         assertThat(summary.getOther()).isEqualTo(0);
@@ -347,6 +348,20 @@ public class CtrfLogicTest extends BaseIntegrationTest {
                 assertThat(test.getStatus()).isEqualTo(TestStatus.SKIPPED);
                 assertThat(test.getMessage()).contains("ctrf.integration.never.set");
             });
+    }
+
+    @Test
+    void verifyFailedAssumptionIsReportedAsSkipped() {
+        var abortedTest = report.getResults().getTests().stream()
+            .filter(test -> "requiresUnavailableService()".equals(test.getName()))
+            .findFirst();
+
+        assertThat(abortedTest)
+            .as("The test aborted by a failed assumption should be in the report")
+            .isPresent();
+        assertThat(abortedTest.get().getStatus()).isEqualTo(TestStatus.SKIPPED);
+        assertThat(abortedTest.get().getRawStatus()).isEqualTo("aborted");
+        assertThat(abortedTest.get().getMessage()).contains("Simulated assumption failure");
     }
 
     // Decided by the report itself, so a listener-only check never skips silently because of where the
