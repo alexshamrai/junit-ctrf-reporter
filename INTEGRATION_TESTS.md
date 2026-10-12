@@ -54,6 +54,7 @@ public abstract class BaseFakeTest {
 - **DummySuccessTest**: Contains tests that pass successfully
 - **DummyFailedTest**: Contains tests that intentionally fail
 - **DummyDisabledTest**: Contains tests marked with `@Disabled`
+- **DisabledClassTest** and **ConditionallySkippedClassTest** (listener module only): whole classes that JUnit skips, one with `@Disabled` and one with a class-level condition. Each of their tests is reported as skipped with the class's reason. The extension never sees tests of a skipped class, so the extension module has no such tests
 
 #### Test Duration Verification
 
