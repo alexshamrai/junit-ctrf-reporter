@@ -11,6 +11,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class CtrfLogicTest extends BaseIntegrationTest {
 
+    private static final String LISTENER = "io.github.alexshamrai.launcher.CtrfListener";
+
     @Test
     void verifyTestStatuses() {
         var tests = report.getResults().getTests();
@@ -49,17 +51,19 @@ public class CtrfLogicTest extends BaseIntegrationTest {
 
         // Both modules: 24 entries from the shared fake tests, plus AfterAllFailureTest's passing test
         // and its teardownError, each run twice because the test-retry plugin reruns failed classes.
-        // The listener module also reports BrokenSourceTest's two failed containers, again twice.
+        // The listener module also reports BrokenSourceTest's two failed containers, again twice, and the
+        // four tests of DisabledClassTest and ConditionallySkippedClassTest as skipped.
         if (isListenerReport()) {
-            assertThat(summary.getTests()).isEqualTo(32);
+            assertThat(summary.getTests()).isEqualTo(36);
             assertThat(summary.getPassed()).isEqualTo(15);
             assertThat(summary.getFailed()).isEqualTo(15);
+            assertThat(summary.getSkipped()).isEqualTo(6);
         } else {
             assertThat(summary.getTests()).isEqualTo(28);
             assertThat(summary.getPassed()).isEqualTo(15);
             assertThat(summary.getFailed()).isEqualTo(11);
+            assertThat(summary.getSkipped()).isEqualTo(2);
         }
-        assertThat(summary.getSkipped()).isEqualTo(2);
         assertThat(summary.getPending()).isEqualTo(0);
         assertThat(summary.getOther()).isEqualTo(0);
         assertThat(summary.getStart()).isGreaterThan(0);
@@ -159,7 +163,7 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         if (reportPath.contains("listener")) {
             assertThat(report.getGeneratedBy())
                 .as("The 'generatedBy' field should be set by the listener")
-                .isEqualTo("io.github.alexshamrai.launcher.CtrfListener");
+                .isEqualTo(LISTENER);
         } else {
             assertThat(report.getGeneratedBy())
                 .as("The 'generatedBy' field should be set by the extension")
@@ -318,8 +322,37 @@ public class CtrfLogicTest extends BaseIntegrationTest {
                 .isEqualTo("[engine:junit-jupiter]/[class:" + test.getFilepath() + "]"));
     }
 
-    private static boolean isListenerReport() {
-        return System.getProperty("ctrf.report.path", "").contains("listener");
+    @Test
+    void verifyTestsOfSkippedClassesAreReportedAsSkipped() {
+        assumeTrue(isListenerReport(), "Only the listener sees tests of classes that JUnit skips as a whole");
+
+        var tests = report.getResults().getTests();
+        var disabledClassTests = tests.stream()
+            .filter(test -> test.getFilepath() != null && test.getFilepath().endsWith(".DisabledClassTest"))
+            .toList();
+        assertThat(disabledClassTests)
+            .as("Each test of a @Disabled class should be skipped")
+            .extracting(io.github.alexshamrai.ctrf.model.Test::getName, io.github.alexshamrai.ctrf.model.Test::getStatus)
+            .containsExactlyInAnyOrder(
+                tuple("firstTestOfDisabledClass()", TestStatus.SKIPPED),
+                tuple("secondTestOfDisabledClass()", TestStatus.SKIPPED));
+        assertThat(disabledClassTests)
+            .as("Each skipped test should carry the class's reason")
+            .allSatisfy(test -> assertThat(test.getMessage()).contains("Simulated disabled class"));
+        assertThat(tests)
+            .filteredOn(test -> test.getFilepath() != null && test.getFilepath().endsWith(".ConditionallySkippedClassTest"))
+            .as("Each test of a class disabled by a condition should be skipped with the condition's reason")
+            .hasSize(2)
+            .allSatisfy(test -> {
+                assertThat(test.getStatus()).isEqualTo(TestStatus.SKIPPED);
+                assertThat(test.getMessage()).contains("ctrf.integration.never.set");
+            });
+    }
+
+    // Decided by the report itself, so a listener-only check never skips silently because of where the
+    // report was written. verifyGeneratedByFieldIsCorrect ties the report path to the expected entry point.
+    private boolean isListenerReport() {
+        return LISTENER.equals(report.getGeneratedBy());
     }
 }
 
