@@ -261,7 +261,7 @@ The project uses GitHub Actions for automated releases to Maven Central:
 
 ### Flaky Test Detection
 
-A test is marked as `flaky: true` if it passed but had previous failed attempts or retries > 0.
+A test is marked as `flaky: true` only if it passed after at least one failed attempt. Earlier attempts are matched by `testId` (the JUnit unique ID); entries from older reports without a `testId` fall back to file path and name, never to the name alone.
 
 ### Rerun Support
 

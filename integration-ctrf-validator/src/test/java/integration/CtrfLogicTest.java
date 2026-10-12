@@ -294,6 +294,30 @@ public class CtrfLogicTest extends BaseIntegrationTest {
             .contains(tuple("usesData(int)", TestStatus.FAILED), tuple("factory()", TestStatus.FAILED));
     }
 
+    @Test
+    void verifyEveryTestHasATestId() {
+        var tests = report.getResults().getTests();
+        assertThat(tests).isNotNull().isNotEmpty();
+
+        assertThat(tests).allSatisfy(test ->
+            assertThat(test.getTestId()).as("testId of %s", test.getName()).isNotBlank());
+    }
+
+    @Test
+    void verifyClassFailuresAreIdentifiedByTheirClass() {
+        var classFailures = report.getResults().getTests().stream()
+            .filter(test -> "initializationError".equals(test.getName()) || "teardownError".equals(test.getName()))
+            .toList();
+        assertThat(classFailures)
+            .extracting(io.github.alexshamrai.ctrf.model.Test::getName)
+            .contains("initializationError", "teardownError");
+
+        assertThat(classFailures).allSatisfy(test ->
+            assertThat(test.getTestId())
+                .as("testId of the %s of %s", test.getName(), test.getFilepath())
+                .isEqualTo("[engine:junit-jupiter]/[class:" + test.getFilepath() + "]"));
+    }
+
     private static boolean isListenerReport() {
         return System.getProperty("ctrf.report.path", "").contains("listener");
     }

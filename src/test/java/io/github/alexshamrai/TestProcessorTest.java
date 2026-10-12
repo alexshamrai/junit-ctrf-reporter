@@ -10,6 +10,7 @@ import org.mockito.MockitoAnnotations;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -80,5 +81,15 @@ public class TestProcessorTest {
         assertEquals(1000, result.getDuration());
         assertNotNull(result.getThreadId());
         assertEquals(Thread.currentThread().getName(), result.getThreadId());
+    }
+
+    @org.junit.jupiter.api.Test
+    void createTest_usesUniqueIdAsTestId() {
+        var uniqueId = "[engine:junit-jupiter]/[class:com.example.ATest]/[method:test1()]";
+        var details = new TestDetails(1_000L, Set.of(), "com.example.ATest", uniqueId, "test1()");
+
+        var result = testProcessor.createTest("test1()", details, 2_000L);
+
+        assertEquals(uniqueId, result.getTestId());
     }
 }
