@@ -4,7 +4,6 @@ import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.model.TestDetails;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -35,7 +34,6 @@ public final class CtrfReportManager {
     private final TestRerunHandler rerunHandler;
     private final ReportOrchestrator reportOrchestrator;
     private final TestProcessor testProcessor;
-    private final SuiteExecutionErrorHandler suiteExecutionErrorHandler;
 
     private long testRunStartTime;
     private final AtomicBoolean isTestRunStarted = new AtomicBoolean(false);
@@ -50,7 +48,6 @@ public final class CtrfReportManager {
         this.rerunHandler = new TestRerunHandler(fileService);
         this.reportOrchestrator = new ReportOrchestrator(configReader, fileService, null);
         this.testProcessor = new TestProcessor(configReader);
-        this.suiteExecutionErrorHandler = new SuiteExecutionErrorHandler(testProcessor);
 
         if (EnvironmentHealthTracker.isEnvironmentVariableUnhealthy()) {
             isEnvironmentHealthy.set(false);
@@ -63,13 +60,11 @@ public final class CtrfReportManager {
     CtrfReportManager(ConfigReader configReader,
                       CtrfReportFileService ctrfReportFileService,
                       TestProcessor testProcessor,
-                      SuiteExecutionErrorHandler suiteExecutionErrorHandler,
                       CtrfJsonComposer ctrfJsonComposer) {
         this.stateTracker = new TestStateTracker();
         this.rerunHandler = new TestRerunHandler(ctrfReportFileService);
         this.reportOrchestrator = new ReportOrchestrator(configReader, ctrfReportFileService, ctrfJsonComposer);
         this.testProcessor = testProcessor;
-        this.suiteExecutionErrorHandler = suiteExecutionErrorHandler;
     }
 
     public static CtrfReportManager getInstance() {
@@ -142,25 +137,12 @@ public final class CtrfReportManager {
     }
 
     public void finishTestRun() {
-        finishTestRun(null, null);
-    }
-
-    /**
-     * Finishes the test run and writes the report, recording an error that made the suite itself fail.
-     *
-     * @param suiteClassName the name of the test class whose execution failed, or {@code null} if unknown
-     * @param suiteError     the error that made the suite fail, or {@code null} if the suite did not fail
-     */
-    public void finishTestRun(String suiteClassName, Throwable suiteError) {
         if (!isTestRunStarted.compareAndSet(true, false)) {
             return;
         }
 
         long testRunStopTime = System.currentTimeMillis();
 
-        if (suiteError != null) {
-            captureUncaughtInitializationError(suiteClassName, suiteError, stateTracker.getAllTests(), testRunStopTime);
-        }
         refreshEnvironmentHealthFromEnvVar();
 
         reportOrchestrator.generateAndWriteReport(
@@ -178,20 +160,5 @@ public final class CtrfReportManager {
         if (EnvironmentHealthTracker.isEnvironmentVariableUnhealthy()) {
             isEnvironmentHealthy.set(false);
         }
-    }
-
-    private void captureUncaughtInitializationError(String suiteClassName,
-                                                    Throwable suiteError,
-                                                    List<Test> tests,
-                                                    long testRunStopTime) {
-        boolean alreadyCaptured = tests.stream()
-            .anyMatch(t -> "initializationError".equals(t.getName()));
-        if (alreadyCaptured) {
-            return;
-        }
-
-        long startTime = tests.isEmpty() ? testRunStartTime : tests.get(tests.size() - 1).getStop();
-        stateTracker.addTest(
-            suiteExecutionErrorHandler.handleInitializationError(suiteClassName, suiteError, startTime, testRunStopTime));
     }
 }
