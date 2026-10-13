@@ -18,6 +18,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -90,23 +91,39 @@ public class CtrfExtensionTest {
     }
 
     @Test
-    void testSuccessful_shouldDelegateToManager() {
+    void testSuccessful_shouldDelegateToManagerWithTheTestIdentity() {
         ctrfExtension.testSuccessful(extensionContext);
-        verify(reportManager).onTestSuccess(eq(TEST_UNIQUE_ID));
+
+        var captor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestSuccess(captor.capture());
+        assertIdentityOfThisTest(captor.getValue());
     }
 
     @Test
-    void testFailed_shouldDelegateToManager() {
+    void testFailed_shouldDelegateToManagerWithTheTestIdentity() {
         var cause = new RuntimeException("Test failed");
         ctrfExtension.testFailed(extensionContext, cause);
-        verify(reportManager).onTestFailure(eq(TEST_UNIQUE_ID), eq(cause));
+
+        var captor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestFailure(captor.capture(), eq(cause));
+        assertIdentityOfThisTest(captor.getValue());
     }
 
     @Test
-    void testAborted_shouldDelegateToManager() {
+    void testAborted_shouldDelegateToManagerWithTheTestIdentity() {
         var cause = new InterruptedException("Test aborted");
         ctrfExtension.testAborted(extensionContext, cause);
-        verify(reportManager).onTestAborted(eq(TEST_UNIQUE_ID), eq(cause));
+
+        var captor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestAborted(captor.capture(), eq(cause));
+        assertIdentityOfThisTest(captor.getValue());
+    }
+
+    private void assertIdentityOfThisTest(TestDetails details) {
+        assertEquals(TEST_UNIQUE_ID, details.uniqueId());
+        assertEquals(TEST_DISPLAY_NAME, details.displayName());
+        assertEquals(this.getClass().getName(), details.filePath());
+        assertTrue(details.tags().contains("smoke-test"));
     }
 
     @Test
@@ -142,7 +159,8 @@ public class CtrfExtensionTest {
         ctrfExtension.afterAll(extensionContext);
 
         verify(reportManager, never()).onTestStart(any());
-        verify(reportManager, never()).onTestFailure(any(), any());
+        verify(reportManager, never()).onTestFailure(anyString(), any());
+        verify(reportManager, never()).onTestFailure(any(TestDetails.class), any());
     }
 
     @Test
