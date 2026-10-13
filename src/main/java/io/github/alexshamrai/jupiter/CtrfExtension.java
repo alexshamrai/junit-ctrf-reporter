@@ -27,9 +27,9 @@ import java.util.Optional;
  * </pre>
  * <p>
  * A failure of a whole test class is reported as one failed entry for that class, identified by the class's
- * unique ID: "initializationError" when the class failed before any of its tests started (for example in
- * {@code @BeforeAll} or in another extension's {@code BeforeAllCallback}), "teardownError" when it failed
- * afterwards (for example in {@code @AfterAll}).
+ * unique ID: "initializationError" when the class failed before any of its tests started or were skipped
+ * (for example in {@code @BeforeAll} or in another extension's {@code BeforeAllCallback}), "teardownError"
+ * when it failed afterwards (for example in {@code @AfterAll}).
  * <p>
  * The extension learns about a class failure only when JUnit runs the class's {@code AfterAllCallback}s,
  * so it cannot see:
@@ -94,23 +94,29 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
 
     // The watcher callbacks pass the test's full identity: when another extension failed before this
     // extension's beforeEach ran, no start was recorded and the identity would otherwise be lost.
+    // For the same reason, and because beforeEach never runs for a disabled test, they also mark the class
+    // as having started tests.
     @Override
     public void testSuccessful(ExtensionContext context) {
+        markChildrenStarted(context);
         reportManager.onTestSuccess(createTestDetails(context));
     }
 
     @Override
     public void testFailed(ExtensionContext context, Throwable cause) {
+        markChildrenStarted(context);
         reportManager.onTestFailure(createTestDetails(context), cause);
     }
 
     @Override
     public void testAborted(ExtensionContext context, Throwable cause) {
+        markChildrenStarted(context);
         reportManager.onTestAborted(createTestDetails(context), cause);
     }
 
     @Override
     public void testDisabled(ExtensionContext context, Optional<String> reason) {
+        markChildrenStarted(context);
         reportManager.onTestSkipped(createTestDetails(context), reason);
     }
 

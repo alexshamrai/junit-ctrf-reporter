@@ -153,6 +153,26 @@ public class CtrfExtensionTest {
     }
 
     @Test
+    void testDisabled_shouldMarkTheClassAsHavingStartedTests() {
+        var classState = new ClassState(1_000L);
+        when(store.get(TEST_UNIQUE_ID, ClassState.class)).thenReturn(classState);
+
+        ctrfExtension.testDisabled(extensionContext, Optional.of("not ready"));
+
+        assertTrue(classState.childrenStarted());
+    }
+
+    @Test
+    void testFailed_withoutBeforeEach_shouldMarkTheClassAsHavingStartedTests() {
+        var classState = new ClassState(1_000L);
+        when(store.get(TEST_UNIQUE_ID, ClassState.class)).thenReturn(classState);
+
+        ctrfExtension.testFailed(extensionContext, new IllegalStateException("fixture setup failed"));
+
+        assertTrue(classState.childrenStarted());
+    }
+
+    @Test
     void afterAll_withoutExecutionException_reportsNothing() {
         when(extensionContext.getExecutionException()).thenReturn(Optional.empty());
 

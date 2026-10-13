@@ -2,7 +2,10 @@ package io.github.alexshamrai.scenario;
 
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.scenario.fixtures.AfterAllFailureFixture;
+import io.github.alexshamrai.scenario.fixtures.AfterAllFailureWithDisabledTestsFixture;
 import io.github.alexshamrai.scenario.fixtures.BrokenSourceFixture;
+import io.github.alexshamrai.scenario.fixtures.ExtAfterAllFailureAfterFailedSetupFixture;
+import io.github.alexshamrai.scenario.fixtures.ExtAfterAllFailureWithDisabledTestsFixture;
 import io.github.alexshamrai.scenario.fixtures.ExtFirstFixture;
 import io.github.alexshamrai.scenario.fixtures.ExtSecondAfterAllFailureFixture;
 import io.github.alexshamrai.scenario.fixtures.ExtThirdCallbackFailureFixture;
@@ -10,6 +13,7 @@ import io.github.alexshamrai.scenario.fixtures.PassingFixture;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
+import static io.github.alexshamrai.ctrf.model.Test.TestStatus.SKIPPED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
@@ -52,6 +56,33 @@ class ContainerFailureScenarioTest {
             .containsExactlyInAnyOrder(
                 tuple("ok()", PASSED, AfterAllFailureFixture.class.getName()),
                 tuple("teardownError", FAILED, AfterAllFailureFixture.class.getName()));
+    }
+
+    @org.junit.jupiter.api.Test
+    void listenerReportsAfterAllFailureOfAClassWhoseTestsWereSkippedAsTeardownError() throws Exception {
+        var result = ScenarioRunner.runWithListener(AfterAllFailureWithDisabledTestsFixture.class);
+
+        assertThat(result.tests())
+            .extracting(Test::getName, Test::getStatus)
+            .containsExactlyInAnyOrder(tuple("disabled()", SKIPPED), tuple("teardownError", FAILED));
+    }
+
+    @org.junit.jupiter.api.Test
+    void extensionReportsAfterAllFailureOfAClassWhoseTestsWereSkippedAsTeardownError() throws Exception {
+        var result = ScenarioRunner.runWithExtension(ExtAfterAllFailureWithDisabledTestsFixture.class);
+
+        assertThat(result.tests())
+            .extracting(Test::getName, Test::getStatus)
+            .containsExactlyInAnyOrder(tuple("disabled()", SKIPPED), tuple("teardownError", FAILED));
+    }
+
+    @org.junit.jupiter.api.Test
+    void extensionReportsAfterAllFailureAsTeardownErrorWhenItsBeforeEachDidNotRun() throws Exception {
+        var result = ScenarioRunner.runWithExtension(ExtAfterAllFailureAfterFailedSetupFixture.class);
+
+        assertThat(result.tests())
+            .extracting(Test::getName, Test::getStatus)
+            .containsExactlyInAnyOrder(tuple("ok()", FAILED), tuple("teardownError", FAILED));
     }
 
     @org.junit.jupiter.api.Test

@@ -276,6 +276,29 @@ public class CtrfListenerTest {
     }
 
     @Test
+    void executionFinished_shouldNameClassFailureAfterItsTestsWereSkippedTeardownError() {
+        var cause = new IllegalStateException("cleanup failed");
+        TestIdentifier skippedTest = mock(TestIdentifier.class);
+        when(skippedTest.isTest()).thenReturn(true);
+        when(skippedTest.getUniqueId()).thenReturn(TEST_UNIQUE_ID + "/[method:disabled()]");
+        when(skippedTest.getParentId()).thenReturn(Optional.of(TEST_UNIQUE_ID));
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testIdentifier.getSource()).thenReturn(Optional.of(ClassSource.from(TEST_CLASS_NAME)));
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.FAILED);
+        when(testExecutionResult.getThrowable()).thenReturn(Optional.of(cause));
+
+        ctrfListener.executionStarted(testIdentifier);
+        ctrfListener.executionSkipped(skippedTest, "not ready");
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestStart(detailsCaptor.capture());
+        assertEquals("teardownError", detailsCaptor.getValue().displayName());
+        verify(reportManager).onTestFailure(TEST_UNIQUE_ID, cause);
+    }
+
+    @Test
     void executionFinished_shouldHandleContainerFailureWithoutStartTime() {
         ClassSource classSource = ClassSource.from(TEST_CLASS_NAME);
         var cause = new RuntimeException("Context initialization failed");

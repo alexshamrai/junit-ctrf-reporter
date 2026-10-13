@@ -61,8 +61,9 @@ public class CtrfListener implements TestExecutionListener {
     private final Map<String, Long> containerStartTimes = new ConcurrentHashMap<>();
 
     /**
-     * Containers whose tests or child containers have started. A class that fails after that
-     * failed in its teardown rather than in its setup.
+     * Containers whose tests or child containers have started or were skipped. JUnit gets to a class's
+     * children only after the class's setup succeeded, so a class that fails after that failed in its
+     * teardown rather than in its setup.
      */
     private final Set<String> containersWithStartedChildren = ConcurrentHashMap.newKeySet();
 
@@ -137,8 +138,9 @@ public class CtrfListener implements TestExecutionListener {
      * a failing engine.
      * <p>
      * A failed class is named "initializationError" when it failed before any of its tests or nested
-     * classes started (for example in {@code @BeforeAll}), matching JUnit's XML reporter, and "teardownError"
-     * when it failed afterwards (for example in {@code @AfterAll}). Any other container keeps its display name.
+     * classes started or were skipped (for example in {@code @BeforeAll}), matching JUnit's XML reporter, and
+     * "teardownError" when it failed afterwards (for example in {@code @AfterAll}). Any other container keeps
+     * its display name.
      * Every entry is identified by the container's own unique ID.
      */
     private void handleContainerFailure(TestIdentifier container, TestExecutionResult testExecutionResult,
@@ -176,6 +178,7 @@ public class CtrfListener implements TestExecutionListener {
 
     @Override
     public void executionSkipped(TestIdentifier testIdentifier, String reason) {
+        testIdentifier.getParentId().ifPresent(containersWithStartedChildren::add);
         if (testIdentifier.isTest()) {
             reportSkipped(testIdentifier, reason);
         } else {
