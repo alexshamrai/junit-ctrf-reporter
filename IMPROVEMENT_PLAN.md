@@ -440,7 +440,7 @@ Target design:
    a temp file in the same directory, then Files.move(ATOMIC_MOVE, REPLACE_EXISTING). Never
    read-modify-write a shard. Fill the spec fields root `runId` and `environment.shardId`.
 2. Merge: build the final report from all shards with the same runId.
-   - Fold attempts across shards by testId (CB-7/HP-6).
+   - Fold attempts across shards by testId (CB-7/HP-6): unfold every shard, then fold, with HP-6's `AttemptFolder`.
    - start = min(start), stop = max(stop), healthy = AND of all shards.
    - Provide a small merger in the library (main class + API) that can run from a Gradle `finalizedBy`
      task or via Maven exec at `post-integration-test`.
@@ -879,44 +879,139 @@ Requirements:
 
 **Priority**: High
 **Complexity**: Moderate
-**Files**: `CtrfReportManager.java`, `FlakyTestDetector.java`, `TestStateTracker.java`, `util/SummaryUtil.java`, `ctrf/model/Test.java` and a new attempt model, `integration-ctrf-validator/src/test/java/integration/CtrfLogicTest.java`
-**Status**: Open (verified 2026-10-08)
+**Files**: `CtrfReportManager.java`, `TestStateTracker.java`, `FlakyTestDetector.java` (deleted) → `AttemptFolder.java` (new), `TestRerunHandler.java` (Javadoc), `util/SummaryUtil.java`, `ctrf/model/Test.java`, `ctrf/model/Summary.java`, `ctrf/model/RetryAttempt.java` (new), `scenario/ScenarioRunner.java`, `integration-ctrf-validator/src/test/java/integration/CtrfLogicTest.java`, `README.md`, `CLAUDE.md`
+**Status**: Designed 2026-10-14 against `master` @ `7235eb5`; replaces the 2026-10-08 prompt
 
-#### Prompt
-````
-Emit one test object per logical test, representing its final attempt, with earlier attempts in
-`retryAttempts`. Count only final attempts in the summary.
+#### Why
 
-Spec (sections 9.1, 9.20, 9.21): "The test object represents the final attempt in that execution. When
-retries occur, attempts completed before the final attempt are represented in retryAttempts." Also:
-"If retries is greater than 0, retryAttempts MUST be present." Today's output violates that MUST.
+Each attempt of a retried test is a separate entry today. A build that is green after retries (`failOnPassedAfterRetry=false`) still produces `summary.failed > 0`, so every CTRF consumer (GitHub test reporter, Slack reporters, `ctrf-cli`) shows the run as failed.
 
-Effect today, in this repository's integration run with retries: tests=24 and failed=9, although only
-4 tests actually fail. The spec-correct summary is tests=19, passed=13, failed=4, skipped=2, flaky=1.
-CtrfLogicTest.verifySummaryIsCorrect (lines 48-50) currently asserts the inflated numbers.
+Gradle's default output counts attempts the same way. Its console says "37 tests completed, 15 failed", and its JUnit XML has the flaky test twice, `tests=2 failures=1`. Gradle offers `reports.junitXml.mergeReruns = true` for exactly this problem. With it, the same run has 28 `<testcase>` elements, and the flaky test is one element with `<flakyFailure>`. Surefire's `rerunFailingTestsCount` always merges, and its summary reports `Flakes: 1`. That's per its docs; not run here.
 
-Requirements:
-1. During execution, record attempts in a ConcurrentHashMap<String testId, List<Attempt>>: O(1) per
-   event, with no scan over earlier results. This replaces the per-event FlakyTestDetector scan and
-   resolves MP-3.
-2. At report time, in a single O(n) pass:
-   - the final attempt becomes the test object;
-   - earlier attempts go into retryAttempts, numbered contiguously from 1, each with status,
-     duration, start/stop and message/trace;
-   - retries = retryAttempts.size(); flaky as defined by the spec;
-   - the summary counts final attempts only and sets summary.flaky.
-3. Before folding, merge attempts from other shards and runs with the same runId (CB-6) by testId.
-4. Update CtrfLogicTest to the spec numbers, and assert retryAttempts for the flaky test and for
-   DummyFailedTest.
-5. Report consumers will see different test counts. Note this in the changelog and README, and bump the
-   minor version.
-````
+CTRF defines it explicitly (spec 0.1.0, sections 9.1, 9.20, 9.21). The test object is the final attempt, earlier attempts go into `retryAttempts`, and "if `retries` is greater than 0, `retryAttempts` MUST be present". Today's second entry has `retries: 1` and no `retryAttempts`, which violates that MUST.
+
+Today every result also scans all earlier results (`FlakyTestDetector`) and copies the whole `CopyOnWriteArrayList` (MP-3: 80k tests take 47.9 s).
+
+#### Decisions (2026-10-14)
+
+- Fold retries by default, with no option to keep one entry per attempt.
+- Not released on its own. HP-6 merges to `master`, and Phase 2 ships together as 0.5.0. The PR has no version bump; the release notes describe the count change.
+- HP-6 lands before CB-6 and works on today's single report file. Merging shards by `runId` (the 2026-10-08 prompt's requirement 3) is CB-6's job, which reuses `AttemptFolder`.
+- Same-JVM reruns (Surefire `rerunFailingTestsCount`, CB-6c) stay broken until CB-6. HP-6 doesn't make them worse.
+- Retries that JUnit gives new unique IDs (JUnit Pioneer `@RetryingTest`) are different tests by `testId` and are not folded.
+- `filePath`, `suite`, `specVersion` and validation against the official schema stay in HP-5/TI-4.
+- Approach: record every attempt with an O(1) append and fold once at the end. This was chosen over a `testId` → attempts map with a separate attempt type, which needs more types and conversions and loses order. It was also chosen over folding as each result arrives, which spreads the flaky logic over every event while CB-6 would still need a general fold.
+
+#### Report shape
+
+```json
+{
+  "testId": "[engine:junit-jupiter]/[class:...FlakyTest]/[method:flakyTest()]",
+  "name": "Flaky test passed on the second run",
+  "status": "passed",
+  "duration": 3, "start": 1760430001200, "stop": 1760430001203,
+  "filepath": "io.github.alexshamrai.integration.fake.FlakyTest",
+  "tags": ["..."], "threadId": "ForkJoinPool-1-worker-1",
+  "retries": 1,
+  "flaky": true,
+  "retryAttempts": [
+    { "attempt": 1, "status": "failed", "duration": 5,
+      "start": 1760430000100, "stop": 1760430000105,
+      "message": "org.opentest4j.AssertionFailedError: ...", "trace": "..." }
+  ]
+}
+```
+
+- A test that ran once looks as it does today, with no `retries`, `retryAttempts` or `flaky`.
+- A retried test is one object, its final attempt. `retries` = n, and `retryAttempts` holds the n earlier attempts, numbered 1..n in the order they ran. The final attempt is number n+1. Name, tags, `filepath`, `threadId` and `rawStatus` come from the final attempt.
+- `flaky: true` only when the final attempt passed and an earlier attempt failed. Otherwise the field is omitted. Skipped (aborted), then passed, is not flaky.
+- Attempt entries carry `attempt`, `status`, `duration`, `start`, `stop`, `message` and `trace`. The spec allows no other fields there, so `threadId` and `rawStatus` stay on the test object.
+- The summary counts test objects, that is final attempts only. `summary.flaky` is always present, 0 when no test is flaky.
+- Class failures (`initializationError`/`teardownError`) fold by their class's `testId`, as CB-7 set up.
+- Model: a new `ctrf.model.RetryAttempt`, in the style of the other model classes. `Test` gets `List<RetryAttempt> retryAttempts`, and `Summary` gets `int flaky`; reading a report without `flaky` gives 0.
+- Expected integration summaries (`master` @ `7235eb5`, CI flags):
+  - listener: 37 entries become tests=28, passed=14, failed=7, skipped=7, flaky=1;
+  - extension: 29 entries become tests=22, passed=14, failed=5, skipped=3, flaky=1.
+
+  The 2026-10-08 numbers (19/13/4/2/1) predate the CB-5/HP-7/HP-8 fake tests.
+
+#### Recording and folding
+
+- `TestStateTracker`: the `CopyOnWriteArrayList<Test>` becomes a `ConcurrentLinkedQueue<Test>` of attempts, which makes adding an attempt O(1).
+- `CtrfReportManager`: `processTestResult` and `onTestSkipped` add the attempt they build, as today, and no longer call `FlakyTestDetector`.
+- `startTestRun`: the existing report's tests go through `AttemptFolder.unfold`. Each test yields its `retryAttempts` as attempts, copying the test's identity (`testId`, name, `filepath`, tags) and taking each entry's own status, duration, start, stop, message and trace. The test itself follows as its final attempt, with `retries`, `retryAttempts` and `flaky` cleared. A third retry round therefore extends the history. A 0.4.x report, with duplicates and no `retryAttempts`, yields one attempt per entry.
+- `finishTestRun`: `AttemptFolder.fold` makes one pass over a snapshot of the queue.
+  - It groups attempts by `testId`, and groups keep the order of their first attempt.
+  - Within a group, attempts keep arrival order: the report file's attempts first, then this run's. A retry round starts only after the previous one ends, so this is the order they ran.
+  - Each group becomes one test object, following the rules above.
+  - `SummaryUtil.createSummary` also counts `flaky`.
+- `AttemptFolder`: a new package-private class with no state and two static methods, `fold` and `unfold`. It replaces `FlakyTestDetector`, which is deleted; its tests move over, including CB-7's `shouldMatchClassFailuresAcrossPhases`. CB-6's merge is "unfold every shard, then fold".
+- Entries without a `testId` come only from reports written before CB-7. They group by `filepath` + name among themselves and are never joined to entries that have a `testId`. `FlakyTestDetector` joins them today. That only matters when an old report is left over from an earlier build, which is the CB-6b accumulation bug anyway.
+- Concurrency: attempts are added from any thread. Folding runs once in `finishTestRun`, after JUnit has reported every test, so it needs no locking.
+- Cost: O(1) per result and O(n) to fold, which resolves MP-3.
+
+#### Edge cases
+
+- A test that failed, then was skipped (aborted) in the next round: final skipped, `retries: 1`, not flaky, counted as skipped.
+- `retryAttempts` read out of order or with gaps: keep array order and renumber 1..n. This is defensive; we only read what we wrote.
+- A passing test rerun because Gradle reran its whole class (`testBeforeFailingTeardown()` today): passed, passed, `retries: 1`, not flaky.
+
+#### Tests
+
+- `AttemptFolderTest` (replaces `FlakyTestDetectorTest`):
+  - a single attempt is untouched;
+  - failed → passed is flaky with `retries: 1`;
+  - failed → failed and skipped → passed are not flaky;
+  - three attempts are numbered 1, 2;
+  - groups keep first-attempt order;
+  - `initializationError` → `teardownError` of one class folds;
+  - entries without `testId` fold by `filepath` + name and stay apart from entries with one;
+  - `unfold` gives n+1 attempts with the identity copied;
+  - `fold(unfold(fold(x)))` equals `fold(x)`.
+- `SummaryUtilTest`: `flaky` is counted.
+- `CtrfReportManagerTest`: a report with a folded test is read at start, a new attempt is added, and finishing gives `retries: 2`. Tests expecting per-result `retries`/`flaky` are rewritten.
+- Scenarios (forked JVMs): `ScenarioRunner` can run the same fixtures several times in fresh JVMs that share one working directory and report file, as Gradle's retry rounds do. A new fixture fails until a marker file exists in the working directory. Each of these runs through both the listener and the extension:
+  - flaky: one passed entry, `retries: 1`, `flaky: true`, attempt 1 failed;
+  - always failing: one failed entry, `retries: 1`, not flaky;
+  - three rounds: `retries: 2`, attempts 1 and 2;
+  - the summary counts each test once.
+
+  Each scenario must fail on `master`.
+- `CtrfLogicTest`:
+  - the summaries above;
+  - every `testId` appears once;
+  - `retries` equals the number of `retryAttempts`, and both are present or both absent;
+  - attempts are numbered 1..n;
+  - the flaky test has a failed attempt 1 and a passed final attempt;
+  - the always-failing tests have a failed attempt and aren't flaky;
+  - `summary.flaky` equals the number of flaky tests.
+
+  Rewrite the comments about tests running twice because of the retry plugin. Confirm the bundled schema accepts `retryAttempts` and `summary.flaky`.
+- Before the PR:
+  - `./gradlew :build`;
+  - both integration runs plus the validator with CI's flags;
+  - `compat/run.sh 5.10.5 5.14.4 6.1.3`;
+  - the MP-3 measurement (10k to 80k tests) before and after.
+
+#### Docs and delivery
+
+- `README.md`: a new section, "Retries and flaky tests". It covers one entry per test with `retryAttempts`, the flaky rule, and the summary counting each test once. So `tests` is lower than Gradle's console count, which counts every attempt even with `mergeReruns`, and it matches the number of `<testcase>` elements in Gradle's XML when `mergeReruns` is on.
+- `CLAUDE.md`: only the lines HP-6 makes wrong.
+  - the data flow (`FlakyTestDetector`);
+  - the component table (`TestStateTracker`, `FlakyTestDetector`);
+  - the concurrency section (`CopyOnWriteArrayList`, `FlakyTestDetector`);
+  - the file tree;
+  - "Flaky Test Detection" (one entry per test; no `filepath` + name joining).
+- Branch `fix/hp-6-fold-retry-attempts` from `master`, one commit, PR description file.
 
 #### Acceptance Criteria
 - [ ] Each logical test appears exactly once in `results.tests`
-- [ ] Integration reports show tests=19, passed=13, failed=4, skipped=2, flaky=1
-- [ ] `retries` always equals `retryAttempts.size()`, and `retryAttempts` is absent when `retries` is 0
-- [ ] Reports validate against the official schema (HP-5)
+- [ ] Integration reports show listener tests=28, passed=14, failed=7, skipped=7, flaky=1 and extension tests=22, passed=14, failed=5, skipped=3, flaky=1
+- [ ] `retries` always equals `retryAttempts.size()`, `retryAttempts` is absent when `retries` is 0, and attempts are numbered 1..n
+- [ ] A test that passes after a failed attempt has `flaky: true`, and `summary.flaky` counts such tests
+- [ ] A third retry round extends `retryAttempts` instead of nesting it
+- [ ] Recording a result is O(1): the MP-3 measurement scales linearly
+- [ ] Reports validate against the official schema once HP-5 lands
 
 ---
 
