@@ -34,7 +34,7 @@ Each improvement item includes:
 | [MP-3](#mp-3-replace-copyonwritearraylist-with-better-alternative) `CopyOnWriteArrayList` | Done by HP-6 | #130 | `56518bd` |
 | [CQ-1](#cq-1-extract-feature-envy-from-ctrfreportmanager) Feature envy | Superseded; HP-6 removed `FlakyTestDetector` | #130 | `56518bd` |
 | [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-5, CB-7, HP-6, HP-7, HP-8 and HP-9 have scenario tests; CB-2, CB-6, MP-5 and HP-5 don't yet | | |
-| [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) Class failure that recovers on retry | New, open; design it together with CB-6 | | |
+| [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) Class failure that recovers on retry | New, open; designed with CB-6, ships in the same PR | | |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -428,74 +428,203 @@ Requirements:
 
 **Priority**: Critical
 **Complexity**: Complex
-**Files**: `CtrfReportFileService.java`, `CtrfReportManager.java`, `TestRerunHandler.java`, `ReportOrchestrator.java`, `config/CtrfConfig.java`, `README.md`
-**Status**: Open (verified 2026-10-08)
+**Files**: `CtrfReportFileService.java`, `CtrfReportManager.java`, `TestStateTracker.java`, `CtrfJsonComposer.java`, `ReportMerger.java` (new), `RunIdResolver.java` (new), `ContainerSuccess.java` (new), `ReportOrchestrator.java` and `TestRerunHandler.java` (deleted), `ctrf/model/CtrfJson.java`, `config/CtrfConfig.java`, `config/ConfigReader.java`, `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `scenario/*`, `integration-tests-*/build.gradle`, `.github/workflows/integration-listener.yml`, `compat/maven/*`, `README.md`, `CLAUDE.md`
+**Status**: Designed 2026-10-14 against `master` @ `58e36f0`, together with HP-11; replaces the 2026-10-08 prompt. CB-6 and HP-11 ship in one PR.
 
-#### Prompt
-````
-Replace the current model: read the existing report at start, then rewrite the whole file at the end.
-A single shared file gives wrong results in every situation where more than one run touches it.
+#### Why
 
-Root cause (master):
-- startTestRun loads the existing file and appends its tests to the current run
-  (CtrfReportManager.java:136), and reuses the file's start time and health flag.
-- The parsed file is cached for the life of the JVM and never invalidated
-  (CtrfReportFileService.java:101-107, introduced by MP-2).
-- finishTestRun writes the whole report and then clears in-memory state (CtrfReportManager.java:163).
-- The default path `ctrf-report.json` is relative to the test JVM's working directory, which is the
-  project directory, not build/. So `clean` does not remove it.
+Each JVM reads the report when its run starts, keeps that read for the rest of the JVM (the MP-2 cache), and rewrites the whole file at the end. Whenever more than one JVM or execution touches the file, the results are wrong:
 
-Verified symptoms:
-a) Forked JVMs (Gradle maxParallelForks, Surefire forkCount): each fork rewrites the whole file and the
-   last writer wins. Real Gradle run of :integration-tests-listener:test, retries disabled:
-     maxParallelForks=1 -> CTRF has 19 of 19 tests (passed=12 failed=5 skipped=2)
-     maxParallelForks=2 -> CTRF has 9 of 19 tests (passed=6 failed=3 skipped=0)
-b) Independent runs accumulate (local re-runs, persistent CI workspaces such as Jenkins). The same
-   2-test class run twice in separate JVMs gives tests=4, every passing test retries=1 flaky=true, and
-   summary.start from the first run.
-c) Re-execution in the same JVM (Surefire rerunFailingTestsCount, programmatic launchers): after two
-   launcher.execute(...) calls on one launcher, the report contains only the second execution. The
-   first execution's results, the failure history and the flaky flag are all lost: the cached pre-run
-   read is reused, and state was cleared after the first write.
-d) The write is not atomic (objectMapper.writeValue(path.toFile(), ...)) and happens only at the very
-   end. A JVM killed mid-write leaves a truncated file. A crash before the end leaves either no report
-   or the previous run's report, which CI then publishes as current.
+- **(a) Forks lose results.** Each fork rewrites the file, and the last writer wins. Measured on `master` @ `58e36f0` with `:integration-tests-listener:test` and CI's flags; Gradle counted 37 attempts every time:
+  - `maxParallelForks=1`: tests=28, passed=14, failed=7, skipped=7, flaky=1, which is correct;
+  - `maxParallelForks=2`: tests=16, passed=8, failed=5, skipped=3, flaky=1;
+  - `maxParallelForks=4`: tests=28 but flaky=0, because the flaky test's failed first attempt was lost.
+- **(b) Separate builds accumulate.** A report left by an earlier build is folded into the next one: a build without `clean`, or a persistent CI workspace such as Jenkins. Tests inherit `retries` and `flaky`, and the earlier build's `summary.start` and unhealthy flag carry over.
+- **(c) A second execution in the same JVM loses the first.** Surefire's `rerunFailingTestsCount` reruns failed tests in the same JVM; a probe on 2026-10-14 showed the same pid. The cached read is reused, so the second write drops the first execution's results, history and flaky flag.
+- **(d) Writes are not atomic.** The report is written in place, so a JVM killed mid-write leaves a truncated file.
 
-Target design:
-1. Shards: each JVM writes its own file, `<dir>/ctrf-<runId>-<shardId>.json`. shardId = pid plus a
-   random suffix, or Gradle's `org.gradle.test.worker` system property when present. Write atomically:
-   a temp file in the same directory, then Files.move(ATOMIC_MOVE, REPLACE_EXISTING). Never
-   read-modify-write a shard. Fill the spec fields root `runId` and `environment.shardId`.
-2. Merge: build the final report from all shards with the same runId.
-   - Fold attempts across shards by testId (CB-7/HP-6): unfold every shard, then fold, with HP-6's `AttemptFolder`.
-   - start = min(start), stop = max(stop), healthy = AND of all shards.
-   - Provide a small merger in the library (main class + API) that can run from a Gradle `finalizedBy`
-     task or via Maven exec at `post-integration-test`.
-   - Document `npx ctrf merge <dir>` (ctrf-io/ctrf-cli) as an alternative when no retry attempts need
-     folding across shards.
-3. Run identity: `ctrf.run.id`. Default it from CI variables (GITHUB_RUN_ID + GITHUB_RUN_ATTEMPT,
-   BUILD_TAG, CI_PIPELINE_ID), otherwise generate one. Ignore shards from other runs. This alone fixes (b).
-4. Stopgap if a single file has to stay the default for now:
-   - On finish, take an exclusive FileChannel.lock() on `<report>.lock` and re-read the current file
-     there (no cache).
-   - Merge only if its runId equals the current runId, otherwise overwrite. Merge by testId.
-   - Write atomically, then release the lock.
-   - Within one JVM, keep the accumulated state across executions of the same run instead of clearing it.
-   This fixes (a), (b) and (c), at the cost of serializing writers.
-5. Optionally default the output location to the build directory, but correctness must not depend on
-   the location; that is what runId is for.
-6. Keep the Gradle test-retry plugin working: retry rounds run in new JVMs of the same build, so they
-   must share the runId and fold into one test object (HP-6).
-7. Build the report from a snapshot of the collected attempts.
-````
+#### Decisions (2026-10-14)
+
+- One report at `ctrf.report.path` stays the default, and the default path doesn't change. Each JVM merges its results into it at the end, under a file lock.
+  - Rejected: shards plus an automatically merged file, which adds a shard directory to manage and clean.
+  - Rejected: shards plus an explicit merge step, which breaks every consumer that expects one file.
+- JVMs belong to the same run when they resolve the same `runId`. The report is merged within a run and replaced otherwise.
+- The report is read only at the end, under the lock. Rejected: also reading it at the start, which means two reads and two code paths that must agree.
+- `ReportOrchestrator` and `TestRerunHandler` are deleted. The merge rule is a pure `ReportMerger`, called by `CtrfReportManager`.
+- HP-11 is designed with CB-6 and ships in the same PR. A class failure that recovers in a later round becomes a passed, flaky entry.
+- No merger tool of our own. For reports from several machines, the README points to `npx ctrf merge` (`ctrf-io/ctrf-cli`).
+- Not released on its own. It ships with Phase 2 as 0.5.0, and the PR has no version bump.
+
+#### Run identity
+
+`RunIdResolver` (new, package-private) resolves the `runId` once per JVM. Blank values are skipped, and the first source that gives a value wins:
+
+1. `ctrf.run.id`, read through `ConfigReader`: a system property or `ctrf.properties`. It is used as is. An environment variable would have to be named `ctrf.run.id` literally, which most shells can't set (MP-9).
+2. A CI variable:
+
+   | CI | `runId` |
+   |---|---|
+   | GitHub Actions | `github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}` |
+   | GitLab | `gitlab-${CI_JOB_ID}` |
+   | Jenkins | `${BUILD_TAG}` (already starts with `jenkins-`) |
+   | Azure Pipelines | `azure-${BUILD_BUILDID}-${SYSTEM_JOBATTEMPT}` |
+   | CircleCI | `circleci-${CIRCLE_WORKFLOW_JOB_ID}` |
+   | Buildkite | `buildkite-${BUILDKITE_JOB_ID}` |
+
+3. The nearest ancestor process that is a JVM, searching upwards from the direct parent. A JVM here means its command is a `java`, `java.exe` or `javaw.exe` executable. The `runId` is `process-<pid>-<start millis>`, or `process-<pid>` if the platform doesn't report the start time. An ancestor whose command can't be read is skipped.
+4. Otherwise this JVM alone: `jvm-<pid>-<start millis>-<random>`.
+
+The value goes into the root `runId` (CTRF §5.4) of every report.
+
+A probe on 2026-10-14 checked fallback 3:
+- Gradle 9.7.1 with a daemon, test-retry 1.6.6 and `maxParallelForks=2`: both forks and the retry-round JVM are children of the daemon, and a second build has the same daemon as its parent.
+- Maven with Surefire 3.5.2, `forkCount=2` and `rerunFailingTestsCount=1`: each fork's parent is its own `/bin/bash`, whose parent is the `mvn` JVM, so the direct parent would split one build into several runs. The rerun happened in the same fork JVM.
+
+What fallback 3 gives when neither `ctrf.run.id` nor a CI variable is set:
+
+| Launch | Run |
+|---|---|
+| Gradle forks and retry rounds | One run (the daemon) |
+| Gradle builds one after another with a daemon | The same run, so they accumulate unless `ctrf.run.id` is set per build |
+| `gradle --no-daemon` | One run per build |
+| Maven Surefire forks | One run per build (the `mvn` JVM) |
+| JUnit's console launcher started from a terminal | Each JVM is its own run |
+| IDE runners | Not probed. If the IDE process itself is a `java` executable, its runs accumulate like a daemon's. |
+| `mvnd`, Bazel and other long-lived JVM build servers | Accumulate unless `ctrf.run.id` is set |
+
+#### Writing the report
+
+`CtrfReportFileService` keeps writing to `ctrf.report.path`. It loses `getExistingTests`, `getExistingStartTime`, `getExistingEnvironmentHealth` and the MP-2 cache. It gains one operation, `update(UnaryOperator<CtrfJson> merge)`, whose function receives the existing report, or `null`:
+
+1. Take a JVM-wide lock, a plain Java lock, because file locks only work between processes. Then take an exclusive `FileChannel` lock on `<report>.lock`, polling `tryLock` for up to 60 s.
+2. Read the report fresh. It is `null` when the file is missing or can't be parsed.
+3. Apply `merge`.
+4. Write to a temp file in the same directory, then `Files.move` it over the report with `ATOMIC_MOVE` and `REPLACE_EXISTING`.
+5. Release both locks.
+
+The `.lock` file stays next to the report, because deleting it would race with other JVMs.
+
+#### Merging
+
+`ReportMerger` (new, package-private) is a pure function, with no files and no clock:
+
+```java
+MergedRun merge(CtrfJson existingOrNull, String runId, List<Test> attempts, List<ContainerSuccess> successes,
+                long start, long stop, boolean healthy)
+```
+
+It returns the folded tests, start, stop and health:
+
+- `sameRun` means the existing report is not `null` and its `runId` equals `runId`. A report without a `runId`, written by 0.4.x or another tool, is never the same run.
+- The attempts are the existing report's tests unfolded with `AttemptFolder.unfold` if `sameRun`, followed by this JVM's attempts in the order they were recorded.
+- Recoveries (HP-11) are appended next. For each container success whose unique ID equals the `testId` of an attempt in that list, add a passed attempt. It copies that test's `testId`, `name`, `filepath` and `tags` from its latest attempt, and takes its start, stop and duration from the success. Every other success is dropped.
+- The tests are `AttemptFolder.fold(attempts)`.
+- If `sameRun`, start is the earlier of the two, stop the later, and the run is healthy only if both are. Otherwise all three come from this JVM.
+- If merging with the existing report throws (for example `"tests": [null]` in a hand-edited file), the merge falls back to this JVM's data alone and prints a warning.
+
+`CtrfReportManager.finishTestRun` then calls `fileService.update(existing -> ...)` with a function that merges, builds the summary with `SummaryUtil` and composes the document with `CtrfJsonComposer`, which now also sets `runId`. The manager now creates the composer, which `ReportOrchestrator` used to do.
+- Every write gets a new `reportId` and `timestamp`, because spec §5.3 says a merged document gets a new `reportId`.
+- Environment metadata comes from the writing JVM.
+- `startTestRun` records the generator, the start time and the `ENV_HEALTHY` flag, and reads no file.
+- State is cleared after each write, as today, so a second execution in the same JVM re-reads what the first one wrote.
+
+The existing report's attempts come first, then this JVM's. That is the order they ran in: retry rounds run one after another, and the forks of one round run different tests. It also resolves the first minor deferred from the HP-6 review. An attempt the extension records before `startTestRun` no longer ends up ahead of the report's attempts, because the report is now read at the end.
+
+Attempts and successes are added in O(1) from any thread. The merge runs once per execution, under the locks.
+
+#### HP-11: container successes
+
+- `ContainerSuccess` (new, internal record): the container's unique ID, start and stop.
+- `TestStateTracker` collects them in a `ConcurrentLinkedQueue`, and clears them together with the attempts.
+- `CtrfListener.executionFinished`: a container that finishes with SUCCESSFUL records a success, with its start from `containerStartTimes`.
+- `CtrfExtension.afterAll`: a class without an execution exception records a success, with its start from `ClassState`.
+- A recovered entry:
+  - has status `passed`, `retries: n`, `flaky: true` and its failures in `retryAttempts`;
+  - keeps the name of its last failure: `initializationError` or `teardownError`, or the container's own name for a container below class level.
+- A container that never failed has no attempts, so its success adds nothing. The engine container is one example.
+
+#### Errors and edge cases
+
+The reporter never throws into JUnit and never leaves a report that can't be parsed. Each fallback prints one warning to stderr.
+
+| Situation | Behaviour |
+|---|---|
+| The file system doesn't support locks (some network mounts) | Write without the file lock, still atomically. Forks on such a mount can overwrite each other. |
+| Another JVM holds the lock for more than 60 s | Write without it. A lock is held only for one read, merge and write, and the OS releases a dead holder's lock, so a longer wait would only hang the build. |
+| The existing report is missing | Write this JVM's results. |
+| The existing report can't be parsed (another tool, a hand edit, or a pre-0.5 JVM killed mid-write) | Treat it as another run and replace it. Lenient reading of unknown fields stays in MP-5. |
+| Merging throws | Fall back to this JVM's results alone. |
+| The write fails (disk full, permissions) | Delete the temp file. The existing report is left untouched. |
+| The platform can't move files atomically | Fall back to a plain replace. |
+| A JVM is killed mid-write | Only a temp file is left behind; the report is the previous complete version. Leftover temp files and the `.lock` file are harmless. |
+| The JVM dies before `finishTestRun` | Its results are lost, as today. What earlier JVMs wrote stays valid. |
+| No ancestor JVM, and no explicit or CI `runId` | This JVM is its own run. |
+| Two separate builds (different `runId`s) write the same file at the same moment, such as the same project started in two terminals | The file stays a complete report of the build that finished last. To keep both, give each build its own `ctrf.report.path`. |
+
+One behaviour change is a fix: a report from a different run no longer passes on its start time or its unhealthy flag.
+
+#### Tests
+
+- **Unit tests**, without files or child processes where possible:
+  - `RunIdResolverTest`: the order of sources, blank values skipped, each CI variable, a JVM ancestor behind a shell, an ancestor without a start time, an ancestor whose command can't be read, and no JVM ancestor. The resolver takes its environment, configuration and process handle as inputs.
+  - `ReportMergerTest`:
+    - no existing report;
+    - same run: unfold and append, earliest start, latest stop, unhealthy if either is;
+    - a different run is replaced and passes on neither its start time nor its health;
+    - a report without a `runId` is never merged;
+    - recoveries: failure then success is passed and flaky, a success without a failure adds nothing, failing every round stays failed;
+    - a merge that throws falls back.
+  - `CtrfReportFileServiceTest`:
+    - `update` creates directories;
+    - an unparsable report reaches the merge function as `null`;
+    - a write that fails halfway leaves the previous report parseable and unchanged;
+    - concurrent `update` calls from several threads all land;
+    - the lock times out, with a short timeout passed in.
+  - `CtrfReportManagerTest`: `startTestRun` reads no file; a second execution in the same JVM keeps the first one's results.
+  - Listener and extension tests: container successes are recorded.
+- **Scenario tests**, in forked JVMs through `ScenarioRunner`:
+  - Forks: three JVMs started at once with the same `ctrf.run.id`, each with different fixtures, give one report with every test.
+  - New build: two runs in a row with different `runId`s, once through `ctrf.run.id` and once through `GITHUB_RUN_ID`. Only the second run remains.
+  - Same JVM: `ScenarioMain` runs the launcher twice. `stable()` is present, and `flakyOnce()` has `retries: 1` and `flaky: true`.
+  - HP-11, through both the listener and the extension:
+    - `@BeforeAll` fails in round 1 and passes in round 2: the class entry is passed and flaky;
+    - it fails in every round: one failed entry with its history;
+    - the same for `@AfterAll`.
+  - The existing retry-round scenarios still pass. They set no `runId`, so they also exercise fallback 3: their JVMs are children of the test JVM.
+  - `ScenarioRunner` removes the CI variables above from the child JVMs' environment, as it already removes `ENV_HEALTHY`. Scenarios then behave the same locally and in CI, where `GITHUB_RUN_ID` is set.
+- **Integration and compat:**
+  - The integration modules accept `-Dforks=N`, and the listener workflow in CI runs with 2 forks, so the validator's fixed numbers check fork merging on every PR. Before the PR, also run 4 forks locally.
+  - The validator checks the root `runId`.
+  - The Maven compat consumer gets a second test class and runs with `forkCount=2`, which checks on real Surefire that its forks resolve one run.
+- **Before the PR:**
+  - `./gradlew :build`;
+  - both integration runs with the validator, using CI's flags, with 1, 2 and 4 forks for the listener;
+  - `compat/run.sh 5.10.5 5.14.4 6.1.3`;
+  - the time to merge into an existing report with 80k tests, which is how long one fork holds the lock.
+
+#### Docs and delivery
+
+- `README.md`:
+  - A new section, "Parallel forks, retries and reruns". It covers one report per run, how the `runId` is chosen, and the `.lock` file. It also covers the Gradle daemon and build-server caveat, with a per-build `ctrf.run.id` setting verified with and without Gradle's configuration cache. Finally, it covers reports from several machines with `npx ctrf merge`.
+  - "Retries and Flaky Tests" gains class failures that recover.
+- `CLAUDE.md`:
+  - the data flow and component table: `ReportOrchestrator` and `TestRerunHandler` removed, `ReportMerger` and `RunIdResolver` added;
+  - "Rerun Support";
+  - the concurrency section: the locks;
+  - the `ctrf.run.id` key;
+  - the line saying `unfold` runs at the start.
+- Branch `fix/cb-6-report-persistence` from `master`, one commit, and a PR description file.
 
 #### Acceptance Criteria
-- [ ] With `maxParallelForks=2` and `4`, the CTRF test count equals Gradle's JUnit XML count (19 of 19 for the listener module)
-- [ ] Re-running without `clean` produces a report for the latest run only
-- [ ] Two executions in one JVM: `stable()` is present, and `flakyOnce()` has `retries=1` and `flaky=true`
-- [ ] Killing the JVM during a write never leaves an unparsable report
+- [ ] With `maxParallelForks` 2 and 4, the listener integration report equals the 1-fork report: tests=28, passed=14, failed=7, skipped=7, flaky=1
+- [ ] Maven Surefire with `forkCount=2` reports the tests of both classes (compat)
+- [ ] A build with a different `runId` replaces the report, including its start time and health
+- [ ] Two executions in one JVM: `stable()` is present, and `flakyOnce()` has `retries: 1` and `flaky: true`
+- [ ] A write that fails halfway leaves the previous report parseable and unchanged
 - [ ] Gradle test-retry rounds still fold into one test per logical test
-- [ ] README documents shards, the merge step, and `ctrf.run.id`
+- [ ] Every report has a root `runId`
+- [ ] HP-11's acceptance criteria hold
+- [ ] README documents run identity, the `.lock` file, the per-build `ctrf.run.id` setting and `npx ctrf merge`
 
 ---
 
@@ -1195,7 +1324,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `AttemptFolder.java`, `CtrfReportManager.java`, scenario tests
-**Status**: Open. Found by the HP-6 review on 2026-10-14 and reproduced in forked-JVM retry rounds. `master` had the same behaviour before HP-6. Design it together with CB-6.
+**Status**: Designed 2026-10-14 together with CB-6, in the CB-6 section ("HP-11: container successes"), and ships in the same PR. Found by the HP-6 review on 2026-10-14 and reproduced in forked-JVM retry rounds. `master` had the same behaviour before HP-6.
 
 #### Why
 
@@ -1203,18 +1332,10 @@ A class-level entry (`initializationError` or `teardownError`), or one for a fai
 
 Reproduced through both entry points: `@BeforeAll` fails in round 1 and passes in round 2. The report keeps `initializationError` as failed, without `retries`, and the summary has `failed: 1` and `flaky: 0`. With `failOnPassedAfterRetry=false`, Gradle is green while CTRF consumers show the run as failed. That is the false red HP-6 removed for tests. Class setup that depends on a database or a container is a common source of such flakes.
 
-#### To decide
+#### Decided (2026-10-14)
 
-- How a recovered container failure appears in the report:
-  - one entry with `status: passed`, `retries: n`, `flaky: true` and the failures in `retryAttempts`, plus which name that entry gets;
-  - or no entry, because the class's tests carry the outcome, which loses the evidence of the flake.
-- Whether a passed class counts towards `summary.tests`.
-
-#### Sketch, from the review
-
-- When a container finishes successfully, record an internal "container passed" attempt keyed by its unique ID. The listener does this in `executionFinished` with SUCCESSFUL; the extension does it in `afterAll` without an execution exception.
-- `AttemptFolder.fold` drops groups made only of such markers and folds the others as usual. A marker is never written to the report on its own.
-- CB-6 merges shards with `unfold` then `fold`, so the markers have to survive that too. That is why the two are designed together.
+- A recovered container failure stays one entry. It has status `passed`, `retries: n`, `flaky: true` and its failures in `retryAttempts`, and keeps the name of its last failure. So `summary.tests` is one higher than in a run where the class never failed, and `summary.flaky` counts the flake. Rejected: dropping the entry, which loses the evidence of the flake.
+- Successes are collected separately from attempts, as `ContainerSuccess` records, and `ReportMerger` turns a success into a final passed attempt only for a container that already has a failure. That replaces the review's sketch of marker attempts inside the attempt list.
 
 #### Acceptance Criteria
 - [ ] A class whose `@BeforeAll` fails in round 1 and passes in round 2 is no longer counted as failed, through both entry points
@@ -3978,7 +4099,7 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6 and MP
 
 ### Phase 2: Data model and persistence (changes the report shape, so bump the minor version)
 8. HP-6: One test object per logical test, with `retryAttempts` (also resolves MP-3). **Done** (#130)
-9. CB-6: Shards plus merge, run identity, atomic writes. Design it together with HP-11: a class failure that recovers on retry stays failed
+9. CB-6: One report merged under a lock, run identity, atomic writes, together with HP-11 (a class failure that recovers on retry stays failed). Designed 2026-10-14; one PR
 10. HP-5: Conform to the official schema
 11. TI-4: Validator using the official schema and a cross-check against JUnit's counts
 12. MP-5: Read previous reports tolerantly
