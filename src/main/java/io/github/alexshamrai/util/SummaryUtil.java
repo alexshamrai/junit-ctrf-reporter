@@ -17,21 +17,24 @@ import static io.github.alexshamrai.ctrf.model.Test.TestStatus.SKIPPED;
 public class SummaryUtil {
 
     /**
-     * Creates a summary from test results using single-pass counting for optimal performance.
+     * Creates a summary from test results: how many tests ended with each status, and how many are flaky.
      * <p>
-     * Uses a single stream iteration with grouping collector instead of multiple filter/count
-     * operations, reducing complexity from O(5n) to O(n).
+     * Each test object is one test, represented by its final attempt, so earlier attempts of a retried test
+     * are not counted. Each count takes one pass over the tests.
      *
-     * @param tests the list of test results to summarize
+     * @param tests the test results to summarize, one per test
      * @param startTime the test run start timestamp
      * @param stopTime the test run stop timestamp
-     * @return a Summary object with status counts and timing information
+     * @return a Summary object with status counts, the flaky count and timing information
      */
     public static Summary createSummary(List<Test> tests, long startTime, long stopTime) {
         Map<Test.TestStatus, Long> statusCounts = tests.stream()
             .map(Test::getStatus)
             .filter(Objects::nonNull)
             .collect(Collectors.groupingBy(status -> status, Collectors.counting()));
+        long flaky = tests.stream()
+            .filter(test -> Boolean.TRUE.equals(test.getFlaky()))
+            .count();
 
         return Summary.builder()
             .tests(tests.size())
@@ -40,6 +43,7 @@ public class SummaryUtil {
             .pending(getCount(statusCounts, PENDING))
             .skipped(getCount(statusCounts, SKIPPED))
             .other(getCount(statusCounts, OTHER))
+            .flaky((int) flaky)
             .start(startTime)
             .stop(stopTime)
             .build();

@@ -26,14 +26,29 @@ final class ScenarioRunner {
     }
 
     static Result runWithListener(Class<?>... fixtures) throws IOException, InterruptedException {
-        return run("listener", fixtures);
+        return run("listener", 1, fixtures);
     }
 
     static Result runWithExtension(Class<?>... fixtures) throws IOException, InterruptedException {
-        return run("extension", fixtures);
+        return run("extension", 1, fixtures);
     }
 
-    private static Result run(String mode, Class<?>... fixtures) throws IOException, InterruptedException {
+    /**
+     * Runs the fixtures {@code rounds} times through the listener, each round in a new JVM that shares the
+     * working directory and the report file with the earlier rounds, as the Gradle test-retry plugin does.
+     */
+    static Result runRoundsWithListener(int rounds, Class<?>... fixtures) throws IOException, InterruptedException {
+        return run("listener", rounds, fixtures);
+    }
+
+    /**
+     * Like {@link #runRoundsWithListener}, reporting only through the fixtures' own extensions.
+     */
+    static Result runRoundsWithExtension(int rounds, Class<?>... fixtures) throws IOException, InterruptedException {
+        return run("extension", rounds, fixtures);
+    }
+
+    private static Result run(String mode, int rounds, Class<?>... fixtures) throws IOException, InterruptedException {
         Path workDir = Files.createTempDirectory("ctrf-scenario");
         Path report = workDir.resolve("ctrf-report.json");
         Path output = workDir.resolve("output.txt");
@@ -46,19 +61,23 @@ final class ScenarioRunner {
             mode));
         Arrays.stream(fixtures).map(Class::getName).forEach(command::add);
 
-        var processBuilder = new ProcessBuilder(command)
-            .directory(workDir.toFile())
-            .redirectErrorStream(true)
-            .redirectOutput(output.toFile());
-        processBuilder.environment().remove("ENV_HEALTHY");
-        Process process = processBuilder.start();
-        if (!process.waitFor(2, TimeUnit.MINUTES)) {
-            process.destroyForcibly();
-            throw new IllegalStateException("Scenario JVM timed out:\n" + Files.readString(output));
-        }
-        String log = Files.readString(output);
-        if (process.exitValue() != 0 || !Files.exists(report)) {
-            throw new IllegalStateException("Scenario JVM exited with " + process.exitValue() + " and wrote no report:\n" + log);
+        String log = "";
+        for (int round = 1; round <= rounds; round++) {
+            var processBuilder = new ProcessBuilder(command)
+                .directory(workDir.toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(output.toFile());
+            processBuilder.environment().remove("ENV_HEALTHY");
+            Process process = processBuilder.start();
+            if (!process.waitFor(2, TimeUnit.MINUTES)) {
+                process.destroyForcibly();
+                throw new IllegalStateException("Scenario JVM timed out in round " + round + ":\n" + Files.readString(output));
+            }
+            log = Files.readString(output);
+            if (process.exitValue() != 0 || !Files.exists(report)) {
+                throw new IllegalStateException("Scenario JVM exited with " + process.exitValue()
+                    + " in round " + round + " and wrote no report:\n" + log);
+            }
         }
         return new Result(new ObjectMapper().readValue(report.toFile(), CtrfJson.class), junitCounts(log), log);
     }

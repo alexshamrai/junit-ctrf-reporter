@@ -3,17 +3,20 @@ package io.github.alexshamrai;
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.model.TestDetails;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Manages test execution state during a test run.
  * <p>
- * This class is responsible for tracking tests and their details during execution.
- * It uses thread-safe collections to support parallel test execution:
+ * It collects attempts, one per execution of a test, and the details of tests in progress. Attempts are
+ * folded into one test object per test only when the report is written (see {@link AttemptFolder}), so
+ * recording one costs O(1):
  * <ul>
- *   <li>{@link CopyOnWriteArrayList} for completed tests (optimized for reads)</li>
+ *   <li>{@link ConcurrentLinkedQueue} for attempts, in the order they finished</li>
  *   <li>{@link ConcurrentHashMap} for in-progress test details</li>
  * </ul>
  * <p>
@@ -21,16 +24,34 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 final class TestStateTracker {
 
-    private final List<Test> tests = new CopyOnWriteArrayList<>();
+    private final Queue<Test> attempts = new ConcurrentLinkedQueue<>();
     private final ConcurrentHashMap<String, TestDetails> testDetailsMap = new ConcurrentHashMap<>();
 
     /**
-     * Adds a completed test to the collection.
+     * Records a finished attempt of a test.
      *
-     * @param test the test result to add
+     * @param attempt the attempt's result
      */
-    void addTest(Test test) {
-        tests.add(test);
+    void addAttempt(Test attempt) {
+        attempts.add(attempt);
+    }
+
+    /**
+     * Records several attempts, for example those of earlier retry rounds read from an existing report.
+     *
+     * @param attemptsToAdd the attempts, in the order they ran
+     */
+    void addAllAttempts(List<Test> attemptsToAdd) {
+        attempts.addAll(attemptsToAdd);
+    }
+
+    /**
+     * Returns a snapshot of the recorded attempts, in the order they were recorded.
+     *
+     * @return a copy of all recorded attempts
+     */
+    List<Test> getAllAttempts() {
+        return new ArrayList<>(attempts);
     }
 
     /**
@@ -54,36 +75,12 @@ final class TestStateTracker {
     }
 
     /**
-     * Returns all completed tests.
-     * <p>
-     * The returned list is a snapshot and can be safely iterated even while
-     * tests are being added by other threads.
-     *
-     * @return list of all completed tests
-     */
-    List<Test> getAllTests() {
-        return tests;
-    }
-
-    /**
-     * Adds multiple tests to the collection.
-     * <p>
-     * This is typically used to restore tests from a previous run when
-     * supporting test reruns.
-     *
-     * @param testsToAdd the tests to add
-     */
-    void addAllTests(List<Test> testsToAdd) {
-        tests.addAll(testsToAdd);
-    }
-
-    /**
      * Clears all test state.
      * <p>
      * This is called after report generation to prepare for the next test run.
      */
     void clear() {
-        tests.clear();
+        attempts.clear();
         testDetailsMap.clear();
     }
 }

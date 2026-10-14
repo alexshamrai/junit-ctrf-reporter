@@ -98,7 +98,7 @@ Test Execution
     ↓
 CtrfReportManager (singleton coordinator)
     ├─ Delegates to TestStateTracker for state management
-    ├─ Delegates to FlakyTestDetector for flaky test detection
+    ├─ Delegates to AttemptFolder to fold retry attempts into one test
     ├─ Delegates to TestRerunHandler for rerun scenarios
     └─ Delegates to ReportOrchestrator for report generation
     ↓
@@ -118,8 +118,8 @@ CtrfReportFileService (filesystem I/O)
 | Component                       | Responsibility                                                                                        |
 |---------------------------------|-------------------------------------------------------------------------------------------------------|
 | **CtrfReportManager**           | Singleton coordinator; delegates test lifecycle events to specialized components (simplified from 195 to 186 lines) |
-| **TestStateTracker**            | Manages test state collections (CopyOnWriteArrayList, ConcurrentHashMap); thread-safe test storage    |
-| **FlakyTestDetector**           | Stateless utility for detecting flaky tests based on retry patterns and previous failures             |
+| **TestStateTracker**            | Collects attempts (ConcurrentLinkedQueue) and in-progress test details (ConcurrentHashMap)            |
+| **AttemptFolder**               | Stateless; folds attempts into one test per testId (retries, retryAttempts, flaky) and unfolds a report's tests back into attempts |
 | **TestRerunHandler**            | Loads existing test data from previous runs; manages rerun scenarios                                  |
 | **ReportOrchestrator**          | Coordinates report generation; delegates to CtrfJsonComposer and CtrfReportFileService                |
 | **EnvironmentHealthTracker**    | Public API for tracking test environment health status                                                |
@@ -157,11 +157,11 @@ CtrfJson (root)
 
 The library handles parallel test execution using thread-safe collections managed by **TestStateTracker**:
 
-- `CopyOnWriteArrayList<Test>` for test results (read-heavy workload, optimized for concurrent reads)
+- `ConcurrentLinkedQueue<Test>` for attempts (O(1) adds from any thread; folded once when the run finishes)
 - `ConcurrentHashMap<String, TestDetails>` for in-progress test tracking
 - `AtomicBoolean` for ensuring single execution of startup/shutdown logic
 
-**No explicit locks are used.** Thread safety is achieved through concurrent data structures and atomic operations. **FlakyTestDetector** is stateless with pure functions, making it inherently thread-safe.
+**No explicit locks are used.** Thread safety is achieved through concurrent data structures and atomic operations. **AttemptFolder** is stateless and runs once, in finishTestRun, on a snapshot of the attempts.
 
 ### Configuration
 
@@ -200,7 +200,7 @@ src/main/java/io/github/alexshamrai/
 ├── util/                          # Utilities (SummaryUtil, TestDetailsUtil)
 ├── CtrfReportManager.java         # Singleton coordinator (delegates to specialized classes)
 ├── TestStateTracker.java          # Manages test state collections
-├── FlakyTestDetector.java         # Detects flaky tests
+├── AttemptFolder.java             # Folds retry attempts into one test
 ├── TestRerunHandler.java          # Handles test rerun scenarios
 ├── ReportOrchestrator.java        # Orchestrates report generation
 ├── EnvironmentHealthTracker.java  # Public API for environment health tracking
@@ -259,13 +259,13 @@ The project uses GitHub Actions for automated releases to Maven Central:
 
 ## Special Features
 
-### Flaky Test Detection
+### Retries and Flaky Tests
 
-A test is marked as `flaky: true` only if it passed after at least one failed attempt. Earlier attempts are matched by `testId` (the JUnit unique ID); entries from older reports without a `testId` fall back to file path and name, never to the name alone.
+Each test appears once in the report, as its final attempt. Earlier attempts with the same `testId` (the JUnit unique ID) go into `retryAttempts`, numbered from 1, and `retries` is their count. A test is marked as `flaky: true` only if its final attempt passed after at least one failed attempt; `summary.flaky` counts such tests. Entries from older reports without a `testId` are grouped by file path and name among themselves, never by name alone, and never joined to entries that have a `testId`.
 
 ### Rerun Support
 
-`CtrfReportFileService` reads existing reports on startup, allowing incremental report building across multiple test runs.
+`CtrfReportFileService` reads existing reports on startup, allowing incremental report building across multiple test runs. Their tests are unfolded into attempts, so a retry round in a new JVM extends each test's `retryAttempts`.
 
 ### Thread Identification
 

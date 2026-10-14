@@ -19,6 +19,10 @@ public class Summary {
     private int pending;
     private int skipped;
     private int other;
+    /**
+     * Number of tests whose final attempt passed after at least one failed attempt.
+     */
+    private int flaky;
     private Integer suites;
     private long start;
     private long stop;
