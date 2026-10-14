@@ -278,6 +278,30 @@ When the environment is marked unhealthy, the CTRF report includes:
 }
 ```
 
+## Retries and Flaky Tests
+
+When a failed test is retried, for example by the Gradle [test-retry plugin](https://github.com/gradle/test-retry-gradle-plugin), the report contains the test once. The test object is its final attempt, and earlier attempts are listed in `retryAttempts`, as the CTRF specification defines:
+
+```json
+{
+  "name": "shouldProcessPayment()",
+  "status": "passed",
+  "retries": 1,
+  "flaky": true,
+  "retryAttempts": [
+    { "attempt": 1, "status": "failed", "duration": 5, "message": "org.opentest4j.AssertionFailedError: ..." }
+  ]
+}
+```
+
+- `retries` is the number of earlier attempts. A test that ran once has no `retries` or `retryAttempts`.
+- A test is `flaky` only if its final attempt passed after at least one failed attempt.
+- The summary counts each test once, by its final attempt, and `summary.flaky` counts flaky tests. A test that failed and then passed on retry counts as passed.
+
+Gradle's console output counts every attempt, so its numbers are higher than the report's when tests are retried. The report's `tests` matches the number of `<testcase>` elements in Gradle's JUnit XML with `reports.junitXml.mergeReruns = true`.
+
+Retries that JUnit runs as separate tests with their own unique IDs, such as JUnit Pioneer's `@RetryingTest`, appear as separate tests.
+
 ## Contributing
 
 Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to this project.

@@ -50,6 +50,7 @@ class SummaryUtilTest {
         assertEquals(0, summary.getPending());
         assertEquals(0, summary.getSkipped());
         assertEquals(0, summary.getOther());
+        assertEquals(0, summary.getFlaky());
         assertEquals(startTime, summary.getStart());
         assertEquals(stopTime, summary.getStop());
     }
@@ -99,5 +100,19 @@ class SummaryUtilTest {
         assertEquals(0, summary.getOther());
         assertEquals(startTime, summary.getStart());
         assertEquals(stopTime, summary.getStop());
+    }
+
+    @org.junit.jupiter.api.Test
+    void shouldCountFlakyTests() {
+        var tests = List.of(
+            Test.builder().status(TestStatus.PASSED).flaky(true).build(),
+            Test.builder().status(TestStatus.PASSED).build(),
+            Test.builder().status(TestStatus.FAILED).build()
+        );
+
+        var summary = SummaryUtil.createSummary(tests, 1000L, 2000L);
+
+        assertEquals(3, summary.getTests());
+        assertEquals(1, summary.getFlaky());
     }
 }

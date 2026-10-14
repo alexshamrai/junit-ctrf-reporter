@@ -1,12 +1,14 @@
 package io.github.alexshamrai;
 
 import io.github.alexshamrai.ctrf.model.Extra;
+import io.github.alexshamrai.ctrf.model.RetryAttempt;
 import io.github.alexshamrai.ctrf.model.Summary;
 import io.github.alexshamrai.ctrf.model.Test;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 /**
  * Processor responsible for calculating and setting startup duration in test results.
@@ -48,11 +50,19 @@ public class StartupDurationProcessor {
         return extra;
     }
 
+    // A retried test's own start is that of its final attempt; its earlier attempts started before it.
     private Long findStartTimeOfTheFirstTest(List<Test> tests) {
         return tests.stream()
-            .map(Test::getStart)
+            .flatMap(StartupDurationProcessor::attemptStarts)
             .filter(Objects::nonNull)
             .min(Long::compareTo)
             .orElse(null);
+    }
+
+    private static Stream<Long> attemptStarts(Test test) {
+        if (test.getRetryAttempts() == null) {
+            return Stream.of(test.getStart());
+        }
+        return Stream.concat(test.getRetryAttempts().stream().map(RetryAttempt::getStart), Stream.of(test.getStart()));
     }
 }

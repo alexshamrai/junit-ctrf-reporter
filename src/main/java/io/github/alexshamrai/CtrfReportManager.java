@@ -21,7 +21,7 @@ import static io.github.alexshamrai.ctrf.model.Test.TestStatus.SKIPPED;
  * specialized classes:
  * <ul>
  *   <li>{@link TestStateTracker} - manages test state and collections</li>
- *   <li>{@link FlakyTestDetector} - detects flaky tests based on retry patterns</li>
+ *   <li>{@link AttemptFolder} - folds the attempts of each test into one test object</li>
  *   <li>{@link TestRerunHandler} - handles test rerun scenarios</li>
  *   <li>{@link ReportOrchestrator} - generates and writes final reports</li>
  * </ul>
@@ -93,7 +93,7 @@ public final class CtrfReportManager {
         var test = testProcessor.createTest(testDetails.displayName(), testDetails, testDetails.startTime());
         test.setStatus(SKIPPED);
         reason.ifPresent(test::setMessage);
-        stateTracker.addTest(test);
+        stateTracker.addAttempt(test);
     }
 
     /**
@@ -111,8 +111,7 @@ public final class CtrfReportManager {
         newTest.setStatus(status);
         outcomeDetails.accept(newTest);
 
-        FlakyTestDetector.detectAndMarkFlaky(newTest, stateTracker.getAllTests());
-        stateTracker.addTest(newTest);
+        stateTracker.addAttempt(newTest);
     }
 
     public void onTestSuccess(String uniqueId) {
@@ -178,8 +177,9 @@ public final class CtrfReportManager {
             this.generator = generator;
             this.testRunStartTime = rerunHandler.loadOrCreateStartTime();
 
-            // Load existing tests from previous run (if any)
-            stateTracker.addAllTests(rerunHandler.getFileService().getExistingTests());
+            // Attempts of earlier retry rounds, from the existing report: unfolded, so that this run's
+            // attempts extend each test's history when the report is folded again
+            stateTracker.addAllAttempts(AttemptFolder.unfold(rerunHandler.getFileService().getExistingTests()));
 
             // Preserve environment health from previous run
             if (rerunHandler.wasPreviousRunUnhealthy()) {
@@ -198,7 +198,7 @@ public final class CtrfReportManager {
         refreshEnvironmentHealthFromEnvVar();
 
         reportOrchestrator.generateAndWriteReport(
-            stateTracker.getAllTests(),
+            AttemptFolder.fold(stateTracker.getAllAttempts()),
             testRunStartTime,
             testRunStopTime,
             isEnvironmentHealthy.get(),

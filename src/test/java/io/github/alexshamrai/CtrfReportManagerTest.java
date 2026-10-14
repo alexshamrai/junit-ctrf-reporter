@@ -2,6 +2,7 @@ package io.github.alexshamrai;
 
 import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
+import io.github.alexshamrai.ctrf.model.RetryAttempt;
 import io.github.alexshamrai.ctrf.model.Summary;
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.model.TestDetails;
@@ -15,6 +16,7 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -24,10 +26,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -176,27 +180,6 @@ class CtrfReportManagerTest {
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("Rerunning a test should set the retry count and flaky flag")
-    void processTestResult_setsRetryCount() {
-        // Mock the first run
-        var firstRun = Test.builder().testId("id-1").name("Rerun Test").status(FAILED).build();
-        when(testProcessor.createTest(eq("Rerun Test"), any(TestDetails.class), anyLong())).thenReturn(firstRun);
-        var details1 = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Rerun Test");
-        reportManager.onTestStart(details1);
-        reportManager.onTestFailure("id-1", new RuntimeException());
-
-        // Mock the second run: a rerun keeps the test's unique ID
-        var secondRun = Test.builder().testId("id-1").name("Rerun Test").build();
-        when(testProcessor.createTest(eq("Rerun Test"), any(TestDetails.class), anyLong())).thenReturn(secondRun);
-        var details2 = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Rerun Test");
-        reportManager.onTestStart(details2);
-        reportManager.onTestSuccess("id-1");
-
-        assertEquals(1, secondRun.getRetries());
-        assertTrue(secondRun.getFlaky());
-    }
-
-    @org.junit.jupiter.api.Test
     @DisplayName("finishTestRun should generate and write report")
     void finishTestRun_generatesReport() {
         var testResult = new Test();
@@ -319,5 +302,86 @@ class CtrfReportManagerTest {
             // Verify report was generated with unhealthy state from programmatic call
             verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(false));
         }
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("finishTestRun reports the attempts of one test as one test with its earlier attempts")
+    void finishTestRun_foldsAttemptsOfTheSameTest() {
+        startRunWithExistingTests(List.of());
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(
+            Test.builder().testId("id-1").name("Rerun Test").start(1_000L).build(),
+            Test.builder().testId("id-1").name("Rerun Test").start(2_000L).build());
+
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "id-1", "Rerun Test"));
+        reportManager.onTestFailure("id-1", new RuntimeException("boom"));
+        reportManager.onTestStart(new TestDetails(2_000L, Set.of(), null, "id-1", "Rerun Test"));
+        reportManager.onTestSuccess("id-1");
+
+        var tests = finishAndCaptureReportedTests();
+        assertEquals(1, tests.size());
+        var test = tests.get(0);
+        assertEquals(PASSED, test.getStatus());
+        assertEquals(1, test.getRetries());
+        assertTrue(test.getFlaky());
+        assertEquals(List.of(FAILED), test.getRetryAttempts().stream().map(RetryAttempt::getStatus).toList());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A test from the existing report is unfolded, so a new attempt extends its history")
+    void startTestRun_unfoldsTheExistingReportSoANewAttemptExtendsIt() {
+        var fromEarlierRounds = Test.builder().testId("id-1").name("Rerun Test").status(FAILED).start(2_000L)
+            .retries(1)
+            .retryAttempts(List.of(RetryAttempt.builder().attempt(1).status(FAILED).start(1_000L).build()))
+            .build();
+        startRunWithExistingTests(List.of(fromEarlierRounds));
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong()))
+            .thenReturn(Test.builder().testId("id-1").name("Rerun Test").start(3_000L).build());
+
+        reportManager.onTestStart(new TestDetails(3_000L, Set.of(), null, "id-1", "Rerun Test"));
+        reportManager.onTestSuccess("id-1");
+
+        var tests = finishAndCaptureReportedTests();
+        assertEquals(1, tests.size());
+        var test = tests.get(0);
+        assertEquals(PASSED, test.getStatus());
+        assertEquals(2, test.getRetries());
+        assertEquals(List.of(1_000L, 2_000L), test.getRetryAttempts().stream().map(RetryAttempt::getStart).toList());
+        assertTrue(test.getFlaky());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A second test plan execution in the same JVM does not report the first one's attempts again")
+    void finishTestRun_doesNotRepeatAttemptsOfAnEarlierExecution() {
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(
+            Test.builder().testId("id-1").name("First").build(),
+            Test.builder().testId("id-2").name("Second").build());
+        startRunWithExistingTests(List.of());
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "id-1", "First"));
+        reportManager.onTestSuccess("id-1");
+        finishAndCaptureReportedTests();
+
+        reportManager.startTestRun("Listener");
+        reportManager.onTestStart(new TestDetails(2_000L, Set.of(), null, "id-2", "Second"));
+        reportManager.onTestSuccess("id-2");
+
+        var tests = finishAndCaptureReportedTests();
+        assertEquals(List.of("id-2"), tests.stream().map(Test::getTestId).toList());
+    }
+
+    private void startRunWithExistingTests(List<Test> existingTests) {
+        when(ctrfReportFileService.getExistingTests()).thenReturn(existingTests);
+        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
+        reportManager.startTestRun("Listener");
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Test> finishAndCaptureReportedTests() {
+        when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), anyBoolean()))
+            .thenReturn(CtrfJson.builder().build());
+        reportManager.finishTestRun();
+
+        ArgumentCaptor<List<Test>> testsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(ctrfJsonComposer, atLeastOnce()).generateCtrfJson(any(Summary.class), testsCaptor.capture(), anyBoolean());
+        return testsCaptor.getValue();
     }
 }

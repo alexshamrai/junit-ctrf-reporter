@@ -13,7 +13,7 @@ import java.util.Map;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@Builder(toBuilder = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Test {
 
@@ -39,6 +39,11 @@ public class Test {
     private String filepath;
     private Integer retries;
     private Boolean flaky;
+    /**
+     * Attempts completed before the final attempt, which this object represents. Present only when
+     * {@code retries} is greater than 0, with exactly {@code retries} entries numbered from 1.
+     */
+    private List<RetryAttempt> retryAttempts;
     private List<String> stdout;
     private List<String> stderr;
     private String browser;

@@ -10,7 +10,7 @@ package io.github.alexshamrai;
  *   <li>Preserve test start times across reruns</li>
  *   <li>Accumulate test results from multiple runs</li>
  *   <li>Maintain environment health state</li>
- *   <li>Detect flaky tests based on retry patterns</li>
+ *   <li>Fold attempts of earlier retry rounds into the same tests (see {@link AttemptFolder})</li>
  * </ul>
  */
 final class TestRerunHandler {

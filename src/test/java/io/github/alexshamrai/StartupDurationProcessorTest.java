@@ -2,6 +2,7 @@
 package io.github.alexshamrai;
 
 import io.github.alexshamrai.ctrf.model.Extra;
+import io.github.alexshamrai.ctrf.model.RetryAttempt;
 import io.github.alexshamrai.ctrf.model.Summary;
 import io.github.alexshamrai.ctrf.model.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -105,5 +106,22 @@ public class StartupDurationProcessorTest {
         assertEquals(3000L, summary.getExtra().getStartupDuration());
         assertNotNull(summary.getExtra().getCustomData());
         assertEquals("existingValue", summary.getExtra().getCustomData().get("existingKey"));
+    }
+
+    @org.junit.jupiter.api.Test
+    void testProcessStartupDurationCountsEarlierAttemptsOfRetriedTests() {
+        var summary = Summary.builder().start(2000L).build();
+        var tests = List.of(
+            Test.builder().start(60000L)
+                .retries(1)
+                .retryAttempts(List.of(RetryAttempt.builder().attempt(1).start(2100L).build()))
+                .build(),
+            Test.builder().start(30000L).build()
+        );
+
+        processor.processStartupDuration(summary, tests);
+
+        assertNotNull(summary.getExtra());
+        assertEquals(100L, summary.getExtra().getStartupDuration());
     }
 }

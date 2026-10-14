@@ -1,9 +1,12 @@
 package integration;
 
+import io.github.alexshamrai.ctrf.model.RetryAttempt;
 import io.github.alexshamrai.ctrf.model.Test.TestStatus;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -49,22 +52,23 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         var summary = report.getResults().getSummary();
         assertThat(summary).isNotNull();
 
-        // Both modules: 24 entries from the shared fake tests, plus AfterAllFailureTest's passing test
-        // and its teardownError, each run twice because the test-retry plugin reruns failed classes, plus
-        // AssumptionTest's aborted test, which counts as skipped.
-        // The listener module also reports BrokenSourceTest's two failed containers, again twice, and the
-        // four tests of DisabledClassTest and ConditionallySkippedClassTest as skipped.
+        // Each test appears once, as its final attempt: the test-retry plugin's second round is folded into
+        // retryAttempts. Both modules: the shared fake tests, AfterAllFailureTest's passing test and its
+        // teardownError, and AssumptionTest's aborted test, which counts as skipped. The listener module also
+        // reports BrokenSourceTest's two failed containers, and the four tests of DisabledClassTest and
+        // ConditionallySkippedClassTest as skipped.
         if (isListenerReport()) {
-            assertThat(summary.getTests()).isEqualTo(37);
-            assertThat(summary.getPassed()).isEqualTo(15);
-            assertThat(summary.getFailed()).isEqualTo(15);
+            assertThat(summary.getTests()).isEqualTo(28);
+            assertThat(summary.getPassed()).isEqualTo(14);
+            assertThat(summary.getFailed()).isEqualTo(7);
             assertThat(summary.getSkipped()).isEqualTo(7);
         } else {
-            assertThat(summary.getTests()).isEqualTo(29);
-            assertThat(summary.getPassed()).isEqualTo(15);
-            assertThat(summary.getFailed()).isEqualTo(11);
+            assertThat(summary.getTests()).isEqualTo(22);
+            assertThat(summary.getPassed()).isEqualTo(14);
+            assertThat(summary.getFailed()).isEqualTo(5);
             assertThat(summary.getSkipped()).isEqualTo(3);
         }
+        assertThat(summary.getFlaky()).isEqualTo(1);
         assertThat(summary.getPending()).isEqualTo(0);
         assertThat(summary.getOther()).isEqualTo(0);
         assertThat(summary.getStart()).isGreaterThan(0);
@@ -148,14 +152,14 @@ public class CtrfLogicTest extends BaseIntegrationTest {
 
     @Test
     void verifyFlakyTestContainsValidData() {
-        var tests = report.getResults().getTests();
-        var flakyTest = tests.stream()
-            .filter(test -> test.getName().equals("Flaky test passed on the second run"))
-            .filter(test -> test.getStatus().equals(TestStatus.PASSED))
-            .findFirst().get();
+        var flakyTest = singleTestNamed("Flaky test passed on the second run");
 
+        assertThat(flakyTest.getStatus()).isEqualTo(TestStatus.PASSED);
         assertThat(flakyTest.getFlaky()).isTrue();
-        assertThat(flakyTest.getRetries()).isPositive();
+        assertThat(flakyTest.getRetries()).isEqualTo(1);
+        assertThat(flakyTest.getRetryAttempts())
+            .extracting(RetryAttempt::getAttempt, RetryAttempt::getStatus)
+            .containsExactly(tuple(1, TestStatus.FAILED));
     }
 
     @Test
@@ -224,10 +228,10 @@ public class CtrfLogicTest extends BaseIntegrationTest {
             .filter(test -> "initializationError".equals(test.getName()))
             .toList();
 
-        // Should have entries from both test classes (with retry, 4 total)
+        // One entry per class: the retry round is folded into retryAttempts
         assertThat(initErrorTests)
-            .as("Should have multiple initializationError entries from different test classes")
-            .hasSizeGreaterThanOrEqualTo(2);
+            .as("Should have one initializationError entry for each of the two test classes")
+            .hasSize(2);
 
         // Get distinct filepaths to verify different classes are captured
         var distinctFilepaths = initErrorTests.stream()
@@ -362,6 +366,60 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assertThat(abortedTest.get().getStatus()).isEqualTo(TestStatus.SKIPPED);
         assertThat(abortedTest.get().getRawStatus()).isEqualTo("aborted");
         assertThat(abortedTest.get().getMessage()).contains("Simulated assumption failure");
+    }
+
+    @Test
+    void verifyEachTestAppearsOnce() {
+        var testIds = report.getResults().getTests().stream()
+            .map(io.github.alexshamrai.ctrf.model.Test::getTestId)
+            .toList();
+
+        assertThat(testIds).as("testIds in the report").doesNotHaveDuplicates();
+    }
+
+    @Test
+    void verifyRetryFieldsAreConsistent() {
+        assertThat(report.getResults().getTests()).allSatisfy(test -> {
+            if (test.getRetryAttempts() == null) {
+                assertThat(test.getRetries()).as("retries of %s without retryAttempts", test.getName()).isNull();
+            } else {
+                assertThat(test.getRetries()).as("retries of %s", test.getName()).isEqualTo(test.getRetryAttempts().size());
+                assertThat(test.getRetryAttempts())
+                    .extracting(RetryAttempt::getAttempt)
+                    .as("attempt numbers of %s", test.getName())
+                    .isEqualTo(IntStream.rangeClosed(1, test.getRetries()).boxed().toList());
+            }
+        });
+    }
+
+    @Test
+    void verifyTestsFailingInEveryRoundAreNotFlaky() {
+        for (String name : List.of("firstFailedTest()", "Second failed test")) {
+            var test = singleTestNamed(name);
+            assertThat(test.getStatus()).as("status of %s", name).isEqualTo(TestStatus.FAILED);
+            assertThat(test.getFlaky()).as("flaky of %s", name).isNull();
+            assertThat(test.getRetryAttempts())
+                .extracting(RetryAttempt::getStatus)
+                .as("earlier attempts of %s", name)
+                .containsExactly(TestStatus.FAILED);
+        }
+    }
+
+    @Test
+    void verifySummaryCountsFlakyTests() {
+        long flakyTests = report.getResults().getTests().stream()
+            .filter(test -> Boolean.TRUE.equals(test.getFlaky()))
+            .count();
+
+        assertThat(report.getResults().getSummary().getFlaky()).isEqualTo((int) flakyTests);
+    }
+
+    private io.github.alexshamrai.ctrf.model.Test singleTestNamed(String name) {
+        var matches = report.getResults().getTests().stream()
+            .filter(test -> name.equals(test.getName()))
+            .toList();
+        assertThat(matches).as("entries named %s", name).hasSize(1);
+        return matches.get(0);
     }
 
     // Decided by the report itself, so a listener-only check never skips silently because of where the
