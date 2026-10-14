@@ -4,6 +4,8 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
+> **Progress 2026-10-14:** Phase 1 and HP-6 are merged to `master` @ `58e36f0`, not yet released (v0.4.5 is the latest release). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+
 ## How to Use This Plan
 
 Each improvement item includes:
@@ -13,6 +15,28 @@ Each improvement item includes:
 - **Acceptance Criteria**: How to verify the fix is complete
 - **Files Affected**: Which files need changes
 - **Status** (added 2026-10-08): Done / Partially done / Open / Re-evaluated / Superseded / Stale, relative to `master`
+
+---
+
+## Status on `master` — 2026-10-14
+
+`master` @ `58e36f0`. None of this is released yet; Phase 2 ships as 0.5.0.
+
+| Item | Status | PR | Commits |
+|---|---|---|---|
+| [CB-4](#cb-4-stop-forcing-junit-runtime-dependencies-on-consumers) Stop forcing JUnit runtime dependencies | Done | #124 | `8f88975`, `156ea67` |
+| [CB-5](#cb-5-report-every-failed-container-not-only-class-level-ones) Report every failed container | Done; one known gap in the extension | #125, #131 | `151c9c8`, `58e36f0` |
+| [CB-7](#cb-7-identify-tests-by-uniqueid-not-display-name) Identify tests by `uniqueId` | Done | #126 | `af822eb` |
+| [HP-8](#hp-8-report-tests-inside-skipped-containers) Tests inside skipped containers | Done | #127 | `732bf7e` |
+| [HP-9](#hp-9-extension-must-not-lose-test-identity-unknown-test) Extension keeps test identity | Done | #128 | `7235eb5` |
+| [HP-7](#hp-7-report-aborted-tests-failed-assumptions-as-skipped) Aborted tests as skipped | Done | #129 | `f6c3c7b` |
+| [HP-6](#hp-6-one-test-object-per-logical-test-fold-retry-attempts) Fold retry attempts | Done | #130 | `56518bd` |
+| [MP-3](#mp-3-replace-copyonwritearraylist-with-better-alternative) `CopyOnWriteArrayList` | Done by HP-6 | #130 | `56518bd` |
+| [CQ-1](#cq-1-extract-feature-envy-from-ctrfreportmanager) Feature envy | Superseded; HP-6 removed `FlakyTestDetector` | #130 | `56518bd` |
+| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-5, CB-7, HP-6, HP-7, HP-8 and HP-9 have scenario tests; CB-2, CB-6, MP-5 and HP-5 don't yet | | |
+| [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) Class failure that recovers on retry | New, open; design it together with CB-6 | | |
+
+Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
 ---
 
@@ -33,6 +57,8 @@ Each new item was reproduced, not inferred from reading:
 All 131 unit tests pass on `master`, and none of them cover these defects. TI-5 turns the scenarios into regression tests.
 
 ### Status of the original items on `master`
+
+Snapshot of 2026-10-08. For the current state, see [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
 
 | Item | Status | Note |
 |---|---|---|
@@ -73,6 +99,7 @@ All 131 unit tests pass on `master`, and none of them cover these defects. TI-5 
 | [HP-8](#hp-8-report-tests-inside-skipped-containers) | High | Tests inside skipped containers (e.g. a `@Disabled` class) vanish |
 | [HP-9](#hp-9-extension-must-not-lose-test-identity-unknown-test) | High | The extension reports "Unknown Test" when an earlier extension's `beforeEach` fails |
 | [HP-10](#hp-10-make-the-testexecutionlistener-the-single-core-integration-point) | High | Make the listener the single core integration point |
+| [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) | High | Added 2026-10-14: a class failure that recovers on retry stays failed |
 | [MP-5](#mp-5-read-previous-reports-tolerantly) | Medium | Reading a previous report is brittle: unknown fields drop history, missing `healthy` means unhealthy |
 | [MP-6](#mp-6-replace-deprecated-extensioncontextstorecloseableresource) | Medium | Deprecated `CloseableResource`; JUnit 6 already logs a warning for every extension user |
 | [MP-7](#mp-7-never-let-reporter-errors-fail-or-mask-user-tests) | Medium | Reporter errors can fail or mask user tests (by inspection) |
@@ -271,7 +298,7 @@ Verify that:
 **Priority**: Critical
 **Complexity**: Moderate
 **Files**: `build.gradle`, `README.md`, `CtrfReportManager.java`, `SuiteExecutionErrorHandler.java`, new consumer-compatibility CI job
-**Status**: Open (verified 2026-10-08)
+**Status**: Done on `master` (#124: `8f88975`, `156ea67`)
 
 #### Prompt
 ````
@@ -333,11 +360,11 @@ Repro (Maven consumer, maven-surefire-plugin 3.5.2, one trivial @Test, run `mvn 
 ````
 
 #### Acceptance Criteria
-- [ ] The published POM contains no `org.junit` dependencies; `module.json` runtimeElements contains no `junit-bom` platform
-- [ ] Maven and Gradle consumers on JUnit 5.10, the latest 5.x and 6.x run their tests and produce a report, in either declaration order
-- [ ] A Vintage-only consumer using `CtrfListener` works without `junit-jupiter-api` on the classpath
-- [ ] README uses test-scoped coordinates
-- [ ] The consumer-compatibility job runs in CI on every PR
+- [x] The published POM contains no `org.junit` dependencies; `module.json` runtimeElements contains no `junit-bom` platform
+- [x] Maven and Gradle consumers on JUnit 5.10, the latest 5.x and 6.x run their tests and produce a report, in either declaration order
+- [x] A Vintage-only consumer using `CtrfListener` works without `junit-jupiter-api` on the classpath
+- [x] README uses test-scoped coordinates
+- [x] The consumer-compatibility job runs in CI on every PR
 
 ---
 
@@ -346,7 +373,7 @@ Repro (Maven consumer, maven-surefire-plugin 3.5.2, one trivial @Test, run `mvn 
 **Priority**: Critical
 **Complexity**: Moderate
 **Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `CtrfReportManager.java`, `SuiteExecutionErrorHandler.java`, integration fake tests and validator
-**Status**: Open (verified 2026-10-08)
+**Status**: Done on `master` (#125: `151c9c8`; follow-up #131: `58e36f0`, which names an `@AfterAll` failure `teardownError` when the class's tests were skipped). Known gap: the extension still names it `initializationError` when every child of the class is a skipped `@Nested` class, because JUnit calls no extension callback for those; the listener gets it right. [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) tracks container failures that recover on retry.
 
 #### Prompt
 ````
@@ -390,10 +417,10 @@ Requirements:
 ````
 
 #### Acceptance Criteria
-- [ ] Every FAILED container in the test plan produces exactly one failed CTRF entry
-- [ ] CTRF `summary.failed > 0` whenever JUnit reports a failed test or container
-- [ ] `@AfterAll` failures are captured for every class, not only the first one
-- [ ] The integration validator cross-checks counts with JUnit's own results
+- [x] Every FAILED container in the test plan produces exactly one failed CTRF entry (with the listener; the extension's limits are listed in its Javadoc)
+- [x] CTRF `summary.failed > 0` whenever JUnit reports a failed test or container (with the listener; see above)
+- [x] `@AfterAll` failures are captured for every class, not only the first one
+- [ ] The integration validator cross-checks counts with JUnit's own results (open; the scenario tests do this, the validator doesn't yet: TI-4)
 
 ---
 
@@ -477,7 +504,7 @@ Target design:
 **Priority**: Critical
 **Complexity**: Simple
 **Files**: `FlakyTestDetector.java`, `CtrfReportManager.java`, `TestProcessor.java`, `ctrf/model/Test.java`
-**Status**: Open (verified 2026-10-08)
+**Status**: Done on `master` (#126: `af822eb`)
 
 #### Prompt
 ````
@@ -517,10 +544,10 @@ Requirements:
 ````
 
 #### Acceptance Criteria
-- [ ] The collision scenarios produce no `retries` or `flaky` values
-- [ ] The integration `FlakyTest` is still flaky with `retries=1`
-- [ ] Every test in the report has a `testId`
-- [ ] No code looks tests up by display name
+- [x] The collision scenarios produce no `retries` or `flaky` values
+- [x] The integration `FlakyTest` is still flaky with `retries=1`
+- [x] Every test in the report has a `testId`
+- [x] No code looks tests up by display name (entries from reports written before CB-7 have no `testId`, so they alone are grouped by file path and name)
 
 ---
 
@@ -880,7 +907,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: `CtrfReportManager.java`, `TestStateTracker.java`, `FlakyTestDetector.java` (deleted) → `AttemptFolder.java` (new), `TestRerunHandler.java` (Javadoc), `util/SummaryUtil.java`, `ctrf/model/Test.java`, `ctrf/model/Summary.java`, `ctrf/model/RetryAttempt.java` (new), `scenario/ScenarioRunner.java`, `integration-ctrf-validator/src/test/java/integration/CtrfLogicTest.java`, `README.md`, `CLAUDE.md`
-**Status**: Designed 2026-10-14 against `master` @ `7235eb5`; replaces the 2026-10-08 prompt
+**Status**: Done on `master` (#130: `56518bd`). Designed 2026-10-14 against `master` @ `7235eb5`; replaces the 2026-10-08 prompt. Follow-ups: [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) and [Deferred from the review](#deferred-from-the-hp-6-review).
 **Implementation plan**: [`docs/plans/2026-10-14-hp-6-fold-retry-attempts.md`](docs/plans/2026-10-14-hp-6-fold-retry-attempts.md)
 
 #### Why
@@ -1005,13 +1032,20 @@ Today every result also scans all earlier results (`FlakyTestDetector`) and copi
   - "Flaky Test Detection" (one entry per test; no `filepath` + name joining).
 - Branch `fix/hp-6-fold-retry-attempts` from `master`, one commit, PR description file.
 
+#### Deferred from the HP-6 review
+
+The final review of #130 rated these as minor:
+- With the extension, when another extension's `BeforeAllCallback` fails in the first class, before any class has started the run, that class's new attempt is recorded before the report file's attempts. Its history is then in the wrong order. In the reproduced case both attempts failed, so only the order was wrong. Fix: keep the report file's attempts in their own list, and fold them before this run's. Consider it with CB-6.
+- `AttemptFolderTest.entriesOfAnOlderReportFoldIntoOneTest` uses `testId`s, but released 0.4.x reports have none. Add a variant keyed by file path and name that goes through `unfold`, then `fold`.
+- `CLAUDE.md` says `AttemptFolder` runs only in `finishTestRun`, but `unfold` also runs in `startTestRun`.
+
 #### Acceptance Criteria
-- [ ] Each logical test appears exactly once in `results.tests`
-- [ ] Integration reports show listener tests=28, passed=14, failed=7, skipped=7, flaky=1 and extension tests=22, passed=14, failed=5, skipped=3, flaky=1
-- [ ] `retries` always equals `retryAttempts.size()`, `retryAttempts` is absent when `retries` is 0, and attempts are numbered 1..n
-- [ ] A test that passes after a failed attempt has `flaky: true`, and `summary.flaky` counts such tests
-- [ ] A third retry round extends `retryAttempts` instead of nesting it
-- [ ] Recording a result is O(1): the MP-3 measurement scales linearly
+- [x] Each logical test appears exactly once in `results.tests`
+- [x] Integration reports show listener tests=28, passed=14, failed=7, skipped=7, flaky=1 and extension tests=22, passed=14, failed=5, skipped=3, flaky=1
+- [x] `retries` always equals `retryAttempts.size()`, `retryAttempts` is absent when `retries` is 0, and attempts are numbered 1..n
+- [x] A test that passes after a failed attempt has `flaky: true`, and `summary.flaky` counts such tests
+- [x] A third retry round extends `retryAttempts` instead of nesting it
+- [x] Recording a result is O(1): the MP-3 measurement scales linearly
 - [ ] Reports validate against the official schema once HP-5 lands
 
 ---
@@ -1021,7 +1055,7 @@ Today every result also scans all earlier results (`FlakyTestDetector`) and copi
 **Priority**: High
 **Complexity**: Simple
 **Files**: `CtrfReportManager.java`, `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, unit tests, integration fake tests
-**Status**: Open (verified 2026-10-08)
+**Status**: Done on `master` (#129: `f6c3c7b`)
 
 #### Prompt
 ````
@@ -1041,9 +1075,9 @@ Requirements:
 ````
 
 #### Acceptance Criteria
-- [ ] Failed assumptions appear as skipped, with `rawStatus` "aborted" and the assumption message
-- [ ] `summary.failed` does not count aborted tests
-- [ ] The listener and the extension behave the same way
+- [x] Failed assumptions appear as skipped, with `rawStatus` "aborted" and the assumption message
+- [x] `summary.failed` does not count aborted tests
+- [x] The listener and the extension behave the same way
 
 ---
 
@@ -1052,7 +1086,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Simple
 **Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java` (documented limitation), tests
-**Status**: Open (verified 2026-10-08)
+**Status**: Done on `master` (#127: `732bf7e`). The extension still cannot see the tests of a class skipped as a whole; its Javadoc says so, and HP-10 resolves it.
 
 #### Prompt
 ````
@@ -1077,8 +1111,8 @@ Requirements:
 ````
 
 #### Acceptance Criteria
-- [ ] Skipped counts match JUnit's `SummaryGeneratingListener` for disabled classes, class-level conditions and aborted containers
-- [ ] Each skipped test carries the container's reason
+- [x] Skipped counts match JUnit's `SummaryGeneratingListener` for disabled classes, class-level conditions and aborted containers (with the listener)
+- [x] Each skipped test carries the container's reason
 
 ---
 
@@ -1087,7 +1121,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Simple
 **Files**: `jupiter/CtrfExtension.java`, `CtrfReportManager.java`
-**Status**: Open (verified 2026-10-08)
+**Status**: Done on `master` (#128: `7235eb5`)
 
 #### Prompt
 ````
@@ -1110,8 +1144,8 @@ Requirements:
 ````
 
 #### Acceptance Criteria
-- [ ] The scenario reports `importantBusinessTest()` with its class and tags
-- [ ] No "Unknown Test" entries appear when an `ExtensionContext` is available
+- [x] The scenario reports `importantBusinessTest()` with its class and tags
+- [x] No "Unknown Test" entries appear when an `ExtensionContext` is available
 
 ---
 
@@ -1156,6 +1190,40 @@ Requirements:
 
 ---
 
+### HP-11: A Class Failure That Recovers on Retry Stays Failed
+
+**Priority**: High
+**Complexity**: Moderate
+**Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `AttemptFolder.java`, `CtrfReportManager.java`, scenario tests
+**Status**: Open. Found by the HP-6 review on 2026-10-14 and reproduced in forked-JVM retry rounds. `master` had the same behaviour before HP-6. Design it together with CB-6.
+
+#### Why
+
+A class-level entry (`initializationError` or `teardownError`), or one for a failed container below class level such as a `@MethodSource`, is written only when the container fails. When the Gradle test-retry plugin reruns the class and it succeeds, nothing is recorded for it, so there is no later attempt to fold into the first round's failure.
+
+Reproduced through both entry points: `@BeforeAll` fails in round 1 and passes in round 2. The report keeps `initializationError` as failed, without `retries`, and the summary has `failed: 1` and `flaky: 0`. With `failOnPassedAfterRetry=false`, Gradle is green while CTRF consumers show the run as failed. That is the false red HP-6 removed for tests. Class setup that depends on a database or a container is a common source of such flakes.
+
+#### To decide
+
+- How a recovered container failure appears in the report:
+  - one entry with `status: passed`, `retries: n`, `flaky: true` and the failures in `retryAttempts`, plus which name that entry gets;
+  - or no entry, because the class's tests carry the outcome, which loses the evidence of the flake.
+- Whether a passed class counts towards `summary.tests`.
+
+#### Sketch, from the review
+
+- When a container finishes successfully, record an internal "container passed" attempt keyed by its unique ID. The listener does this in `executionFinished` with SUCCESSFUL; the extension does it in `afterAll` without an execution exception.
+- `AttemptFolder.fold` drops groups made only of such markers and folds the others as usual. A marker is never written to the report on its own.
+- CB-6 merges shards with `unfold` then `fold`, so the markers have to survive that too. That is why the two are designed together.
+
+#### Acceptance Criteria
+- [ ] A class whose `@BeforeAll` fails in round 1 and passes in round 2 is no longer counted as failed, through both entry points
+- [ ] The same holds for `@AfterAll`, and for a failed container below class level that recovers
+- [ ] A container that fails in every round is still one failed entry, with its history in `retryAttempts`
+- [ ] Containers that never failed add no entries
+
+---
+
 ## Medium Priority Improvements
 
 ### MP-1: Optimize SummaryUtil with Single-Pass Counting
@@ -1163,7 +1231,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `src/main/java/io/github/alexshamrai/util/SummaryUtil.java`
-**Status**: Done on `master` (`64f5bdd`); `summary.flaky` is added by HP-6
+**Status**: Done on `master` (`64f5bdd`); HP-6 (#130) added `summary.flaky`
 
 #### Prompt
 ```
@@ -1330,7 +1398,7 @@ Read the report once in constructor or in a single initialization method called 
 **Priority**: High (raised from Medium on 2026-10-08)
 **Complexity**: Moderate
 **Files**: `src/main/java/io/github/alexshamrai/TestStateTracker.java`, `FlakyTestDetector.java` (on `master`; the list moved out of `CtrfReportManager.java` in `c6b2650`)
-**Status**: Open; resolved by HP-6
+**Status**: Done on `master` by HP-6 (#130: `56518bd`). Attempts go into a `ConcurrentLinkedQueue` and are folded once when the run finishes. Recording 80k tests took 167 s on the previous `master` and takes 0.18 s now, on the same machine. The prompt below is superseded.
 
 #### Review Note (2026-10-08)
 The analysis below assumes a single read at the end, which is wrong. Every test completion runs two O(n) operations:
@@ -1741,7 +1809,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java` + new files
-**Status**: Superseded by CB-7 and HP-6. Do not implement the design below as written.
+**Status**: Superseded by CB-7 and HP-6; HP-6 (#130) removed `FlakyTestDetector`. Do not implement the design below as written.
 
 #### Review Note (2026-10-08)
 This logic was extracted on `master` as `FlakyTestDetector`. The design below matches tests by display name (`findTestsByName`, and `mergeRerunResults` comparing names), which is exactly the CB-7 defect. Its `isFlaky` rule ("retries > 0 and passed", "different outcomes") also contradicts the spec definition: final status passed, and at least one earlier failed attempt. Identity and folding are specified in CB-7 and HP-6.
@@ -2925,7 +2993,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: new tests under `src/test/java/io/github/alexshamrai/scenario/` (or a new integration module), fake test classes
-**Status**: Open (2026-10-08)
+**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-7, HP-6, HP-7, HP-8 and HP-9, each written with its fix. Still open: the CB-6 scenarios (same-JVM rerun, two JVMs, accumulation), CB-2 (nested run), MP-5 (tolerant read) and HP-5 (official schema).
 
 #### Prompt
 ````
@@ -3892,23 +3960,25 @@ Report Generation:
 
 ## Implementation Order
 
-Updated 2026-10-08. This replaces the original four-phase order, whose Phase 1 and most of Phase 2 are already done on `master`.
+Updated 2026-10-08; progress marked 2026-10-14. This replaces the original four-phase order, whose Phase 1 and most of Phase 2 are already done on `master`.
 
 ### Already done on `master`
 CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 (its regression is tracked in CB-6), TI-3 (partially)
 
+Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6 and MP-3. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
+
 ### Phase 1: Stop wrong results and broken builds (small, independent changes)
-1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix
-2. CB-7: Identify tests by `uniqueId` (`testId`) and fix the flaky rule
-3. CB-5: Report every failed container
-4. HP-8: Report tests inside skipped containers
-5. HP-7: Report aborted tests as skipped
-6. HP-9: Keep test identity in the extension
-7. TI-5: Write the regression scenario for each of the fixes above alongside it
+1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix. **Done** (#124)
+2. CB-7: Identify tests by `uniqueId` (`testId`) and fix the flaky rule. **Done** (#126)
+3. CB-5: Report every failed container. **Done** (#125, #131)
+4. HP-8: Report tests inside skipped containers. **Done** (#127)
+5. HP-7: Report aborted tests as skipped. **Done** (#129)
+6. HP-9: Keep test identity in the extension. **Done** (#128)
+7. TI-5: Write the regression scenario for each of the fixes above alongside it. **Done** for items 1–6; TI-5 itself stays partially done
 
 ### Phase 2: Data model and persistence (changes the report shape, so bump the minor version)
-8. HP-6: One test object per logical test, with `retryAttempts` (also resolves MP-3)
-9. CB-6: Shards plus merge, run identity, atomic writes
+8. HP-6: One test object per logical test, with `retryAttempts` (also resolves MP-3). **Done** (#130)
+9. CB-6: Shards plus merge, run identity, atomic writes. Design it together with HP-11: a class failure that recovers on retry stays failed
 10. HP-5: Conform to the official schema
 11. TI-4: Validator using the official schema and a cross-check against JUnit's counts
 12. MP-5: Read previous reports tolerantly
