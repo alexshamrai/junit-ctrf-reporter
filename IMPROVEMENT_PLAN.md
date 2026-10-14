@@ -430,6 +430,7 @@ Requirements:
 **Complexity**: Complex
 **Files**: `CtrfReportFileService.java`, `CtrfReportManager.java`, `TestStateTracker.java`, `CtrfJsonComposer.java`, `ReportMerger.java` (new), `RunIdResolver.java` (new), `ContainerSuccess.java` (new), `ReportOrchestrator.java` and `TestRerunHandler.java` (deleted), `ctrf/model/CtrfJson.java`, `config/CtrfConfig.java`, `config/ConfigReader.java`, `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `scenario/*`, `integration-tests-*/build.gradle`, `.github/workflows/integration-listener.yml`, `compat/maven/*`, `README.md`, `CLAUDE.md`
 **Status**: Designed 2026-10-14 against `master` @ `58e36f0`, together with HP-11; replaces the 2026-10-08 prompt. CB-6 and HP-11 ship in one PR.
+**Implementation plan**: [`docs/plans/2026-10-14-cb-6-report-persistence.md`](docs/plans/2026-10-14-cb-6-report-persistence.md)
 
 #### Why
 
