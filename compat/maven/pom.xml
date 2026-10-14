@@ -50,6 +50,9 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.2</version>
                 <configuration>
+                    <forkCount>2</forkCount>
+                    <reuseForks>false</reuseForks>
+                    <rerunFailingTestsCount>1</rerunFailingTestsCount>
                     <systemPropertyVariables>
                         <ctrf.report.path>${project.build.directory}/ctrf-report.json</ctrf.report.path>
                         <compat.out>${project.build.directory}/junit-versions.txt</compat.out>

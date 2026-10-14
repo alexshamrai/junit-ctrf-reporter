@@ -97,4 +97,8 @@ public class ConfigReader {
     public boolean calculateStartupDuration() {
         return config.calculateStartupDuration();
     }
+
+    public String getRunId() {
+        return config.runId();
+    }
 }

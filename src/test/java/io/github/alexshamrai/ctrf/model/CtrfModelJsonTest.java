@@ -65,4 +65,13 @@ class CtrfModelJsonTest {
         assertThat(copy.getStatus()).isEqualTo(Test.TestStatus.PASSED);
         assertThat(test.getStatus()).isEqualTo(Test.TestStatus.FAILED);
     }
+
+    @org.junit.jupiter.api.Test
+    void runIdIsWrittenAtTheRootOnlyWhenSet() throws Exception {
+        var withRunId = objectMapper.readTree(objectMapper.writeValueAsString(CtrfJson.builder().runId("run-1").build()));
+        var withoutRunId = objectMapper.readTree(objectMapper.writeValueAsString(CtrfJson.builder().build()));
+
+        assertThat(withRunId.get("runId").asText()).isEqualTo("run-1");
+        assertThat(withoutRunId.has("runId")).isFalse();
+    }
 }

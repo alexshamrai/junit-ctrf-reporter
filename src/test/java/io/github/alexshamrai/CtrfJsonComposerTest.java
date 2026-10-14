@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -51,7 +52,7 @@ public class CtrfJsonComposerTest {
         var summary = Summary.builder().build();
         var tests = List.of(Test.builder().build(), Test.builder().build());
 
-        var result = composer.generateCtrfJson(summary, tests, true);
+        var result = composer.generateCtrfJson(summary, tests, true, "run-1");
 
         assertNotNull(result);
         assertNotNull(result.getResults());
@@ -90,7 +91,7 @@ public class CtrfJsonComposerTest {
         var summary = Summary.builder().build();
         List<Test> tests = Collections.emptyList();
 
-        var result = composer.generateCtrfJson(summary, tests, true);
+        var result = composer.generateCtrfJson(summary, tests, true, "run-1");
 
         assertNotNull(result);
         assertNotNull(result.getResults());
@@ -102,7 +103,7 @@ public class CtrfJsonComposerTest {
     void testGenerateCtrfJsonWithNullSummary() {
         var tests = List.of(Test.builder().build());
 
-        var result = composer.generateCtrfJson(null, tests, true);
+        var result = composer.generateCtrfJson(null, tests, true, "run-1");
 
         assertNotNull(result);
         assertNotNull(result.getResults());
@@ -128,7 +129,7 @@ public class CtrfJsonComposerTest {
 
         long expectedStartupDuration = 3000L;
 
-        var result = composer.generateCtrfJson(summary, tests, true);
+        var result = composer.generateCtrfJson(summary, tests, true, "run-1");
 
         assertNotNull(result);
         assertNotNull(result.getResults());
@@ -142,11 +143,20 @@ public class CtrfJsonComposerTest {
         var summary = Summary.builder().build();
         var tests = List.of(Test.builder().build());
 
-        var result = composer.generateCtrfJson(summary, tests, false);
+        var result = composer.generateCtrfJson(summary, tests, false, "run-1");
 
         assertNotNull(result);
         Environment environment = result.getResults().getEnvironment();
         assertNotNull(environment);
         assertEquals(false, environment.isHealthy());
+    }
+
+    @org.junit.jupiter.api.Test
+    void testGenerateCtrfJsonSetsTheRunIdAndANewReportIdEachTime() {
+        var first = composer.generateCtrfJson(Summary.builder().build(), List.of(), true, "run-1");
+        var second = composer.generateCtrfJson(Summary.builder().build(), List.of(), true, "run-1");
+
+        assertEquals("run-1", first.getRunId());
+        assertNotEquals(first.getReportId(), second.getReportId());
     }
 }

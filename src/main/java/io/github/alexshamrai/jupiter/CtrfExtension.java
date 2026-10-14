@@ -65,15 +65,19 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
     }
 
     /**
-     * Reports the class as failed if it failed outside its tests. Runs after the class's {@code @AfterAll}
-     * methods, and also when a {@code @BeforeAll} method or a {@code BeforeAllCallback} failed, but not when
-     * the class could not be created (see the class documentation).
+     * Reports the class as failed if it failed outside its tests, and otherwise records that it succeeded, so
+     * that its failure in an earlier retry round is reported as recovered: passed and flaky. Runs after the
+     * class's {@code @AfterAll} methods, and also when a {@code @BeforeAll} method or a
+     * {@code BeforeAllCallback} failed, but not when the class could not be created (see the class
+     * documentation).
      *
      * @param context the context of the finished test class
      */
     @Override
     public void afterAll(ExtensionContext context) {
-        context.getExecutionException().ifPresent(error -> reportClassFailure(context, error));
+        context.getExecutionException().ifPresentOrElse(
+            error -> reportClassFailure(context, error),
+            () -> reportClassSuccess(context));
     }
 
     @Override
@@ -131,6 +135,11 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
 
         reportManager.onTestStart(new TestDetails(startTime, context.getTags(), className, uniqueId, name));
         reportManager.onTestFailure(uniqueId, error);
+    }
+
+    private void reportClassSuccess(ExtensionContext context) {
+        ClassState state = classStateOf(context);
+        reportManager.onContainerSuccess(context.getUniqueId(), state != null ? state.startTime() : null);
     }
 
     /**

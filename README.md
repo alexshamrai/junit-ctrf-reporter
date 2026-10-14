@@ -174,6 +174,7 @@ The following parameters can be configured in the `ctrf.properties` file:
 | `ctrf.report.path`                | The file path where the CTRF report will be saved            | `ctrf-report.json` |
 | `ctrf.max.message.length`         | Maximum length for error messages in the report              | `500`              |
 | `ctrf.calculate.startup.duration` | Whether to calculate and include test suite startup duration | `false`            |
+| `ctrf.run.id`                     | Run identifier shared by the JVMs of one build; see [Parallel Forks, Retries and Reruns](#parallel-forks-retries-and-reruns) | detected |
 | `junit.version`                   | The version of JUnit used in your project                    |                    |
 | `ctrf.report.name`                | Name of the test report                                      |                    |
 | `ctrf.app.name`                   | Name of the application under test                           |                    |
@@ -258,7 +259,7 @@ boolean healthy = EnvironmentHealthTracker.isEnvironmentHealthy();
 
 - **Default State**: Environment starts as healthy (`true`)
 - **Irreversible**: Once marked unhealthy, it remains unhealthy for the entire test run
-- **Persistence**: Unhealthy state is preserved across test reruns when using the same report file
+- **Persistence**: When the JVMs of one run merge their results, such as parallel forks and retry rounds, the report is unhealthy if any of them was. A report from an earlier run doesn't pass its state on
 - **Report Field**: The health status appears in the CTRF report under `results.environment.healthy`
 
 ### Example Report Output
@@ -301,6 +302,67 @@ When a failed test is retried, for example by the Gradle [test-retry plugin](htt
 Gradle's console output counts every attempt, so its numbers are higher than the report's when tests are retried. The report's `tests` matches the number of `<testcase>` elements in Gradle's JUnit XML with `reports.junitXml.mergeReruns = true`.
 
 Retries that JUnit runs as separate tests with their own unique IDs, such as JUnit Pioneer's `@RetryingTest`, appear as separate tests.
+
+A test class whose setup (`@BeforeAll`) or teardown (`@AfterAll`) fails in one round and succeeds in a later one is reported the same way: its `initializationError` or `teardownError` entry becomes `passed`, with `flaky: true` and the failure in `retryAttempts`.
+
+## Parallel Forks, Retries and Reruns
+
+A build can run tests in several JVMs that write the same report:
+- parallel forks: Gradle `maxParallelForks`, Surefire `forkCount`;
+- retry rounds: the Gradle test-retry plugin;
+- reruns inside one JVM: Surefire `rerunFailingTestsCount`;
+- several test tasks or plugin executions in one build.
+
+The report stays one file at `ctrf.report.path`, and each JVM merges its results into it when it finishes.
+- **JVMs of the same run merge.** Every test appears once, with earlier attempts in `retryAttempts`.
+- **A report from another run is replaced**, for example the one left by the previous build.
+- **The report is never half-written.** While a JVM merges, it holds a lock on `<report>.lock` next to the report, and it replaces the report by moving a complete file over it. Add `ctrf-report.json.lock` and `.ctrf-report.json.*.tmp` to `.gitignore`, or set `ctrf.report.path` under `build/` or `target/`.
+- **If the lock can't be taken**, the report is still written, atomically but without the lock. That happens when another JVM holds it for more than 60 seconds, or on a file system that doesn't support locks, such as some network mounts. JVMs that finish at the same moment can then overwrite each other's results. A JVM killed while writing can leave a hidden `.ctrf-report.json.<id>.tmp` file, which is safe to delete.
+
+Each JVM reads and rewrites the whole report when it finishes. With a large suite and a new JVM per test class (Gradle `forkEvery = 1`, Surefire `reuseForks=false`), this adds about a second per JVM at 80,000 tests.
+
+### How the Run Is Identified
+
+The report's root `runId` decides which JVMs belong together. Each JVM resolves it on its own, and the first match wins:
+
+1. `ctrf.run.id`, a system property or a `ctrf.properties` entry. It must change with every build. A constant, such as a fixed entry in `ctrf.properties`, makes every build the same run, so reports accumulate again.
+2. A CI variable:
+   - GitHub Actions: `GITHUB_RUN_ID` and `GITHUB_RUN_ATTEMPT`;
+   - GitLab: `CI_JOB_ID`;
+   - Jenkins: `BUILD_TAG`;
+   - Azure Pipelines: `BUILD_BUILDID` and `SYSTEM_JOBATTEMPT`;
+   - CircleCI: `CIRCLE_WORKFLOW_JOB_ID`;
+   - Buildkite: `BUILDKITE_JOB_ID`.
+3. The build tool's JVM, meaning the nearest ancestor process that is a JVM. This identifies one Maven build, or one `gradle --no-daemon` build.
+4. Otherwise each JVM is its own run.
+
+Locally, Gradle runs builds in a long-lived daemon, so consecutive builds share step 3 and their results accumulate in one report. The same goes for other long-lived build servers, such as `mvnd` and Bazel. Test runs started from an IDE can behave the same way, for example VS Code's Java test runner, whose parent is a long-lived `java` process. Give each Gradle build its own id:
+
+```groovy
+tasks.withType(Test).configureEach {
+    // A new id each time the task runs, shared by its forks and retry rounds.
+    // The task stays up to date, and this works with the configuration cache.
+    doFirst { systemProperty 'ctrf.run.id', UUID.randomUUID().toString() }
+}
+```
+
+Or, with the Kotlin DSL:
+
+```kotlin
+import java.util.UUID
+
+tasks.withType<Test>().configureEach {
+    doFirst { (this as Test).systemProperty("ctrf.run.id", UUID.randomUUID().toString()) }
+}
+```
+
+Each test task then gets its own id. If a build runs several test tasks, give each its own `ctrf.report.path`. This matters most when two tasks run the same tests, for example one per JDK version. Writing to one report, a test that fails on one JDK and passes on the other would fold into one passed, flaky entry.
+
+Separate build invocations are separate runs unless they share a run id, for example `./gradlew test` followed by `./gradlew integrationTest`, or two Maven invocations. On a CI system that isn't listed above, pass the same `-Dctrf.run.id=<your CI build id>` to every invocation whose results belong in one report.
+
+### Reports from Several Machines
+
+When tests run on several machines, such as CI matrix jobs, each machine writes its own report. Merge them with [ctrf-cli](https://github.com/ctrf-io/ctrf-cli): `npx ctrf merge <directory>`.
 
 ## Contributing
 

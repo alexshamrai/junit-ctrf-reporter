@@ -9,6 +9,7 @@ class CompatTest {
     @Test
     void passes() throws Exception {
         VersionProbe.write();
+        VersionProbe.recordFork("CompatTest");
     }
 
     @Test

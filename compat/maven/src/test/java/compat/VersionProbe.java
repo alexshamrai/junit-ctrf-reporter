@@ -18,6 +18,14 @@ final class VersionProbe {
         Files.writeString(Path.of(System.getProperty("compat.out")), text);
     }
 
+    /**
+     * Records the pid of the JVM a test class runs in, so that compat/check_report.py can tell the forks apart.
+     */
+    static void recordFork(String testClass) throws Exception {
+        Path directory = Path.of(System.getProperty("compat.out")).getParent();
+        Files.writeString(directory.resolve("fork-" + testClass + ".pid"), String.valueOf(ProcessHandle.current().pid()));
+    }
+
     private static String versionOf(String className) {
         try {
             String version = Class.forName(className).getPackage().getImplementationVersion();

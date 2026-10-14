@@ -81,4 +81,7 @@ public interface CtrfConfig extends Config {
     @Key("ctrf.calculate.startup.duration")
     @DefaultValue("false")
     boolean calculateStartupDuration();
+
+    @Key("ctrf.run.id")
+    String runId();
 }

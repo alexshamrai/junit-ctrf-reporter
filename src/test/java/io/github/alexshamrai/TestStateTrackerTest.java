@@ -5,7 +5,6 @@ import io.github.alexshamrai.model.TestDetails;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -54,18 +53,6 @@ class TestStateTrackerTest {
     @DisplayName("Should return null for non-existent test details")
     void shouldReturnNullForNonExistentDetails() {
         assertThat(tracker.removeTestDetails("non-existent")).isNull();
-    }
-
-    @org.junit.jupiter.api.Test
-    @DisplayName("Should add multiple tests")
-    void shouldAddMultipleTests() {
-        var test1 = Test.builder().name("test1").build();
-        var test2 = Test.builder().name("test2").build();
-        var testsToAdd = List.of(test1, test2);
-
-        tracker.addAllAttempts(testsToAdd);
-
-        assertThat(tracker.getAllAttempts()).containsExactly(test1, test2);
     }
 
     @org.junit.jupiter.api.Test
@@ -130,5 +117,19 @@ class TestStateTrackerTest {
         tracker.addAttempt(Test.builder().name("test2").build());
 
         assertThat(snapshot).hasSize(1);
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Container successes are kept in order and cleared with the attempts")
+    void shouldKeepContainerSuccessesUntilCleared() {
+        var first = new ContainerSuccess("class-1", 1L, 2L);
+        var second = new ContainerSuccess("class-2", 3L, 4L);
+
+        tracker.addContainerSuccess(first);
+        tracker.addContainerSuccess(second);
+
+        assertThat(tracker.getAllContainerSuccesses()).containsExactly(first, second);
+        tracker.clear();
+        assertThat(tracker.getAllContainerSuccesses()).isEmpty();
     }
 }

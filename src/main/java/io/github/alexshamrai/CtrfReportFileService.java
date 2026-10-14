@@ -3,124 +3,229 @@ package io.github.alexshamrai;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
-import io.github.alexshamrai.ctrf.model.Test;
-import lombok.RequiredArgsConstructor;
 
+import java.io.Closeable;
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.AccessDeniedException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.List;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.time.Duration;
+import java.util.UUID;
+import java.util.function.UnaryOperator;
 
 /**
- * Handles writing the CTRF JSON report to a file on the filesystem.
+ * Reads and writes the CTRF report file at {@code ctrf.report.path}.
  * <p>
- * This class takes care of creating necessary directories, handling file system errors,
- * and serializing the CTRF JSON object to a file. The target file path is determined
- * by the configuration provided through {@link ConfigReader}.
+ * Several JVMs can write the same report, for example parallel forks and retry rounds. {@link #update} lets
+ * them take turns: it holds an exclusive lock on {@code <report>.lock} while it reads the report, merges, and
+ * replaces the report by moving a complete temp file over it. A JVM killed while writing therefore never
+ * leaves a truncated report.
  */
-@RequiredArgsConstructor
 public class CtrfReportFileService {
+
+    static final Duration DEFAULT_LOCK_TIMEOUT = Duration.ofSeconds(60);
+    private static final Duration LOCK_POLL_INTERVAL = Duration.ofMillis(50);
+    private static final int MOVE_ATTEMPTS = 10;
+    private static final Duration MOVE_RETRY_INTERVAL = Duration.ofMillis(100);
+
+    /**
+     * Threads of this JVM take turns here before touching the file lock. Besides keeping them from colliding on it,
+     * this guarantees the JVM has only one channel open on {@code <report>.lock}: on POSIX systems, closing any
+     * channel to a file releases every lock the process holds on that file, so a second channel closed by a waiting
+     * thread would silently drop the lock another thread holds.
+     */
+    private static final Object JVM_LOCK = new Object();
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ConfigReader configReader;
-    private CtrfJson cachedReport;
-    private boolean reportReadAttempted = false;
+    private final Duration lockTimeout;
+
+    public CtrfReportFileService(ConfigReader configReader) {
+        this(configReader, DEFAULT_LOCK_TIMEOUT);
+    }
+
+    CtrfReportFileService(ConfigReader configReader, Duration lockTimeout) {
+        this.configReader = configReader;
+        this.lockTimeout = lockTimeout;
+    }
 
     /**
-     * Writes the provided CTRF JSON object to a file.
+     * Replaces the report with what {@code merge} makes of the current one.
      * <p>
-     * The method handles directory creation if needed and logs errors to the standard error
-     * if any issues occur during file writing.
+     * Threads of this JVM take turns, and other JVMs are kept out by an exclusive lock on {@code <report>.lock}.
+     * The report is read fresh while the lock is held. After the lock timeout, or on a file system that can't
+     * lock files, the report is written without the lock. Errors, including one thrown by {@code merge}, are
+     * printed to the standard error and leave the report as it was.
      *
-     * @param ctrfJson the CTRF JSON object to write to file
+     * @param merge receives the current report, or {@code null} if there is none or it can't be parsed, and
+     *              returns the report to write
      */
-    public void writeResultsToFile(CtrfJson ctrfJson) {
-        var filePath = configReader.getReportPath();
-        var path = Paths.get(filePath);
-        try {
-            if (path.getParent() != null) {
-                Files.createDirectories(path.getParent());
+    public void update(UnaryOperator<CtrfJson> merge) {
+        Path report = Paths.get(configReader.getReportPath()).toAbsolutePath();
+        synchronized (JVM_LOCK) {
+            try {
+                Files.createDirectories(report.getParent());
+            } catch (IOException e) {
+                printWriteFailure(e);
+                return;
             }
-
-            objectMapper.writeValue(path.toFile(), ctrfJson);
-        } catch (AccessDeniedException e) {
-            System.err.println("Access denied: " + filePath + " - " + e.getMessage());
-        } catch (IOException e) {
-            System.err.println("Failed to write results to file: " + filePath + " - " + e.getMessage());
+            FileLock lock = lockAcrossJvms(report);
+            try {
+                writeAtomically(report, merge.apply(readExisting(report)));
+            } catch (RuntimeException e) {
+                System.err.println("Failed to write results to file: " + configReader.getReportPath() + " - " + e);
+            } finally {
+                release(lock);
+            }
         }
     }
 
     /**
-     * Gets the list of tests from an existing report file, if available.
-     *
-     * @return List of tests from the existing report, or an empty list if no report exists
+     * Takes the exclusive lock on {@code <report>.lock}, waiting up to the lock timeout. Returns {@code null},
+     * after printing why, when the file system can't lock files or the lock stays taken; the report is then
+     * written without it.
      */
-    public List<Test> getExistingTests() {
-        CtrfJson existingReport = getExistingReportCached();
-        return existingReport != null
-            && existingReport.getResults() != null
-            && existingReport.getResults().getTests() != null
-            ? existingReport.getResults().getTests()
-            : Collections.emptyList();
-    }
-
-    /**
-     * Gets the start time from an existing report if available.
-     * If the start time exists in the previous report, it should be returned.
-     * If no report exists or the start time cannot be extracted, returns null.
-     *
-     * @return Long representing the start time from the existing report, or null if not available
-     */
-    public Long getExistingStartTime() {
-        var existingReport = getExistingReportCached();
-        if (existingReport != null && existingReport.getResults() != null
-            && existingReport.getResults().getSummary() != null) {
-            return existingReport.getResults().getSummary().getStart();
-        }
-        return null;
-    }
-
-    /**
-     * Gets the environment health status from an existing report if available.
-     * If the environment was marked unhealthy in the previous report, that status should be preserved.
-     * If no report exists or the health status cannot be extracted, returns true (healthy by default).
-     *
-     * @return Boolean representing the health status from the existing report, or true if not available
-     */
-    public boolean getExistingEnvironmentHealth() {
-        var existingReport = getExistingReportCached();
-        if (existingReport != null && existingReport.getResults() != null
-            && existingReport.getResults().getEnvironment() != null) {
-            return existingReport.getResults().getEnvironment().isHealthy();
-        }
-        return true;
-    }
-
-    private CtrfJson getExistingReportCached() {
-        if (!reportReadAttempted) {
-            cachedReport = readExistingReport();
-            reportReadAttempted = true;
-        }
-        return cachedReport;
-    }
-
-    private CtrfJson readExistingReport() {
-        var filePath = configReader.getReportPath();
-        var path = Paths.get(filePath);
-
-        if (!Files.exists(path)) {
-            return null;
-        }
-
+    private FileLock lockAcrossJvms(Path report) {
+        Path lockFile = report.resolveSibling(report.getFileName() + ".lock");
+        FileChannel channel = null;
         try {
-            var ctrf = objectMapper.readValue(path.toFile(), CtrfJson.class);
-            System.out.println("File already exists: " + filePath + ". Tests might have been rerun.");
-            return ctrf;
-        } catch (IOException e) {
-            System.err.println("Failed to read existing report file: " + filePath + " - " + e.getMessage());
+            channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+            long deadline = System.nanoTime() + lockTimeout.toNanos();
+            while (true) {
+                FileLock lock = tryLock(channel);
+                if (lock != null) {
+                    return lock;
+                }
+                if (System.nanoTime() >= deadline) {
+                    System.err.println("Could not lock " + lockFile + " within " + lockTimeout.toMillis()
+                        + " ms; writing the report without the lock");
+                    closeQuietly(channel);
+                    return null;
+                }
+                Thread.sleep(LOCK_POLL_INTERVAL.toMillis());
+            }
+        } catch (IOException | UnsupportedOperationException e) {
+            System.err.println("Could not lock " + lockFile + "; writing the report without the lock - " + e.getMessage());
+            closeQuietly(channel);
             return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("Interrupted while waiting for " + lockFile + "; writing the report without the lock");
+            closeQuietly(channel);
+            return null;
+        }
+    }
+
+    // A lock held by this JVM through another channel makes tryLock throw instead of returning null
+    private static FileLock tryLock(FileChannel channel) throws IOException {
+        try {
+            return channel.tryLock();
+        } catch (OverlappingFileLockException e) {
+            return null;
+        }
+    }
+
+    // Closing the channel releases its lock
+    private static void release(FileLock lock) {
+        if (lock != null) {
+            closeQuietly(lock.channel());
+        }
+    }
+
+    private CtrfJson readExisting(Path report) {
+        if (!Files.exists(report)) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(report.toFile(), CtrfJson.class);
+        } catch (IOException e) {
+            System.err.println("Ignoring the existing report, which can't be read: " + report + " - " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Writes to a hidden temp file next to the report, then moves it over the report. Not
+     * {@code Files.createTempFile}, which would make the report readable by its owner only.
+     */
+    private void writeAtomically(Path report, CtrfJson ctrfJson) {
+        Path temp = report.resolveSibling("." + report.getFileName() + "." + UUID.randomUUID() + ".tmp");
+        try {
+            objectMapper.writeValue(temp.toFile(), ctrfJson);
+            moveOver(temp, report);
+        } catch (IOException e) {
+            printWriteFailure(e);
+        } finally {
+            deleteQuietly(temp);
+        }
+    }
+
+    /**
+     * Moves the temp file over the report. On Windows the move fails while another process, such as an antivirus
+     * scanner or a viewer, has either file open, so a failure is retried while the lock is still held.
+     */
+    private static void moveOver(Path source, Path target) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                return;
+            } catch (AtomicMoveNotSupportedException e) {
+                System.err.println("Can't replace " + target + " atomically; replacing it in place");
+                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+                return;
+            } catch (NoSuchFileException e) {
+                throw e;
+            } catch (FileSystemException e) {
+                if (attempt >= MOVE_ATTEMPTS || !pauseBeforeRetry()) {
+                    throw e;
+                }
+            }
+        }
+    }
+
+    private static boolean pauseBeforeRetry() {
+        try {
+            Thread.sleep(MOVE_RETRY_INTERVAL.toMillis());
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    private void printWriteFailure(IOException e) {
+        if (e instanceof AccessDeniedException) {
+            System.err.println("Access denied: " + configReader.getReportPath() + " - " + e.getMessage());
+        } else {
+            System.err.println("Failed to write results to file: " + configReader.getReportPath() + " - " + e.getMessage());
+        }
+    }
+
+    private static void deleteQuietly(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            // A leftover temp file is harmless
+        }
+    }
+
+    private static void closeQuietly(Closeable closeable) {
+        if (closeable == null) {
+            return;
+        }
+        try {
+            closeable.close();
+        } catch (IOException e) {
+            // Nothing left to release
         }
     }
 }
