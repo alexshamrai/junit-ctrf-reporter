@@ -881,6 +881,7 @@ Requirements:
 **Complexity**: Moderate
 **Files**: `CtrfReportManager.java`, `TestStateTracker.java`, `FlakyTestDetector.java` (deleted) → `AttemptFolder.java` (new), `TestRerunHandler.java` (Javadoc), `util/SummaryUtil.java`, `ctrf/model/Test.java`, `ctrf/model/Summary.java`, `ctrf/model/RetryAttempt.java` (new), `scenario/ScenarioRunner.java`, `integration-ctrf-validator/src/test/java/integration/CtrfLogicTest.java`, `README.md`, `CLAUDE.md`
 **Status**: Designed 2026-10-14 against `master` @ `7235eb5`; replaces the 2026-10-08 prompt
+**Implementation plan**: [`docs/plans/2026-10-14-hp-6-fold-retry-attempts.md`](docs/plans/2026-10-14-hp-6-fold-retry-attempts.md)
 
 #### Why
 
