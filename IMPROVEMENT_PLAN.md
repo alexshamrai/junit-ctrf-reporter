@@ -494,15 +494,15 @@ What fallback 3 gives when neither `ctrf.run.id` nor a CI variable is set:
 
 #### Writing the report
 
-`CtrfReportFileService` keeps writing to `ctrf.report.path`. It loses `getExistingTests`, `getExistingStartTime`, `getExistingEnvironmentHealth` and the MP-2 cache. It gains one operation, `update(UnaryOperator<CtrfJson> merge)`, whose function receives the existing report, or `null`:
+`CtrfReportFileService` keeps writing to `ctrf.report.path`. It loses `getExistingTests`, `getExistingStartTime`, `getExistingEnvironmentHealth`, `writeResultsToFile` and the MP-2 cache. These are public methods, so the 0.5.0 release notes list them. It gains one operation, `update(UnaryOperator<CtrfJson> merge)`, the only way to write the report, whose function receives the existing report, or `null`:
 
-1. Take a JVM-wide lock, a plain Java lock, because file locks only work between processes. Then take an exclusive `FileChannel` lock on `<report>.lock`, polling `tryLock` for up to 60 s.
+1. Take a JVM-wide lock, a plain Java lock. A JVM can hold a file lock only once, and a second attempt throws `OverlappingFileLockException`, so threads of one JVM queue on the Java lock first. Then take an exclusive `FileChannel` lock on `<report>.lock`, polling `tryLock` for up to 60 s.
 2. Read the report fresh. It is `null` when the file is missing or can't be parsed.
 3. Apply `merge`.
-4. Write to a temp file in the same directory, then `Files.move` it over the report with `ATOMIC_MOVE` and `REPLACE_EXISTING`.
+4. Write to a hidden temp file in the same directory, `.<report name>.<random>.tmp`, then `Files.move` it over the report with `ATOMIC_MOVE` and `REPLACE_EXISTING`.
 5. Release both locks.
 
-The `.lock` file stays next to the report, because deleting it would race with other JVMs.
+The `.lock` file stays next to the report, because deleting it would race with other JVMs. With the default path, that is the project directory, so the README says to ignore `ctrf-report.json.lock` in version control or to point `ctrf.report.path` under `build/`.
 
 #### Merging
 
@@ -536,7 +536,7 @@ Attempts and successes are added in O(1) from any thread. The merge runs once pe
 
 - `ContainerSuccess` (new, internal record): the container's unique ID, start and stop.
 - `TestStateTracker` collects them in a `ConcurrentLinkedQueue`, and clears them together with the attempts.
-- `CtrfListener.executionFinished`: a container that finishes with SUCCESSFUL records a success, with its start from `containerStartTimes`.
+- `CtrfListener.executionFinished`: a container below the engine that finishes with SUCCESSFUL records a success, with its start from `containerStartTimes`. Engine containers are left out because every fork runs them. Otherwise one fork's engine success could "recover" another fork's engine failure in the same round. A class runs in exactly one fork per round, so classes and the containers inside them can't meet this problem.
 - `CtrfExtension.afterAll`: a class without an execution exception records a success, with its start from `ClassState`.
 - A recovered entry:
   - has status `passed`, `retries: n`, `flaky: true` and its failures in `retryAttempts`;
@@ -583,7 +583,7 @@ One behaviour change is a fix: a report from a different run no longer passes on
   - `CtrfReportManagerTest`: `startTestRun` reads no file; a second execution in the same JVM keeps the first one's results.
   - Listener and extension tests: container successes are recorded.
 - **Scenario tests**, in forked JVMs through `ScenarioRunner`:
-  - Forks: three JVMs started at once with the same `ctrf.run.id`, each with different fixtures, give one report with every test.
+  - Forks: three JVMs started at once with the same `ctrf.run.id`, each with different fixtures, give one report with every test. The fixtures wait for each other through marker files in the shared working directory, so all three finish together and contend for the lock. Without that barrier, the scenario would pass even without the lock.
   - New build: two runs in a row with different `runId`s, once through `ctrf.run.id` and once through `GITHUB_RUN_ID`. Only the second run remains.
   - Same JVM: `ScenarioMain` runs the launcher twice. `stable()` is present, and `flakyOnce()` has `retries: 1` and `flaky: true`.
   - HP-11, through both the listener and the extension:
@@ -595,7 +595,7 @@ One behaviour change is a fix: a report from a different run no longer passes on
 - **Integration and compat:**
   - The integration modules accept `-Dforks=N`, and the listener workflow in CI runs with 2 forks, so the validator's fixed numbers check fork merging on every PR. Before the PR, also run 4 forks locally.
   - The validator checks the root `runId`.
-  - The Maven compat consumer gets a second test class and runs with `forkCount=2`, which checks on real Surefire that its forks resolve one run.
+  - The Maven compat consumers get a second test class and run with `forkCount=2`, which checks on real Surefire that its forks resolve one run. They also run with `rerunFailingTestsCount=1` and a test that fails only on its first call, which checks (c) on real Surefire: the test must come out flaky. The scenario only models (c) with two launcher executions.
 - **Before the PR:**
   - `./gradlew :build`;
   - both integration runs with the validator, using CI's flags, with 1, 2 and 4 forks for the listener;
@@ -605,7 +605,7 @@ One behaviour change is a fix: a report from a different run no longer passes on
 #### Docs and delivery
 
 - `README.md`:
-  - A new section, "Parallel forks, retries and reruns". It covers one report per run, how the `runId` is chosen, and the `.lock` file. It also covers the Gradle daemon and build-server caveat, with a per-build `ctrf.run.id` setting verified with and without Gradle's configuration cache. Finally, it covers reports from several machines with `npx ctrf merge`.
+  - A new section, "Parallel forks, retries and reruns". It covers one report per run, how the `runId` is chosen, and the `.lock` file. It also covers the Gradle daemon and build-server caveat, with a per-build `ctrf.run.id` setting verified with and without Gradle's configuration cache. It warns that the value must change with every build: a constant, for example one in `ctrf.properties`, makes every build the same run, so reports accumulate again. Finally, it covers reports from several machines with `npx ctrf merge`.
   - "Retries and Flaky Tests" gains class failures that recover.
 - `CLAUDE.md`:
   - the data flow and component table: `ReportOrchestrator` and `TestRerunHandler` removed, `ReportMerger` and `RunIdResolver` added;
@@ -620,11 +620,12 @@ One behaviour change is a fix: a report from a different run no longer passes on
 - [ ] Maven Surefire with `forkCount=2` reports the tests of both classes (compat)
 - [ ] A build with a different `runId` replaces the report, including its start time and health
 - [ ] Two executions in one JVM: `stable()` is present, and `flakyOnce()` has `retries: 1` and `flaky: true`
+- [ ] Surefire with `rerunFailingTestsCount=1`: a test that fails only once is reported flaky (compat)
 - [ ] A write that fails halfway leaves the previous report parseable and unchanged
 - [ ] Gradle test-retry rounds still fold into one test per logical test
 - [ ] Every report has a root `runId`
 - [ ] HP-11's acceptance criteria hold
-- [ ] README documents run identity, the `.lock` file, the per-build `ctrf.run.id` setting and `npx ctrf merge`
+- [ ] README documents run identity, the `.lock` file, the per-build `ctrf.run.id` setting (and that it must change with every build) and `npx ctrf merge`
 
 ---
 
