@@ -173,14 +173,25 @@ public class CtrfExtensionTest {
     }
 
     @Test
-    void afterAll_withoutExecutionException_reportsNothing() {
+    void afterAll_withoutExecutionException_recordsClassSuccess() {
+        when(extensionContext.getExecutionException()).thenReturn(Optional.empty());
+        when(store.get(TEST_UNIQUE_ID, ClassState.class)).thenReturn(new ClassState(1_000L));
+
+        ctrfExtension.afterAll(extensionContext);
+
+        verify(reportManager).onContainerSuccess(TEST_UNIQUE_ID, 1_000L);
+        verify(reportManager, never()).onTestStart(any());
+        verify(reportManager, never()).onTestFailure(anyString(), any());
+        verify(reportManager, never()).onTestFailure(any(TestDetails.class), any());
+    }
+
+    @Test
+    void afterAll_withoutClassState_recordsSuccessWithoutStart() {
         when(extensionContext.getExecutionException()).thenReturn(Optional.empty());
 
         ctrfExtension.afterAll(extensionContext);
 
-        verify(reportManager, never()).onTestStart(any());
-        verify(reportManager, never()).onTestFailure(anyString(), any());
-        verify(reportManager, never()).onTestFailure(any(TestDetails.class), any());
+        verify(reportManager).onContainerSuccess(TEST_UNIQUE_ID, null);
     }
 
     @Test
@@ -200,6 +211,7 @@ public class CtrfExtensionTest {
         assertEquals(1_000L, details.startTime());
         assertTrue(details.tags().contains("smoke-test"));
         verify(reportManager).onTestFailure(TEST_UNIQUE_ID, cause);
+        verify(reportManager, never()).onContainerSuccess(anyString(), any());
     }
 
     @Test
@@ -217,6 +229,7 @@ public class CtrfExtensionTest {
         assertEquals("teardownError", detailsCaptor.getValue().displayName());
         assertEquals(TEST_UNIQUE_ID, detailsCaptor.getValue().uniqueId(), "a class failure is identified by the class itself");
         verify(reportManager).onTestFailure(TEST_UNIQUE_ID, cause);
+        verify(reportManager, never()).onContainerSuccess(anyString(), any());
     }
 
     @Test

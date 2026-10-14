@@ -40,6 +40,14 @@ def configureThreads(Test task) {
     }
 }
 
+def configureForks(Test task) {
+    def forks = System.getProperty("forks")
+    if (forks?.isInteger() && forks.toInteger() > 1) {
+        task.maxParallelForks = forks.toInteger()
+        println "${task.name} - Configured number of forks: ${forks}"
+    }
+}
+
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
 
@@ -57,6 +65,7 @@ tasks.withType(Test).configureEach {
     }
 
     configureThreads(it)
+    configureForks(it)
 }
 
 test {

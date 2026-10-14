@@ -12,11 +12,12 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 /**
  * Manages test execution state during a test run.
  * <p>
- * It collects attempts, one per execution of a test, and the details of tests in progress. Attempts are
- * folded into one test object per test only when the report is written (see {@link AttemptFolder}), so
- * recording one costs O(1):
+ * It collects attempts, one per execution of a test, the containers that finished without failing, and the
+ * details of tests in progress. Attempts are folded into one test object per test only when the report is
+ * written (see {@link AttemptFolder}), so recording one costs O(1):
  * <ul>
  *   <li>{@link ConcurrentLinkedQueue} for attempts, in the order they finished</li>
+ *   <li>{@link ConcurrentLinkedQueue} for containers that finished without failing</li>
  *   <li>{@link ConcurrentHashMap} for in-progress test details</li>
  * </ul>
  * <p>
@@ -25,6 +26,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 final class TestStateTracker {
 
     private final Queue<Test> attempts = new ConcurrentLinkedQueue<>();
+    private final Queue<ContainerSuccess> containerSuccesses = new ConcurrentLinkedQueue<>();
     private final ConcurrentHashMap<String, TestDetails> testDetailsMap = new ConcurrentHashMap<>();
 
     /**
@@ -37,21 +39,30 @@ final class TestStateTracker {
     }
 
     /**
-     * Records several attempts, for example those of earlier retry rounds read from an existing report.
-     *
-     * @param attemptsToAdd the attempts, in the order they ran
-     */
-    void addAllAttempts(List<Test> attemptsToAdd) {
-        attempts.addAll(attemptsToAdd);
-    }
-
-    /**
      * Returns a snapshot of the recorded attempts, in the order they were recorded.
      *
      * @return a copy of all recorded attempts
      */
     List<Test> getAllAttempts() {
         return new ArrayList<>(attempts);
+    }
+
+    /**
+     * Records a container that finished without failing.
+     *
+     * @param success the container and when it ran
+     */
+    void addContainerSuccess(ContainerSuccess success) {
+        containerSuccesses.add(success);
+    }
+
+    /**
+     * Returns a snapshot of the recorded container successes, in the order they were recorded.
+     *
+     * @return a copy of all recorded container successes
+     */
+    List<ContainerSuccess> getAllContainerSuccesses() {
+        return new ArrayList<>(containerSuccesses);
     }
 
     /**
@@ -81,6 +92,7 @@ final class TestStateTracker {
      */
     void clear() {
         attempts.clear();
+        containerSuccesses.clear();
         testDetailsMap.clear();
     }
 }

@@ -44,6 +44,12 @@ public class CtrfJson {
     private String reportId;
 
     /**
+     * Identifies the logical run this report belongs to (CTRF section 5.4). The JVMs of one run, such as
+     * parallel forks and retry rounds, merge their results into one report.
+     */
+    private String runId;
+
+    /**
      * The timestamp when the report was generated, in ISO 8601 format.
      */
     private String timestamp;

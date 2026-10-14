@@ -45,6 +45,9 @@ import java.util.stream.Stream;
  * }
  * </pre>
  * <p>
+ * A container that finishes successfully is recorded too, so that its failure in an earlier retry round is
+ * reported as recovered: passed and flaky.
+ * <p>
  * The listener can be configured through a {@code ctrf.properties} file placed in the classpath.
  * See the README for all available configuration options.
  */
@@ -112,6 +115,11 @@ public class CtrfListener implements TestExecutionListener {
         } else if (testIdentifier.isContainer() && testExecutionResult.getStatus() == TestExecutionResult.Status.ABORTED) {
             String reason = testExecutionResult.getThrowable().map(Throwable::getMessage).orElse(null);
             reportTestsNotStartedAsSkipped(testIdentifier, reason);
+        } else if (testIdentifier.isContainer() && testExecutionResult.getStatus() == TestExecutionResult.Status.SUCCESSFUL
+            && testIdentifier.getParentId().isPresent()) {
+            // Engines are left out: every fork runs them, so one fork's engine success must not look like the
+            // recovery of another fork's engine failure
+            reportManager.onContainerSuccess(uniqueId, startTime);
         }
         // It ran: an enclosing container aborted later must not report it as skipped
         reportedIds.add(uniqueId);

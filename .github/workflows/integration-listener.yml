@@ -37,6 +37,7 @@ jobs:
         run: |
           ./gradlew :integration-tests-listener:test \
           -Dthreads=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.threads || '2' }} \
+          -Dforks=2 \
           -Dctrf.build.name=system-build \
           -Dctrf.build.number=${{ github.run_number }} \
           -Dctrf.build.url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} \

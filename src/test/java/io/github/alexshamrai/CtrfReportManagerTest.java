@@ -2,11 +2,12 @@ package io.github.alexshamrai;
 
 import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
+import io.github.alexshamrai.ctrf.model.Environment;
+import io.github.alexshamrai.ctrf.model.Results;
 import io.github.alexshamrai.ctrf.model.RetryAttempt;
 import io.github.alexshamrai.ctrf.model.Summary;
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.model.TestDetails;
-import io.github.alexshamrai.util.SummaryUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.mockito.ArgumentCaptor;
@@ -15,29 +16,30 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class CtrfReportManagerTest {
+
+    private static final String RUN_ID = "run-1";
 
     @Mock
     private ConfigReader configReader;
@@ -45,36 +47,24 @@ class CtrfReportManagerTest {
     private CtrfReportFileService ctrfReportFileService;
     @Mock
     private TestProcessor testProcessor;
-    @Mock
-    private CtrfJsonComposer ctrfJsonComposer;
 
     private CtrfReportManager reportManager;
+
+    /**
+     * Stands in for the report file: each update hands it to the merge function and keeps what comes back.
+     */
+    private CtrfJson reportOnDisk;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        // Create a new, clean instance for each test using the new constructor
-        reportManager = new CtrfReportManager(
-            configReader,
-            ctrfReportFileService,
-            testProcessor,
-            ctrfJsonComposer
-        );
-    }
-
-    @org.junit.jupiter.api.Test
-    @DisplayName("startTestRun should initialize state only on the first call")
-    void startTestRun_initializesOnce() {
-        when(ctrfReportFileService.getExistingStartTime()).thenReturn(1000L);
-        when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
-        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
-
-        reportManager.startTestRun("Listener");
-        reportManager.startTestRun("Listener"); // This second call should do nothing
-
-        verify(ctrfReportFileService, times(1)).getExistingStartTime();
-        verify(ctrfReportFileService, times(1)).getExistingTests();
-        verify(ctrfReportFileService, times(1)).getExistingEnvironmentHealth();
+        var composer = new CtrfJsonComposer(configReader, new StartupDurationProcessor(), "Listener");
+        reportManager = new CtrfReportManager(configReader, ctrfReportFileService, testProcessor, composer, RUN_ID);
+        doAnswer(invocation -> {
+            UnaryOperator<CtrfJson> merge = invocation.getArgument(0);
+            reportOnDisk = merge.apply(reportOnDisk);
+            return null;
+        }).when(ctrfReportFileService).update(any());
     }
 
     @org.junit.jupiter.api.Test
@@ -82,9 +72,9 @@ class CtrfReportManagerTest {
     void onTestStart_storesDetails() {
         var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Test Details");
         var testResult = new Test();
-        
+
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(testResult);
-        
+
         reportManager.onTestStart(details);
         reportManager.onTestSuccess("id-1");
 
@@ -180,134 +170,91 @@ class CtrfReportManagerTest {
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("finishTestRun should generate and write report")
-    void finishTestRun_generatesReport() {
-        var testResult = new Test();
-        when(testProcessor.createTest(anyString(), any(), anyLong())).thenReturn(testResult);
-        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
-        reportManager.onTestStart(new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "test"));
+    @DisplayName("startTestRun reads no report: it is read only at the end, under the lock")
+    void startTestRun_readsNoFile() {
+        reportManager.startTestRun("Listener");
+        reportManager.startTestRun("Listener");
+
+        verifyNoInteractions(ctrfReportFileService);
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("finishTestRun writes this execution's tests, with the run id at the root")
+    void finishTestRun_writesTheReportWithTheRunId() {
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong()))
+            .thenReturn(Test.builder().testId("id-1").name("test").build());
+        reportManager.startTestRun("Listener");
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "id-1", "test"));
         reportManager.onTestSuccess("id-1");
 
-        reportManager.startTestRun("Listener");
+        reportManager.finishTestRun();
 
-        try (MockedStatic<SummaryUtil> summaryUtil = Mockito.mockStatic(SummaryUtil.class)) {
-            var mockReport = CtrfJson.builder().build();
-            summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
-            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(true))).thenReturn(mockReport);
-
-            reportManager.finishTestRun();
-
-            summaryUtil.verify(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong()));
-            verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(true));
-            verify(ctrfReportFileService).writeResultsToFile(mockReport);
-        }
+        verify(ctrfReportFileService).update(any());
+        assertEquals(RUN_ID, reportOnDisk.getRunId());
+        assertEquals(List.of("id-1"), testIdsOnDisk());
+        assertEquals(1, reportOnDisk.getResults().getSummary().getPassed());
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("startTestRun should preserve unhealthy state from previous run")
-    void startTestRun_preservesUnhealthyState() {
-        when(ctrfReportFileService.getExistingStartTime()).thenReturn(1000L);
-        when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
-        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(false);
+    @DisplayName("finishTestRun writes nothing when no run was started")
+    void finishTestRun_withoutStart_writesNothing() {
+        reportManager.finishTestRun();
 
-        reportManager.startTestRun("Listener");
-
-        try (MockedStatic<SummaryUtil> summaryUtil = Mockito.mockStatic(SummaryUtil.class)) {
-            var mockReport = CtrfJson.builder().build();
-            summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
-            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(false))).thenReturn(mockReport);
-
-            reportManager.finishTestRun();
-
-            verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(false));
-        }
+        verifyNoInteractions(ctrfReportFileService);
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("startTestRun should keep healthy state when previous run was healthy")
-    void startTestRun_keepsHealthyState() {
-        when(ctrfReportFileService.getExistingStartTime()).thenReturn(1000L);
-        when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
-        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
-
+    @DisplayName("An unhealthy report of the same run keeps the merged report unhealthy")
+    void finishTestRun_isUnhealthyWhenTheSameRunsReportIs() {
+        reportOnDisk = reportOfRun(RUN_ID, false);
         reportManager.startTestRun("Listener");
 
-        try (MockedStatic<SummaryUtil> summaryUtil = Mockito.mockStatic(SummaryUtil.class)) {
-            var mockReport = CtrfJson.builder().build();
-            summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
-            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(true))).thenReturn(mockReport);
+        finishWithEnvironmentVariableHealthy();
 
-            reportManager.finishTestRun();
+        assertFalse(reportOnDisk.getResults().getEnvironment().isHealthy());
+    }
 
-            verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(true));
-        }
+    @org.junit.jupiter.api.Test
+    @DisplayName("The health of another run's report is not passed on")
+    void finishTestRun_ignoresTheHealthOfAnotherRunsReport() {
+        reportOnDisk = reportOfRun("run-0", false);
+        reportManager.startTestRun("Listener");
+
+        finishWithEnvironmentVariableHealthy();
+
+        assertTrue(reportOnDisk.getResults().getEnvironment().isHealthy());
     }
 
     @org.junit.jupiter.api.Test
     @DisplayName("finishTestRun should re-read ENV_HEALTHY and mark unhealthy if set to false")
     void finishTestRun_reReadsEnvHealthy() {
-        when(ctrfReportFileService.getExistingStartTime()).thenReturn(1000L);
-        when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
-        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
-
-        // Start with healthy state
         reportManager.startTestRun("Listener");
 
-        try (MockedStatic<SummaryUtil> summaryUtil = Mockito.mockStatic(SummaryUtil.class);
-             MockedStatic<EnvironmentHealthTracker> healthTracker = Mockito.mockStatic(EnvironmentHealthTracker.class)) {
-
-            var mockReport = CtrfJson.builder().build();
-            summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
-
-            // Mock ENV_HEALTHY being set to false during test execution
+        try (MockedStatic<EnvironmentHealthTracker> healthTracker = Mockito.mockStatic(EnvironmentHealthTracker.class)) {
             healthTracker.when(EnvironmentHealthTracker::isEnvironmentVariableUnhealthy).thenReturn(true);
-
-            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(false))).thenReturn(mockReport);
 
             reportManager.finishTestRun();
 
-            // Verify that ENV_HEALTHY was re-read (via isEnvironmentVariableUnhealthy call)
             healthTracker.verify(EnvironmentHealthTracker::isEnvironmentVariableUnhealthy);
-            // Verify report was generated with unhealthy state
-            verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(false));
         }
+        assertFalse(reportOnDisk.getResults().getEnvironment().isHealthy());
     }
 
     @org.junit.jupiter.api.Test
     @DisplayName("finishTestRun should respect programmatic markEnvironmentUnhealthy call")
     void finishTestRun_respectsProgrammaticHealthChange() {
-        when(ctrfReportFileService.getExistingStartTime()).thenReturn(1000L);
-        when(ctrfReportFileService.getExistingTests()).thenReturn(Collections.emptyList());
-        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
-
-        // Start with healthy state
         reportManager.startTestRun("Listener");
-
-        // Programmatically mark unhealthy during test execution
         reportManager.markEnvironmentUnhealthyInternal();
 
-        try (MockedStatic<SummaryUtil> summaryUtil = Mockito.mockStatic(SummaryUtil.class);
-             MockedStatic<EnvironmentHealthTracker> healthTracker = Mockito.mockStatic(EnvironmentHealthTracker.class)) {
+        finishWithEnvironmentVariableHealthy();
 
-            var mockReport = CtrfJson.builder().build();
-            summaryUtil.when(() -> SummaryUtil.createSummary(anyList(), anyLong(), anyLong())).thenReturn(new Summary());
-
-            // ENV_HEALTHY is not set (remains healthy from environment perspective)
-            healthTracker.when(EnvironmentHealthTracker::isEnvironmentVariableUnhealthy).thenReturn(false);
-
-            when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), eq(false))).thenReturn(mockReport);
-
-            reportManager.finishTestRun();
-
-            // Verify report was generated with unhealthy state from programmatic call
-            verify(ctrfJsonComposer).generateCtrfJson(any(Summary.class), anyList(), eq(false));
-        }
+        assertFalse(reportOnDisk.getResults().getEnvironment().isHealthy());
     }
 
     @org.junit.jupiter.api.Test
     @DisplayName("finishTestRun reports the attempts of one test as one test with its earlier attempts")
     void finishTestRun_foldsAttemptsOfTheSameTest() {
-        startRunWithExistingTests(List.of());
+        reportManager.startTestRun("Listener");
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(
             Test.builder().testId("id-1").name("Rerun Test").start(1_000L).build(),
             Test.builder().testId("id-1").name("Rerun Test").start(2_000L).build());
@@ -316,10 +263,10 @@ class CtrfReportManagerTest {
         reportManager.onTestFailure("id-1", new RuntimeException("boom"));
         reportManager.onTestStart(new TestDetails(2_000L, Set.of(), null, "id-1", "Rerun Test"));
         reportManager.onTestSuccess("id-1");
+        reportManager.finishTestRun();
 
-        var tests = finishAndCaptureReportedTests();
-        assertEquals(1, tests.size());
-        var test = tests.get(0);
+        var test = testsOnDisk().get(0);
+        assertEquals(1, testsOnDisk().size());
         assertEquals(PASSED, test.getStatus());
         assertEquals(1, test.getRetries());
         assertTrue(test.getFlaky());
@@ -327,22 +274,22 @@ class CtrfReportManagerTest {
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("A test from the existing report is unfolded, so a new attempt extends its history")
-    void startTestRun_unfoldsTheExistingReportSoANewAttemptExtendsIt() {
-        var fromEarlierRounds = Test.builder().testId("id-1").name("Rerun Test").status(FAILED).start(2_000L)
+    @DisplayName("A test in the same run's report gets this execution's attempt appended to its history")
+    void finishTestRun_extendsTheHistoryInTheSameRunsReport() {
+        reportOnDisk = reportOfRun(RUN_ID, true, Test.builder().testId("id-1").name("Rerun Test").status(FAILED).start(2_000L)
             .retries(1)
             .retryAttempts(List.of(RetryAttempt.builder().attempt(1).status(FAILED).start(1_000L).build()))
-            .build();
-        startRunWithExistingTests(List.of(fromEarlierRounds));
+            .build());
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong()))
             .thenReturn(Test.builder().testId("id-1").name("Rerun Test").start(3_000L).build());
+        reportManager.startTestRun("Listener");
 
         reportManager.onTestStart(new TestDetails(3_000L, Set.of(), null, "id-1", "Rerun Test"));
         reportManager.onTestSuccess("id-1");
+        reportManager.finishTestRun();
 
-        var tests = finishAndCaptureReportedTests();
-        assertEquals(1, tests.size());
-        var test = tests.get(0);
+        var test = testsOnDisk().get(0);
+        assertEquals(1, testsOnDisk().size());
         assertEquals(PASSED, test.getStatus());
         assertEquals(2, test.getRetries());
         assertEquals(List.of(1_000L, 2_000L), test.getRetryAttempts().stream().map(RetryAttempt::getStart).toList());
@@ -350,38 +297,104 @@ class CtrfReportManagerTest {
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("A second test plan execution in the same JVM does not report the first one's attempts again")
+    @DisplayName("Another run's report is replaced, not merged")
+    void finishTestRun_replacesAnotherRunsReport() {
+        reportOnDisk = reportOfRun("run-0", true, Test.builder().testId("old").name("old").status(FAILED).build());
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong()))
+            .thenReturn(Test.builder().testId("id-1").name("test").build());
+        reportManager.startTestRun("Listener");
+
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "id-1", "test"));
+        reportManager.onTestSuccess("id-1");
+        reportManager.finishTestRun();
+
+        assertEquals(List.of("id-1"), testIdsOnDisk());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A second test plan execution in the same JVM does not record the first one's attempts again")
     void finishTestRun_doesNotRepeatAttemptsOfAnEarlierExecution() {
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(
             Test.builder().testId("id-1").name("First").build(),
             Test.builder().testId("id-2").name("Second").build());
-        startRunWithExistingTests(List.of());
+        reportManager.startTestRun("Listener");
         reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "id-1", "First"));
         reportManager.onTestSuccess("id-1");
-        finishAndCaptureReportedTests();
+        reportManager.finishTestRun();
 
         reportManager.startTestRun("Listener");
         reportManager.onTestStart(new TestDetails(2_000L, Set.of(), null, "id-2", "Second"));
         reportManager.onTestSuccess("id-2");
-
-        var tests = finishAndCaptureReportedTests();
-        assertEquals(List.of("id-2"), tests.stream().map(Test::getTestId).toList());
-    }
-
-    private void startRunWithExistingTests(List<Test> existingTests) {
-        when(ctrfReportFileService.getExistingTests()).thenReturn(existingTests);
-        when(ctrfReportFileService.getExistingEnvironmentHealth()).thenReturn(true);
-        reportManager.startTestRun("Listener");
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<Test> finishAndCaptureReportedTests() {
-        when(ctrfJsonComposer.generateCtrfJson(any(Summary.class), anyList(), anyBoolean()))
-            .thenReturn(CtrfJson.builder().build());
         reportManager.finishTestRun();
 
-        ArgumentCaptor<List<Test>> testsCaptor = ArgumentCaptor.forClass(List.class);
-        verify(ctrfJsonComposer, atLeastOnce()).generateCtrfJson(any(Summary.class), testsCaptor.capture(), anyBoolean());
-        return testsCaptor.getValue();
+        assertEquals(List.of("id-1", "id-2"), testIdsOnDisk());
+        assertNull(testsOnDisk().get(0).getRetries());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A second execution in the same JVM, as Surefire's reruns are, merges into what the first one wrote")
+    void secondExecutionInTheSameJvmKeepsTheFirstExecutionsResults() {
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(
+            Test.builder().testId("stable").name("stable()").build(),
+            Test.builder().testId("flaky").name("flakyOnce()").build(),
+            Test.builder().testId("flaky").name("flakyOnce()").build());
+        reportManager.startTestRun("Listener");
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "stable", "stable()"));
+        reportManager.onTestSuccess("stable");
+        reportManager.onTestStart(new TestDetails(1_100L, Set.of(), null, "flaky", "flakyOnce()"));
+        reportManager.onTestFailure("flaky", new AssertionError("fails on its first call"));
+        reportManager.finishTestRun();
+
+        reportManager.startTestRun("Listener");
+        reportManager.onTestStart(new TestDetails(2_000L, Set.of(), null, "flaky", "flakyOnce()"));
+        reportManager.onTestSuccess("flaky");
+        reportManager.finishTestRun();
+
+        assertEquals(List.of("stable", "flaky"), testIdsOnDisk());
+        var flaky = testsOnDisk().get(1);
+        assertEquals(1, flaky.getRetries());
+        assertTrue(flaky.getFlaky());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A container success without a start time uses its stop time")
+    void onContainerSuccess_withoutStartUsesTheStopTime() {
+        reportOnDisk = reportOfRun(RUN_ID, true, Test.builder().testId("class-1").name("initializationError").status(FAILED).build());
+        reportManager.startTestRun("Listener");
+
+        reportManager.onContainerSuccess("class-1", null);
+        reportManager.finishTestRun();
+
+        var recovered = testsOnDisk().get(0);
+        assertEquals(PASSED, recovered.getStatus());
+        assertTrue(recovered.getFlaky());
+        assertEquals(recovered.getStart(), recovered.getStop());
+        assertEquals(0L, recovered.getDuration());
+    }
+
+    private void finishWithEnvironmentVariableHealthy() {
+        try (MockedStatic<EnvironmentHealthTracker> healthTracker = Mockito.mockStatic(EnvironmentHealthTracker.class)) {
+            healthTracker.when(EnvironmentHealthTracker::isEnvironmentVariableUnhealthy).thenReturn(false);
+            reportManager.finishTestRun();
+        }
+    }
+
+    private static CtrfJson reportOfRun(String runId, boolean healthy, Test... tests) {
+        return CtrfJson.builder()
+            .runId(runId)
+            .results(Results.builder()
+                .tests(List.of(tests))
+                .summary(Summary.builder().start(500L).stop(600L).build())
+                .environment(Environment.builder().healthy(healthy).build())
+                .build())
+            .build();
+    }
+
+    private List<Test> testsOnDisk() {
+        return reportOnDisk.getResults().getTests();
+    }
+
+    private List<String> testIdsOnDisk() {
+        return testsOnDisk().stream().map(Test::getTestId).toList();
     }
 }

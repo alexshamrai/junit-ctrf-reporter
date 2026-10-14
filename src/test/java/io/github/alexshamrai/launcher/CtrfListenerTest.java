@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -477,5 +478,46 @@ public class CtrfListenerTest {
 
         TestDetails details = captor.getValue();
         assertTrue(details.tags().isEmpty());
+    }
+
+    @Test
+    void executionFinished_shouldRecordSuccessOfAClass() {
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testIdentifier.getParentId()).thenReturn(Optional.of("[engine:junit-jupiter]"));
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.SUCCESSFUL);
+
+        ctrfListener.executionStarted(testIdentifier);
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
+
+        verify(reportManager).onContainerSuccess(eq(TEST_UNIQUE_ID), notNull());
+    }
+
+    @Test
+    void executionFinished_shouldNotRecordSuccessOfAnEngine() {
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testIdentifier.getParentId()).thenReturn(Optional.empty());
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.SUCCESSFUL);
+
+        ctrfListener.executionStarted(testIdentifier);
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
+
+        verify(reportManager, never()).onContainerSuccess(anyString(), any());
+    }
+
+    @Test
+    void executionFinished_shouldNotRecordSuccessOfAFailedContainer() {
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testIdentifier.getParentId()).thenReturn(Optional.of("[engine:junit-jupiter]"));
+        when(testIdentifier.getSource()).thenReturn(Optional.of(ClassSource.from(TEST_CLASS_NAME)));
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.FAILED);
+        when(testExecutionResult.getThrowable()).thenReturn(Optional.of(new RuntimeException("setup failed")));
+
+        ctrfListener.executionStarted(testIdentifier);
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
+
+        verify(reportManager, never()).onContainerSuccess(anyString(), any());
     }
 }

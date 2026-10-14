@@ -34,9 +34,10 @@ public class CtrfJsonComposer {
      * @param summary the test execution summary
      * @param tests the list of test results
      * @param isEnvironmentHealthy whether the test environment is considered healthy
+     * @param runId the run this report belongs to (CTRF {@code runId})
      * @return a complete CTRF JSON object ready for serialization
      */
-    public CtrfJson generateCtrfJson(Summary summary, List<Test> tests, boolean isEnvironmentHealthy) {
+    public CtrfJson generateCtrfJson(Summary summary, List<Test> tests, boolean isEnvironmentHealthy, String runId) {
         if (configReader.calculateStartupDuration()) {
             startupDurationProcessor.processStartupDuration(summary, tests);
         }
@@ -51,6 +52,7 @@ public class CtrfJsonComposer {
         return CtrfJson.builder()
             .results(results)
             .reportId(UUID.randomUUID().toString())
+            .runId(runId)
             .timestamp(Instant.now().toString())
             .generatedBy(this.generatedBy)
             .build();

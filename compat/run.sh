@@ -5,6 +5,7 @@
 # projects against each given JUnit version:
 #   maven/pom.xml             Maven + CtrfListener, JUnit declared before the reporter
 #   maven/pom-ctrf-first.xml  Maven + CtrfListener, reporter declared before JUnit
+#   (both Maven projects run their two test classes in separate forks and rerun failed tests once)
 #   gradle-jupiter            Gradle + CtrfExtension
 #   gradle-vintage            Gradle + CtrfListener, JUnit 4 tests only (no Jupiter on the classpath)
 # Each consumer runs one passing and one failing test; check_report.py then verifies the CTRF report
@@ -41,7 +42,9 @@ run_consumer() {
   local label=$1 out_dir=$2 junit=$3 kind=$4
   shift 4
   local log="$LOGS/${label//\//_}-$junit.log"
-  if ! "$@" > "$log" 2>&1; then
+  # Without CI variables, so that every consumer relies on the run id of its build tool's JVM, in CI too
+  if ! env -u GITHUB_RUN_ID -u GITHUB_RUN_ATTEMPT -u CI_JOB_ID -u BUILD_TAG -u BUILD_BUILDID -u SYSTEM_JOBATTEMPT \
+      -u CIRCLE_WORKFLOW_JOB_ID -u BUILDKITE_JOB_ID "$@" > "$log" 2>&1; then
     echo "  build failed (full log: $log):"
     grep -E '\[ERROR\] [A-Za-z]|What went wrong|Error:|Exception' "$log" | head -n 4 | sed 's/^/    /' || true
   fi
@@ -55,7 +58,7 @@ run_consumer() {
 
 for junit in "$@"; do
   for pom in pom.xml pom-ctrf-first.xml; do
-    run_consumer "maven/$pom" "$COMPAT/maven/target" "$junit" jupiter \
+    run_consumer "maven/$pom" "$COMPAT/maven/target" "$junit" maven \
       mvn -B -U -f "$COMPAT/maven/$pom" clean test -Dmaven.test.failure.ignore=true \
         -Djunit.version="$junit" -Dctrf.version="$CTRF_VERSION" -Dctrf.repo="file://$CTRF_REPO"
   done

@@ -1,281 +1,265 @@
 package io.github.alexshamrai;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.config.CtrfConfig;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
-import io.github.alexshamrai.ctrf.model.Results;
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.file.AccessDeniedException;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.times;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
-public class CtrfReportFileServiceTest {
+class CtrfReportFileServiceTest {
 
-    private ConfigReader configReader;
-    private CtrfReportFileService ctrfReportFileService;
-    private CtrfJson ctrfJson;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final ByteArrayOutputStream errContent = new ByteArrayOutputStream();
     private final PrintStream originalErr = System.err;
-    private final String filePath = "ctrf.json";
+
+    @TempDir
+    Path tempDir;
 
     @BeforeEach
-    void setup() {
-        var customConfig = new HashMap<String, String>();
-        customConfig.put("ctrf.report.path", filePath);
-        var mockConfig = ConfigFactory.create(CtrfConfig.class, customConfig);
-        configReader = new ConfigReader(mockConfig);
-        ctrfReportFileService = new CtrfReportFileService(configReader);
-        ctrfJson = new CtrfJson();
+    void captureStandardError() {
         System.setErr(new PrintStream(errContent));
     }
 
     @AfterEach
-    void cleanup() throws IOException {
-        Files.deleteIfExists(Paths.get(filePath));
+    void restoreStandardError() {
         System.setErr(originalErr);
     }
 
     @Test
-    void shouldSuccessfullyWriteResultsToFile() throws IOException {
-        ctrfReportFileService.writeResultsToFile(ctrfJson);
+    @DisplayName("update creates missing directories and writes the report, with its lock file next to it")
+    void updateWritesTheReportAndCreatesDirectories() throws IOException {
+        Path report = tempDir.resolve("nested/dir/ctrf.json");
 
-        var path = Paths.get(filePath);
-        assertThat(Files.exists(path)).isTrue();
-        assertThat(Files.readString(path)).isNotEmpty();
-    }
+        serviceFor(report).update(existing -> marker("first"));
 
-    @Test
-    void shouldOverwriteExistingFile() throws IOException {
-        var path = Paths.get(filePath);
-        Files.createFile(path);
-        var initialModifiedTime = Files.getLastModifiedTime(path).toMillis();
-
-        ctrfReportFileService.writeResultsToFile(ctrfJson);
-        var newModifiedTime = Files.getLastModifiedTime(path).toMillis();
-
-        assertThat(initialModifiedTime).isNotEqualTo(newModifiedTime);
+        assertThat(readMarker(report)).isEqualTo("first");
+        assertThat(report.resolveSibling("ctrf.json.lock")).exists();
+        assertThat(tempFilesNextTo(report)).isEmpty();
         assertThat(errContent.toString()).isEmpty();
     }
 
     @Test
-    void shouldHandleAccessDeniedException() {
-        var nestedFilePath = "nested/ctrf.json";
-        configReader = createConfigReaderWithPath(nestedFilePath);
-        ctrfReportFileService = new CtrfReportFileService(configReader);
+    @DisplayName("update passes the current report to the merge function and writes what it returns")
+    void updatePassesTheCurrentReportToTheMerge() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        var service = serviceFor(report);
+        service.update(existing -> marker("first"));
+        List<String> seen = new ArrayList<>();
 
-        try (MockedStatic<Files> mockedFiles = mockStatic(Files.class)) {
-            mockedFiles.when(() -> Files.createDirectories(Paths.get("nested"))).thenThrow(new AccessDeniedException("nested"));
-            mockedFiles.when(() -> Files.exists(any())).thenReturn(false);
+        service.update(existing -> {
+            seen.add(existing.getGeneratedBy());
+            return marker("second");
+        });
 
-            ctrfReportFileService.writeResultsToFile(ctrfJson);
+        assertThat(seen).containsExactly("first");
+        assertThat(readMarker(report)).isEqualTo("second");
+    }
 
-            mockedFiles.verify(() -> Files.createDirectories(Paths.get("nested")), times(1));
-            assertThat(errContent.toString()).contains("Access denied: " + nestedFilePath);
+    @Test
+    @DisplayName("A report that can't be parsed reaches the merge function as null")
+    void unparsableReportReachesTheMergeAsNull() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.writeString(report, "{ not json");
+        List<CtrfJson> seen = new ArrayList<>();
+
+        serviceFor(report).update(existing -> {
+            seen.add(existing);
+            return marker("fresh");
+        });
+
+        assertThat(seen).containsExactly((CtrfJson) null);
+        assertThat(readMarker(report)).isEqualTo("fresh");
+        assertThat(errContent.toString()).contains("can't be read");
+    }
+
+    @Test
+    @DisplayName("A write that fails halfway leaves the previous report parseable and unchanged")
+    void writeThatFailsHalfwayLeavesThePreviousReport() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        var service = serviceFor(report);
+        service.update(existing -> marker("first"));
+
+        service.update(existing -> CtrfJson.builder().generatedBy("second").extra(Map.of("value", new Exploding())).build());
+
+        assertThat(readMarker(report)).isEqualTo("first");
+        assertThat(tempFilesNextTo(report)).isEmpty();
+        assertThat(errContent.toString()).contains("Failed to write results to file");
+    }
+
+    @Test
+    @DisplayName("A merge function that throws leaves the report as it was and releases the lock")
+    void mergeThatThrowsLeavesTheReportAndReleasesTheLock() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        var service = new CtrfReportFileService(configReaderWithPath(report.toString()), Duration.ofMillis(300));
+        service.update(existing -> marker("first"));
+
+        assertThatCode(() -> service.update(existing -> {
+            throw new IllegalStateException("composing failed");
+        })).doesNotThrowAnyException();
+
+        assertThat(readMarker(report)).isEqualTo("first");
+        assertThat(errContent.toString()).contains("composing failed");
+        service.update(existing -> marker("third"));
+        assertThat(readMarker(report)).isEqualTo("third");
+        assertThat(errContent.toString()).doesNotContain("Could not lock");
+        assertThat(tempFilesNextTo(report)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("A move that keeps failing is retried for about a second, then reported, leaving no temp file")
+    void moveThatKeepsFailingIsRetriedThenReported() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.createDirectory(report);
+        Path inside = Files.writeString(report.resolve("keep.txt"), "x");
+        var service = serviceFor(report);
+
+        long begin = System.nanoTime();
+        assertThatCode(() -> service.update(existing -> marker("x"))).doesNotThrowAnyException();
+        long elapsedMillis = Duration.ofNanos(System.nanoTime() - begin).toMillis();
+
+        assertThat(report).isDirectory();
+        assertThat(inside).exists();
+        assertThat(tempFilesNextTo(report)).isEmpty();
+        assertThat(errContent.toString()).contains("Failed to write results to file");
+        assertThat(elapsedMillis).isGreaterThanOrEqualTo(900L);
+    }
+
+    @Test
+    @DisplayName("Updates from many threads at once all land")
+    void concurrentUpdatesFromSeveralThreadsAllLand() throws Exception {
+        Path report = tempDir.resolve("ctrf.json");
+        var service = serviceFor(report);
+        UnaryOperator<CtrfJson> increment = existing -> {
+            int count = existing == null ? 0 : (Integer) existing.getExtra().get("count");
+            return CtrfJson.builder().extra(Map.of("count", count + 1)).build();
+        };
+        int threads = 8;
+        var pool = Executors.newFixedThreadPool(threads);
+        var start = new CountDownLatch(1);
+        for (int t = 0; t < threads; t++) {
+            pool.submit(() -> {
+                start.await();
+                service.update(increment);
+                return null;
+            });
         }
+
+        start.countDown();
+        pool.shutdown();
+
+        assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+        assertThat(objectMapper.readValue(report.toFile(), CtrfJson.class).getExtra()).containsEntry("count", threads);
     }
 
     @Test
-    void shouldHandleIoException() {
-        var nestedFilePath = "test-dir/ctrf.json";
-        configReader = createConfigReaderWithPath(nestedFilePath);
-        ctrfReportFileService = new CtrfReportFileService(configReader);
+    @DisplayName("When another holder keeps the lock, update waits for the timeout and then writes without it")
+    void waitsForTheLockAndThenWritesWithoutIt() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Path lockFile = tempDir.resolve("ctrf.json.lock");
+        var service = new CtrfReportFileService(configReaderWithPath(report.toString()), Duration.ofMillis(300));
 
-        try (MockedStatic<Files> mockedFiles = mockStatic(Files.class)) {
-            mockedFiles.when(() -> Files.createDirectories(Paths.get("test-dir"))).thenThrow(new IOException("IO error"));
-            mockedFiles.when(() -> Files.exists(any())).thenReturn(false);
+        try (var channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var held = channel.lock()) {
+            long started = System.nanoTime();
+            service.update(existing -> marker("written anyway"));
+            long waitedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
 
-            ctrfReportFileService.writeResultsToFile(ctrfJson);
-
-            mockedFiles.verify(() -> Files.createDirectories(Paths.get("test-dir")), times(1));
-            assertThat(errContent.toString()).contains("Failed to write results to file: " + nestedFilePath);
+            assertThat(held.isValid()).isTrue();
+            assertThat(waitedMillis).isGreaterThanOrEqualTo(300);
         }
-    }
 
-    private ConfigReader createConfigReaderWithPath(String path) {
-        var customConfig = new HashMap<String, String>();
-        customConfig.put("ctrf.report.path", path);
-        var mockConfig = ConfigFactory.create(CtrfConfig.class, customConfig);
-        return new ConfigReader(mockConfig);
+        assertThat(readMarker(report)).isEqualTo("written anyway");
+        assertThat(errContent.toString()).contains("Could not lock");
     }
 
     @Test
-    void shouldReturnEmptyListWhenReportFileDoesNotExist() {
-        List<io.github.alexshamrai.ctrf.model.Test> tests = ctrfReportFileService.getExistingTests();
-
-        assertThat(tests).isEmpty();
-    }
-
-    @Test
-    void shouldReturnTestsFromExistingReport() {
-        var test1 = io.github.alexshamrai.ctrf.model.Test.builder().name("Test1").build();
-        var test2 = io.github.alexshamrai.ctrf.model.Test.builder().name("Test2").build();
-        var testsList = new ArrayList<io.github.alexshamrai.ctrf.model.Test>();
-        testsList.add(test1);
-        testsList.add(test2);
-
-        var results = Results.builder().tests(testsList).build();
-        var ctrfJsonWithTests = CtrfJson.builder().results(results).build();
-
-        ctrfReportFileService.writeResultsToFile(ctrfJsonWithTests);
-
-        var existingTests = ctrfReportFileService.getExistingTests();
-
-        assertThat(existingTests).hasSize(2);
-        assertThat(existingTests).extracting("name").containsExactly("Test1", "Test2");
-    }
-
-    @Test
-    void shouldHandleErrorWhenReadingExistingReport() throws IOException {
-        Files.writeString(Paths.get(filePath), "invalid json");
-
-        var existingTests = ctrfReportFileService.getExistingTests();
-
-        assertThat(existingTests).isEmpty();
-        assertThat(errContent.toString()).contains("Failed to read existing report file");
-    }
-
-    @Test
-    void shouldReturnEmptyListWhenReportHasNullResults() {
-        var ctrfJsonWithNullResults = CtrfJson.builder().results(null).build();
-
-        ctrfReportFileService.writeResultsToFile(ctrfJsonWithNullResults);
-
-        var existingTests = ctrfReportFileService.getExistingTests();
-
-        assertThat(existingTests).isEmpty();
-    }
-
-    @Test
-    void shouldReturnEmptyListWhenReportHasNullTestsList() {
-        var results = Results.builder().tests(null).build();
-        var ctrfJsonWithNullTests = CtrfJson.builder().results(results).build();
-
-        ctrfReportFileService.writeResultsToFile(ctrfJsonWithNullTests);
-
-        var existingTests = ctrfReportFileService.getExistingTests();
-
-        assertThat(existingTests).isEmpty();
-    }
-
-    @Test
-    void shouldReturnNullWhenReportFileDoesNotExist() {
-        var startTime = ctrfReportFileService.getExistingStartTime();
-
-        assertThat(startTime).isNull();
-    }
-
-    @Test
-    void shouldReturnStartTimeFromExistingReport() {
-        var expectedStartTime = 1234567890L;
-        var summary = io.github.alexshamrai.ctrf.model.Summary.builder().start(expectedStartTime).build();
-        var results = Results.builder().summary(summary).build();
-        var ctrfJsonWithSummary = CtrfJson.builder().results(results).build();
-
-        ctrfReportFileService.writeResultsToFile(ctrfJsonWithSummary);
-
-        var existingStartTime = ctrfReportFileService.getExistingStartTime();
-
-        assertThat(existingStartTime).isEqualTo(expectedStartTime);
-    }
-
-    @Test
-    void shouldReturnNullWhenExistingReportHasNoSummary() {
-        var results = Results.builder().summary(null).build();
-        var ctrfJsonWithoutSummary = CtrfJson.builder().results(results).build();
-
-        ctrfReportFileService.writeResultsToFile(ctrfJsonWithoutSummary);
-
-        var existingStartTime = ctrfReportFileService.getExistingStartTime();
-
-        assertThat(existingStartTime).isNull();
-    }
-
-    @Test
-    void shouldCacheReportAndReadFileOnlyOnce() {
-        // Setup a report with all data
-        var test1 = io.github.alexshamrai.ctrf.model.Test.builder().name("Test1").build();
-        var test2 = io.github.alexshamrai.ctrf.model.Test.builder().name("Test2").build();
-        var testsList = List.of(test1, test2);
-        var expectedStartTime = 1234567890L;
-        var summary = io.github.alexshamrai.ctrf.model.Summary.builder().start(expectedStartTime).build();
-        var environment = io.github.alexshamrai.ctrf.model.Environment.builder().healthy(false).build();
-        var results = Results.builder()
-            .tests(testsList)
-            .summary(summary)
-            .environment(environment)
-            .build();
-        var fullReport = CtrfJson.builder().results(results).build();
-
-        ctrfReportFileService.writeResultsToFile(fullReport);
-
-        // Clear the output stream to track only the read operations
-        errContent.reset();
-        var outContent = new ByteArrayOutputStream();
-        var originalOut = System.out;
-        System.setOut(new PrintStream(outContent));
-
+    @DisplayName("A report given as a bare file name, as the default ctrf-report.json is, is written in the working directory")
+    void updatesAReportGivenAsABareFileName() throws IOException {
+        String name = "ctrf-bare-" + UUID.randomUUID() + ".json";
+        Path report = Path.of(name);
+        Path lockFile = Path.of(name + ".lock");
         try {
-            // Call all three getter methods
-            var existingTests = ctrfReportFileService.getExistingTests();
-            var existingStartTime = ctrfReportFileService.getExistingStartTime();
-            var existingHealth = ctrfReportFileService.getExistingEnvironmentHealth();
+            new CtrfReportFileService(configReaderWithPath(name)).update(existing -> marker("bare"));
 
-            // Verify all values are correct
-            assertThat(existingTests).hasSize(2);
-            assertThat(existingStartTime).isEqualTo(expectedStartTime);
-            assertThat(existingHealth).isFalse();
-
-            // Verify the "File already exists" message appears only once
-            var output = outContent.toString();
-            var messageCount = output.split("File already exists", -1).length - 1;
-            assertThat(messageCount).isEqualTo(1);
+            assertThat(readMarker(report)).isEqualTo("bare");
+            assertThat(lockFile).exists();
         } finally {
-            System.setOut(originalOut);
+            Files.deleteIfExists(report);
+            Files.deleteIfExists(lockFile);
         }
     }
 
     @Test
-    void shouldCacheNullResultWhenFileDoesNotExist() {
-        // Don't create any file, so readExistingReport returns null
+    @DisplayName("A directory that can't be written is reported, not thrown")
+    void reportInAReadOnlyDirectoryIsReportedNotThrown() throws IOException {
+        Path readOnly = Files.createDirectory(tempDir.resolve("read-only"));
+        assumeFalse(!readOnly.toFile().setWritable(false) || readOnly.toFile().canWrite(), "the file system ignores permissions");
+        try {
+            assertThatCode(() -> serviceFor(readOnly.resolve("sub/ctrf.json")).update(existing -> marker("never")))
+                .doesNotThrowAnyException();
 
-        // Clear the output stream
-        errContent.reset();
+            assertThat(errContent.toString()).contains("Access denied");
+        } finally {
+            readOnly.toFile().setWritable(true);
+        }
+    }
 
-        // Call all three getter methods multiple times
-        var tests1 = ctrfReportFileService.getExistingTests();
-        var startTime1 = ctrfReportFileService.getExistingStartTime();
-        var health1 = ctrfReportFileService.getExistingEnvironmentHealth();
+    private CtrfReportFileService serviceFor(Path report) {
+        return new CtrfReportFileService(configReaderWithPath(report.toString()));
+    }
 
-        var tests2 = ctrfReportFileService.getExistingTests();
-        var startTime2 = ctrfReportFileService.getExistingStartTime();
-        var health2 = ctrfReportFileService.getExistingEnvironmentHealth();
+    private static ConfigReader configReaderWithPath(String path) {
+        return new ConfigReader(ConfigFactory.create(CtrfConfig.class, Map.of("ctrf.report.path", path)));
+    }
 
-        // Verify all values are correct defaults
-        assertThat(tests1).isEmpty();
-        assertThat(startTime1).isNull();
-        assertThat(health1).isTrue();
+    private static CtrfJson marker(String value) {
+        return CtrfJson.builder().generatedBy(value).build();
+    }
 
-        assertThat(tests2).isEmpty();
-        assertThat(startTime2).isNull();
-        assertThat(health2).isTrue();
+    private String readMarker(Path report) throws IOException {
+        return objectMapper.readValue(report.toFile(), CtrfJson.class).getGeneratedBy();
+    }
 
-        // Verify no errors were logged multiple times
-        assertThat(errContent.toString()).isEmpty();
+    private static List<Path> tempFilesNextTo(Path report) throws IOException {
+        try (Stream<Path> files = Files.list(report.getParent())) {
+            return files.filter(path -> path.getFileName().toString().endsWith(".tmp")).toList();
+        }
+    }
+
+    /**
+     * Fails while Jackson serializes it, after the report's first fields are already written.
+     */
+    static final class Exploding {
+
+        public String getValue() {
+            throw new IllegalStateException("boom");
+        }
     }
 }

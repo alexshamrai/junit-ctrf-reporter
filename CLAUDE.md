@@ -99,18 +99,17 @@ Test Execution
 CtrfReportManager (singleton coordinator)
     ├─ Delegates to TestStateTracker for state management
     ├─ Delegates to AttemptFolder to fold retry attempts into one test
-    ├─ Delegates to TestRerunHandler for rerun scenarios
-    └─ Delegates to ReportOrchestrator for report generation
+    ├─ Delegates to RunIdResolver to decide which JVMs share one report
+    └─ At the end, CtrfReportFileService.update → ReportMerger → CtrfJsonComposer
     ↓
 TestProcessor (converts test data)
     └─ Creates CTRF Test objects from JUnit execution data
     ↓
-ReportOrchestrator (generates report)
-    ├─ Uses CtrfJsonComposer for JSON structure
-    └─ Uses CtrfReportFileService for file I/O
-    ↓
-CtrfReportFileService (filesystem I/O)
-    └─ Writes JSON to configured path (default: ctrf-report.json)
+CtrfReportFileService.update (under a JVM lock and a lock on <report>.lock)
+    ├─ Reads the report fresh
+    ├─ ReportMerger: same runId → unfold its tests, append this execution's attempts and recoveries, fold;
+    │                otherwise this execution alone
+    └─ Writes a temp file and moves it over the report (default: ctrf-report.json)
 ```
 
 ### Key Components
@@ -120,12 +119,12 @@ CtrfReportFileService (filesystem I/O)
 | **CtrfReportManager**           | Singleton coordinator; delegates test lifecycle events to specialized components (simplified from 195 to 186 lines) |
 | **TestStateTracker**            | Collects attempts (ConcurrentLinkedQueue) and in-progress test details (ConcurrentHashMap)            |
 | **AttemptFolder**               | Stateless; folds attempts into one test per testId (retries, retryAttempts, flaky) and unfolds a report's tests back into attempts |
-| **TestRerunHandler**            | Loads existing test data from previous runs; manages rerun scenarios                                  |
-| **ReportOrchestrator**          | Coordinates report generation; delegates to CtrfJsonComposer and CtrfReportFileService                |
+| **RunIdResolver**               | Resolves the runId: ctrf.run.id, a CI variable, the nearest ancestor JVM, or this JVM                 |
+| **ReportMerger**                | Pure; merges an execution into the report of the same run, replaces another run's report; HP-11 recoveries |
 | **EnvironmentHealthTracker**    | Public API for tracking test environment health status                                                |
 | **TestProcessor**               | Converts JUnit test execution data (status, duration, failures) into CTRF Test objects                |
 | **CtrfJsonComposer**            | Assembles final CTRF JSON structure with metadata (tool, environment, summary)                        |
-| **CtrfReportFileService**       | Handles file I/O; supports reading existing reports for test reruns                                   |
+| **CtrfReportFileService**       | `update`: locked fresh read, merge function, atomic write                                             |
 | **ConfigReader/CtrfConfig**     | Configuration facade using owner library; loads from system properties → env vars → `ctrf.properties` |
 | **SuiteExecutionErrorHandler**  | Captures suite-level initialization/execution failures                                                |
 | **StartupDurationProcessor**    | Optionally calculates test suite startup duration                                                     |
@@ -157,11 +156,11 @@ CtrfJson (root)
 
 The library handles parallel test execution using thread-safe collections managed by **TestStateTracker**:
 
-- `ConcurrentLinkedQueue<Test>` for attempts (O(1) adds from any thread; folded once when the run finishes)
+- `ConcurrentLinkedQueue<Test>` for attempts and `ConcurrentLinkedQueue<ContainerSuccess>` for containers that finished without failing (O(1) adds from any thread; merged once when the execution finishes)
 - `ConcurrentHashMap<String, TestDetails>` for in-progress test tracking
 - `AtomicBoolean` for ensuring single execution of startup/shutdown logic
 
-**No explicit locks are used.** Thread safety is achieved through concurrent data structures and atomic operations. **AttemptFolder** is stateless and runs once, in finishTestRun, on a snapshot of the attempts.
+While tests run, thread safety comes from concurrent data structures and atomic operations. Writing the report is the one locked section: `CtrfReportFileService.update` takes a JVM-wide lock and an exclusive file lock on `<report>.lock`, so the JVMs of one run (forks, retry rounds) merge one after another. **ReportMerger** and **AttemptFolder** are stateless and run inside that section.
 
 ### Configuration
 
@@ -174,6 +173,7 @@ Configuration priority (highest to lowest):
 - `ctrf.report.path` - Output file location (default: `ctrf-report.json`)
 - `ctrf.max.message.length` - Max error message length (default: 500)
 - `ctrf.calculate.startup.duration` - Enable startup duration calculation (default: false)
+- `ctrf.run.id` - Run identifier shared by the JVMs of one build (default: a CI variable, the nearest ancestor JVM, or this JVM)
 - `junit.version` - JUnit version for metadata
 - Environment metadata: `ctrf.app.name`, `ctrf.build.number`, `ctrf.repository.url`, `ctrf.os.platform`, etc.
 
@@ -201,8 +201,9 @@ src/main/java/io/github/alexshamrai/
 ├── CtrfReportManager.java         # Singleton coordinator (delegates to specialized classes)
 ├── TestStateTracker.java          # Manages test state collections
 ├── AttemptFolder.java             # Folds retry attempts into one test
-├── TestRerunHandler.java          # Handles test rerun scenarios
-├── ReportOrchestrator.java        # Orchestrates report generation
+├── RunIdResolver.java             # Resolves the runId
+├── ReportMerger.java              # Merges an execution into its run's report
+├── ContainerSuccess.java          # A container that finished without failing (HP-11)
 ├── EnvironmentHealthTracker.java  # Public API for environment health tracking
 ├── CtrfJsonComposer.java          # JSON structure assembly
 ├── CtrfReportFileService.java     # File I/O operations
@@ -261,11 +262,11 @@ The project uses GitHub Actions for automated releases to Maven Central:
 
 ### Retries and Flaky Tests
 
-Each test appears once in the report, as its final attempt. Earlier attempts with the same `testId` (the JUnit unique ID) go into `retryAttempts`, numbered from 1, and `retries` is their count. A test is marked as `flaky: true` only if its final attempt passed after at least one failed attempt; `summary.flaky` counts such tests. Entries from older reports without a `testId` are grouped by file path and name among themselves, never by name alone, and never joined to entries that have a `testId`.
+Each test appears once in the report, as its final attempt. Earlier attempts with the same `testId` (the JUnit unique ID) go into `retryAttempts`, numbered from 1, and `retries` is their count. A test is marked as `flaky: true` only if its final attempt passed after at least one failed attempt; `summary.flaky` counts such tests. Entries from older reports without a `testId` are grouped by file path and name among themselves, never by name alone, and never joined to entries that have a `testId`. A class failure (initializationError/teardownError) followed by the class's success in a later round becomes a passed, flaky entry (HP-11).
 
 ### Rerun Support
 
-`CtrfReportFileService` reads existing reports on startup, allowing incremental report building across multiple test runs. Their tests are unfolded into attempts, so a retry round in a new JVM extends each test's `retryAttempts`.
+Nothing is read when a run starts. At the end of each execution, `CtrfReportFileService.update` reads the report under a lock. If its root `runId` matches, `ReportMerger` unfolds its tests and appends this execution's attempts, so forks, retry rounds in new JVMs and reruns in the same JVM all end up in one report. A report of another run is replaced.
 
 ### Thread Identification
 
@@ -285,7 +286,7 @@ The library tracks the health status of the test environment, allowing tests to 
   - `isEnvironmentHealthy()`: Returns current health status
 - **CtrfReportManager**: Stores health state in `AtomicBoolean` for thread safety
   - Initialized by checking `ENV_HEALTHY` environment variable during startup
-  - Health state is preserved across test reruns via `CtrfReportFileService`
+  - Health is merged across the JVMs of one run by `ReportMerger`: unhealthy if any was
 - **CtrfJsonComposer**: Includes health status in `Environment.healthy` field
 
 **Initialization Methods:**
@@ -295,7 +296,7 @@ The library tracks the health status of the test environment, allowing tests to 
 **Behavior:**
 - Default state: `true` (healthy)
 - Once marked unhealthy, remains unhealthy for entire test run
-- State persists across reruns when using same report file
+- State is merged within one run and not passed on to a later run
 - Thread-safe for parallel test execution
 - Included in CTRF report as `results.environment.healthy`
 

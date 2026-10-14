@@ -414,6 +414,11 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assertThat(report.getResults().getSummary().getFlaky()).isEqualTo((int) flakyTests);
     }
 
+    @Test
+    void verifyReportHasARunId() {
+        assertThat(report.getRunId()).as("root runId").isNotBlank();
+    }
+
     private io.github.alexshamrai.ctrf.model.Test singleTestNamed(String name) {
         var matches = report.getResults().getTests().stream()
             .filter(test -> name.equals(test.getName()))
