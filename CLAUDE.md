@@ -66,21 +66,35 @@ ENV_HEALTHY=false ./gradlew clean :integration-tests-listener:test :integration-
 
 ## Architecture Overview
 
-### Entry Points (Dual Integration Model)
+### Entry Points
 
-The library provides two ways to enable CTRF reporting:
+The library provides two ways to enable CTRF reporting. A project uses one of them, never both.
 
-1. **CtrfExtension** (`jupiter/CtrfExtension.java`)
-   - JUnit Jupiter Extension using `@ExtendWith(CtrfExtension.class)` annotation
-   - Implements `TestWatcher`, `BeforeEachCallback`, and `TestRunExtension`
-   - Best for per-class or per-test configuration
+1. **CtrfListener** (`launcher/CtrfListener.java`), recommended
+   - JUnit Platform `TestExecutionListener`, registered by the user through `META-INF/services` or programmatically
+   - The jar doesn't register it itself: that would switch reporting on for every project with the jar on its test classpath, and take over the reporting of `CtrfExtension` users (the listener's test plan owns the run, so the extension's run start is refused)
+   - Sees classes skipped as a whole, failed containers of every kind, other engines (Vintage) and dynamic tests
+   - JUnit's launcher catches and logs exceptions from listener callbacks, so the listener needs no guard of its own
+2. **CtrfExtension** (`jupiter/CtrfExtension.java`)
+   - JUnit Jupiter extension, `@ExtendWith(CtrfExtension.class)`; implements `TestRunExtension`, `AfterAllCallback`, `BeforeEachCallback` and `TestWatcher`
+   - The end of the run is a `RunEndResource` in the root store, which is both `CloseableResource` and `AutoCloseable`
+   - Every reporter call goes through a guard: an error is logged and never becomes a test failure; a `VirtualMachineError` propagates
 
-2. **CtrfListener** (`launcher/CtrfListener.java`)
-   - JUnit Platform `TestExecutionListener`
-   - Registered via `META-INF/services` or programmatically with `LauncherFactory`
-   - Best for global, project-wide reporting
+Both report through `CtrfReportManager`. Each has a package-private constructor that takes the manager, for tests.
 
-Both delegate to the **singleton CtrfReportManager** for core functionality.
+### Run Ownership
+
+`CtrfReportManager` keeps at most one active `TestRun`: its owner, generator, start time and recorded state.
+- The owner is the listener's `TestPlan` or the extension's root `ExtensionContext`, compared by identity.
+- `startTestRun(owner, generator)` returns false while another owner's run is active. The entry point then ignores all its events, so a JUnit run started from inside a test (CB-2) neither ends the outer run nor adds its tests.
+- `finishTestRun(owner)` acts only for the owner. Results recorded while no run is active are dropped.
+- `startTestRun(String)` and `finishTestRun()` remain, with an owner of their own.
+
+### What the Singleton Is For
+
+`CtrfReportManager.getInstance()` is the JVM's default manager. `createDefault()` builds its collaborators from one `ConfigReader` and passes them to the package-private constructor, which the tests use too: test processor, file service, a composer factory per generator, run id and initial health.
+
+The singleton remains because JUnit creates `CtrfListener` and `CtrfExtension` itself, through their no-argument constructors, and `EnvironmentHealthTracker`'s static API must reach the same manager as they do. Environment health is JVM-wide, not per run.
 
 ### Core Data Flow
 
@@ -89,8 +103,8 @@ Test Execution
     ↓
 [CtrfExtension | CtrfListener] (observers)
     ↓
-CtrfReportManager (singleton coordinator)
-    ├─ Delegates to TestStateTracker for state management
+CtrfReportManager (coordinator; getInstance() is the default instance)
+    ├─ Keeps the active TestRun: owner, generator, start time and its TestStateTracker
     ├─ Delegates to AttemptFolder to fold retry attempts into one test
     ├─ Delegates to RunIdResolver to decide which JVMs share one report
     └─ At the end, CtrfReportFileService.update → ReportMerger → CtrfJsonComposer
@@ -109,8 +123,9 @@ CtrfReportFileService.update (under a JVM lock and a lock on <report>.lock)
 
 | Component                       | Responsibility                                                                                        |
 |---------------------------------|-------------------------------------------------------------------------------------------------------|
-| **CtrfReportManager**           | Singleton coordinator; delegates test lifecycle events to specialized components (simplified from 195 to 186 lines) |
-| **TestStateTracker**            | Collects attempts (ConcurrentLinkedQueue) and in-progress test details (ConcurrentHashMap)            |
+| **CtrfReportManager**           | Coordinator: keeps the active `TestRun` and writes it at the end; `getInstance()` is the default instance, built in `createDefault()` |
+| **TestRun**                     | One run: owner (`TestPlan` or root `ExtensionContext`), generator, start time and its `TestStateTracker` |
+| **TestStateTracker**            | One run's attempts (ConcurrentLinkedQueue), container successes and in-progress test details (ConcurrentHashMap)            |
 | **AttemptFolder**               | Stateless; folds attempts into one test per testId (retries, retryAttempts, flaky) and unfolds a report's tests back into attempts |
 | **RunIdResolver**               | Resolves the runId: ctrf.run.id, a CI variable, the nearest ancestor JVM, or this JVM                 |
 | **ReportMerger**                | Pure; merges an execution into the report of the same run, replaces another run's report; HP-11 recoveries |
@@ -154,7 +169,7 @@ The library handles parallel test execution using thread-safe collections manage
 
 - `ConcurrentLinkedQueue<Test>` for attempts and `ConcurrentLinkedQueue<ContainerSuccess>` for containers that finished without failing (O(1) adds from any thread; merged once when the execution finishes)
 - `ConcurrentHashMap<String, TestDetails>` for in-progress test tracking
-- `AtomicBoolean` for ensuring single execution of startup/shutdown logic
+- `AtomicReference<TestRun>` for the active run: compare-and-set to start it and to finish it, so one owner at a time
 
 While tests run, thread safety comes from concurrent data structures and atomic operations. Writing the report is the one locked section: `CtrfReportFileService.update` takes a JVM-wide lock and an exclusive file lock on `<report>.lock`, so the JVMs of one run (forks, retry rounds) merge one after another. **ReportMerger** and **AttemptFolder** are stateless and run inside that section.
 
@@ -188,6 +203,7 @@ test {
 src/main/java/io/github/alexshamrai/
 ├── jupiter/
 │   ├── CtrfExtension.java         # JUnit Jupiter Extension entry point
+│   ├── RunEndResource.java        # End-of-run hook: CloseableResource and AutoCloseable
 │   └── TestRunExtension.java      # Lifecycle hooks interface
 ├── launcher/
 │   └── CtrfListener.java          # JUnit Platform Listener entry point
@@ -197,8 +213,9 @@ src/main/java/io/github/alexshamrai/
 ├── model/
 │   └── TestDetails.java           # Internal DTO for test data
 ├── util/                          # Utilities (SummaryUtil, TestDetailsUtil)
-├── CtrfReportManager.java         # Singleton coordinator (delegates to specialized classes)
+├── CtrfReportManager.java         # Coordinator: the active TestRun; getInstance() is the default instance
 ├── TestStateTracker.java          # Manages test state collections
+├── TestRun.java                   # One run's owner and state
 ├── AttemptFolder.java             # Folds retry attempts into one test
 ├── RunIdResolver.java             # Resolves the runId
 ├── ReportMerger.java              # Merges an execution into its run's report

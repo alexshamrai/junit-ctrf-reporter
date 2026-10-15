@@ -72,21 +72,30 @@ dependencies {
 }
 ```
 
-## Usage options
+## Choosing a setup
 
-There are two ways to use the CTRF reporter: as a JUnit Jupiter Extension or as a JUnit Platform TestExecutionListener.
+The reporter has two entry points: a JUnit Platform listener and a JUnit Jupiter extension. Use one of them. **Never register both**: only the listener would report, and the extension's registration would silently do nothing.
 
-### 1. Use CtrfListener (JUnit Platform TestExecutionListener)
-This approach is suitable when you need to enable CTRF reporting globally for all tests executed by the JUnit Platform, without modifying individual test classes.
- Register the listener by creating a file named org.junit.platform.launcher.TestExecutionListener in your src/test/resources/META-INF/services directory and add the fully qualified name of the listener:
+### Recommended: CtrfListener
+
+`CtrfListener` is a JUnit Platform `TestExecutionListener`. It sees everything the JUnit Platform runs, so besides your tests it also reports:
+
+- the tests of a class that JUnit skips as a whole, such as a `@Disabled` class, as skipped;
+- failures outside tests, as failed entries: a class whose `@BeforeAll` or `@AfterAll` fails, a class that can't be created, a `@MethodSource` or `@TestFactory` that throws;
+- tests of other engines, such as JUnit 4 tests run by the Vintage engine;
+- dynamic tests, such as those of a `@TestFactory`.
+
+Register it for the whole test run with a file named `org.junit.platform.launcher.TestExecutionListener` in `src/test/resources/META-INF/services/`, containing this line:
+
 ```
 io.github.alexshamrai.launcher.CtrfListener
 ```
 
-Programmatically:
-If you are invoking the JUnit Platform Launcher directly, you can register the listener programmatically:
-``` java
-// Example with LauncherDiscoveryRequest
+That is all Gradle and Maven need: both run tests on the JUnit Platform, which finds the file on the test classpath. Nothing goes in `build.gradle` or `pom.xml`.
+
+If you start the JUnit Platform Launcher yourself, register the listener programmatically:
+
+```java
 LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
     .selectors(selectPackage("com.example"))
     .build();
@@ -96,9 +105,11 @@ launcher.registerTestExecutionListeners(new CtrfListener());
 launcher.execute(request);
 ```
 
-### 2. Register CtrfExtension
+**Why the jar doesn't register the listener itself.** It could, with the same `META-INF/services` file inside the jar. Then every project with the reporter on its test classpath would get a report whether it wanted one or not, and in projects that use `CtrfExtension` the listener would silently take over the reporting. So the listener stays opt-in.
 
-To use the JUnit CTRF Extension, you need to register it in your JUnit test class. You can do this by adding the `@ExtendWith` annotation to your test class:
+### Supported: CtrfExtension
+
+`CtrfExtension` is a JUnit Jupiter extension. Register it on each test class, or on a base class they share:
 
 ```java
 @ExtendWith(CtrfExtension.class)
@@ -110,8 +121,24 @@ public class MyTest {
     }
 }
 ```
-It allows you to configure a report only for custom classes
-For more details on JUnit extensions, see the [JUnit 5 User Guide](https://junit.org/junit5/docs/current/user-guide/#extensions).
+
+It reports only the classes it is registered on, and it can't see:
+
+- the tests of a class that JUnit skips as a whole, such as a `@Disabled` class: they are missing from the report;
+- a class that can't be created, for example when its Spring context fails to load under `@TestInstance(Lifecycle.PER_CLASS)`;
+- failures of containers below class level, such as a `@MethodSource` that throws;
+- teardown failures of extensions registered before it;
+- tests that don't run on JUnit Jupiter, such as JUnit 4 tests.
+
+For more on extensions, see the [JUnit 5 User Guide](https://junit.org/junit5/docs/current/user-guide/#extensions).
+
+### Tests that run JUnit themselves
+
+A test that starts the JUnit Platform itself, for example through `LauncherFactory.create()`, starts a nested run in the same JVM. Only the run that started reporting is reported: the nested run's tests are left out, and the run around it goes on.
+
+With `CtrfExtension`, the run starts at the first class that has the extension, so a nested run that starts earlier, from a class without it, becomes the reported run and its tests reach the report. `CtrfListener` starts the run when the test plan starts, so it has no such gap. Register a `CtrfListener` instance with one launcher only: an instance shared by an outer and a nested launcher loses track of the outer run.
+
+## Configuration
 
 ### Configure Properties
 
