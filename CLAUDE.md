@@ -118,7 +118,7 @@ CtrfReportFileService.update (under a JVM lock and a lock on <report>.lock)
 | **TestProcessor**               | Converts JUnit test execution data (status, duration, failures) into CTRF Test objects                |
 | **CtrfJsonComposer**            | Assembles final CTRF JSON structure with metadata (tool, environment, summary)                        |
 | **CtrfReportFileService**       | `update`: locked fresh read, merge function, atomic write                                             |
-| **ConfigReader/CtrfConfig**     | Configuration facade using owner library; loads from system properties → env vars → `ctrf.properties` |
+| **ConfigReader**                | Reads the configuration once: system property → env var (exact name, then `CTRF_X_Y` for `ctrf.*` keys) → `ctrf.properties` (UTF-8) → default; `${...}` references; an invalid number or boolean warns and uses the default |
 | **SuiteExecutionErrorHandler**  | Captures suite-level initialization/execution failures                                                |
 | **StartupDurationProcessor**    | Optionally calculates test suite startup duration                                                     |
 
@@ -161,8 +161,9 @@ While tests run, thread safety comes from concurrent data structures and atomic 
 
 Configuration priority (highest to lowest):
 1. System properties (`-Dctrf.report.path=...`)
-2. Environment variables
-3. `src/test/resources/ctrf.properties` file
+2. Environment variables: the exact key, then the `CTRF_REPORT_PATH` form for `ctrf.*` keys
+3. `src/test/resources/ctrf.properties` file, read as UTF-8
+4. Defaults
 
 **Key Properties:**
 - `ctrf.report.path` - Output file location (default: `ctrf-report.json`)
@@ -189,7 +190,7 @@ src/main/java/io/github/alexshamrai/
 ├── launcher/
 │   └── CtrfListener.java          # JUnit Platform Listener entry point
 ├── ctrf/model/                    # CTRF model classes (CtrfJson, Test, Summary, etc.)
-├── config/                        # Configuration handling (ConfigReader, CtrfConfig)
+├── config/                        # Configuration loading (ConfigReader)
 ├── model/
 │   └── TestDetails.java           # Internal DTO for test data
 ├── util/                          # Utilities (SummaryUtil, TestDetailsUtil)

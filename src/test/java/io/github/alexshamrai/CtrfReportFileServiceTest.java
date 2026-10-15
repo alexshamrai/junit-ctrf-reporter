@@ -2,9 +2,7 @@ package io.github.alexshamrai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.alexshamrai.config.ConfigReader;
-import io.github.alexshamrai.config.CtrfConfig;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
-import org.aeonbits.owner.ConfigFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -241,7 +239,7 @@ class CtrfReportFileServiceTest {
     }
 
     private static ConfigReader configReaderWithPath(String path) {
-        return new ConfigReader(ConfigFactory.create(CtrfConfig.class, Map.of("ctrf.report.path", path)));
+        return new ConfigReader(Map.of("ctrf.report.path", path), Map.of(), Map.of());
     }
 
     private static CtrfJson marker(String value) {

@@ -19,7 +19,7 @@ jobs:
       contents: read
 
     env:
-      CTRF_REPORT_PATH: 'integration-tests-listener/build/test-results/ctrf-report.json'
+      REPORT_FILE: 'integration-tests-listener/build/test-results/ctrf-report.json'
       ENV_HEALTHY: 'false' ## the report must say unhealthy; the validator reads the same variable
       # Passed to both the report step and the validator, which takes its expectations from them
       RUN_FLAGS: >-
@@ -46,7 +46,7 @@ jobs:
       - name: Publish CTRF Test Report
         uses: ctrf-io/github-test-reporter@v1.3.0
         with:
-          report-path: ${{ env.CTRF_REPORT_PATH }}
+          report-path: ${{ env.REPORT_FILE }}
 
           summary-report: true
           test-report: true
@@ -63,7 +63,7 @@ jobs:
         if: always()
 
       - name: Run integration tests
-        run: ./gradlew :integration-ctrf-validator:test $RUN_FLAGS -Dctrf.report.path=../${{ env.CTRF_REPORT_PATH }}
+        run: ./gradlew :integration-ctrf-validator:test $RUN_FLAGS -Dctrf.report.path=../${{ env.REPORT_FILE }}
         if: always()
 
       - name: Upload test results

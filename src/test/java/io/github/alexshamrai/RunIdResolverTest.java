@@ -2,8 +2,6 @@ package io.github.alexshamrai;
 
 import io.github.alexshamrai.RunIdResolver.Ancestor;
 import io.github.alexshamrai.config.ConfigReader;
-import io.github.alexshamrai.config.CtrfConfig;
-import org.aeonbits.owner.ConfigFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -110,9 +108,9 @@ class RunIdResolverTest {
     @Test
     @DisplayName("ctrf.run.id is read from the configuration")
     void resolvesFromConfiguration() {
-        var config = ConfigFactory.create(CtrfConfig.class, Map.of("ctrf.run.id", "from-config"));
+        var config = new ConfigReader(Map.of("ctrf.run.id", "from-config"), Map.of(), Map.of());
 
-        assertThat(RunIdResolver.resolve(new ConfigReader(config))).isEqualTo("from-config");
+        assertThat(RunIdResolver.resolve(config)).isEqualTo("from-config");
     }
 
     @Test
@@ -121,8 +119,8 @@ class RunIdResolverTest {
         Supplier<ProcessHandle> denied = () -> {
             throw new SecurityException("denied");
         };
-        var withoutRunId = new ConfigReader(ConfigFactory.create(CtrfConfig.class, Map.of()));
-        var withRunId = new ConfigReader(ConfigFactory.create(CtrfConfig.class, Map.of("ctrf.run.id", "from-config")));
+        var withoutRunId = new ConfigReader(Map.of(), Map.of(), Map.of());
+        var withRunId = new ConfigReader(Map.of("ctrf.run.id", "from-config"), Map.of(), Map.of());
 
         assertThat(RunIdResolver.resolve(withoutRunId, denied, Map::of)).startsWith("jvm-");
         assertThat(RunIdResolver.resolve(withRunId, denied, Map::of)).isEqualTo("from-config");
