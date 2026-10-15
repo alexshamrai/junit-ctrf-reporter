@@ -20,7 +20,7 @@ Each improvement item includes:
 
 ## Status on `master` — 2026-10-14
 
-`master` @ `58e36f0`. None of this is released yet; Phase 2 ships as 0.5.0.
+`master` @ `c4093eb` (updated 2026-10-15). None of this is released yet; Phase 2 ships as 0.5.0.
 
 | Item | Status | PR | Commits |
 |---|---|---|---|
@@ -33,8 +33,10 @@ Each improvement item includes:
 | [HP-6](#hp-6-one-test-object-per-logical-test-fold-retry-attempts) Fold retry attempts | Done | #130 | `56518bd` |
 | [MP-3](#mp-3-replace-copyonwritearraylist-with-better-alternative) `CopyOnWriteArrayList` | Done by HP-6 | #130 | `56518bd` |
 | [CQ-1](#cq-1-extract-feature-envy-from-ctrfreportmanager) Feature envy | Superseded; HP-6 removed `FlakyTestDetector` | #130 | `56518bd` |
-| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-5, CB-7, HP-6, HP-7, HP-8 and HP-9 have scenario tests; CB-2, CB-6, MP-5 and HP-5 don't yet | | |
-| [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) Class failure that recovers on retry | New, open; designed with CB-6, ships in the same PR | | |
+| [CB-6](#cb-6-rework-report-persistence-forks-accumulation-same-jvm-reruns) One report per run (forks, accumulation, same-JVM reruns) | Done | #132 | `9084a83` |
+| [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) Class failure that recovers on retry | Done, with CB-6 | #132 | `9084a83` |
+| [TI-4](#ti-4-validate-integration-output-against-the-official-schema-and-junits-own-counts) Official schema and JUnit counts in the validator | Partially done: CI runs the listener integration with 2 forks (CB-6) | #132 | `9084a83` |
+| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests; CB-2, MP-5 and HP-5 don't yet | | |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -429,7 +431,7 @@ Requirements:
 **Priority**: Critical
 **Complexity**: Complex
 **Files**: `CtrfReportFileService.java`, `CtrfReportManager.java`, `TestStateTracker.java`, `CtrfJsonComposer.java`, `ReportMerger.java` (new), `RunIdResolver.java` (new), `ContainerSuccess.java` (new), `ReportOrchestrator.java` and `TestRerunHandler.java` (deleted), `ctrf/model/CtrfJson.java`, `config/CtrfConfig.java`, `config/ConfigReader.java`, `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `scenario/*`, `integration-tests-*/build.gradle`, `.github/workflows/integration-listener.yml`, `compat/maven/*`, `README.md`, `CLAUDE.md`
-**Status**: Designed 2026-10-14 against `master` @ `58e36f0`, together with HP-11; replaces the 2026-10-08 prompt. CB-6 and HP-11 ship in one PR.
+**Status**: Done on `master` (#132: `9084a83`), together with HP-11. Designed 2026-10-14 against `master` @ `58e36f0`; replaces the 2026-10-08 prompt. Follow-ups: [Deferred from the review](#deferred-from-the-cb-6-review).
 **Implementation plan**: [`docs/plans/2026-10-14-cb-6-report-persistence.md`](docs/plans/2026-10-14-cb-6-report-persistence.md)
 
 #### Why
@@ -616,17 +618,30 @@ One behaviour change is a fix: a report from a different run no longer passes on
   - the line saying `unfold` runs at the start.
 - Branch `fix/cb-6-report-persistence` from `master`, one commit, and a PR description file.
 
+#### Deferred from the CB-6 review
+
+The per-task and whole-branch reviews of #132 left these open. The full list is in the PR's review notes.
+- **Windows is untested in CI.** The move is retried on Windows file-sharing errors, but the lock, the move, the `java.exe` ancestor lookup and Surefire's `cmd.exe` fork chain have never run on Windows. A `windows-latest` job running `:build` would cover them. Its move-retry test asserts the "Failed to write results to file" message, which Windows reports as "Access denied" instead.
+- **A read error is treated like an unparsable report,** so a same-run report that can't be read for a moment is replaced. A short retry, like the move's, would fix it.
+- **A symlinked report is replaced by a regular file.** The rename also resets the file's mode to the default.
+- **Under a `SecurityManager` that denies process inspection,** forks fall back to separate `jvm-` run ids and replace each other. Reading the CI variables before inspecting processes would keep them merging. `CtrfReportManager`'s constructor also reads `ENV_HEALTHY` outside any `try`.
+- **The CI variable list is written in three places:** `RunIdResolver`, `ScenarioRunner` and `compat/run.sh`.
+- **Test hygiene:**
+  - scenario JVMs aren't destroyed when another one fails;
+  - scenario temp directories are never deleted;
+  - one Review Focus test can't tell the stop time from the start time within a millisecond.
+
 #### Acceptance Criteria
-- [ ] With `maxParallelForks` 2 and 4, the listener integration report equals the 1-fork report: tests=28, passed=14, failed=7, skipped=7, flaky=1
-- [ ] Maven Surefire with `forkCount=2` reports the tests of both classes (compat)
-- [ ] A build with a different `runId` replaces the report, including its start time and health
-- [ ] Two executions in one JVM: `stable()` is present, and `flakyOnce()` has `retries: 1` and `flaky: true`
-- [ ] Surefire with `rerunFailingTestsCount=1`: a test that fails only once is reported flaky (compat)
-- [ ] A write that fails halfway leaves the previous report parseable and unchanged
-- [ ] Gradle test-retry rounds still fold into one test per logical test
-- [ ] Every report has a root `runId`
-- [ ] HP-11's acceptance criteria hold
-- [ ] README documents run identity, the `.lock` file, the per-build `ctrf.run.id` setting (and that it must change with every build) and `npx ctrf merge`
+- [x] With `maxParallelForks` 2 and 4, the listener integration report equals the 1-fork report: tests=28, passed=14, failed=7, skipped=7, flaky=1
+- [x] Maven Surefire with `forkCount=2` reports the tests of both classes (compat)
+- [x] A build with a different `runId` replaces the report, including its start time and health
+- [x] Two executions in one JVM: `stable()` is present, and `flakyOnce()` has `retries: 1` and `flaky: true`
+- [x] Surefire with `rerunFailingTestsCount=1`: a test that fails only once is reported flaky (compat)
+- [x] A write that fails halfway leaves the previous report parseable and unchanged
+- [x] Gradle test-retry rounds still fold into one test per logical test
+- [x] Every report has a root `runId`
+- [x] HP-11's acceptance criteria hold
+- [x] README documents run identity, the `.lock` file, the per-build `ctrf.run.id` setting (and that it must change with every build) and `npx ctrf merge`
 
 ---
 
@@ -1326,7 +1341,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `AttemptFolder.java`, `CtrfReportManager.java`, scenario tests
-**Status**: Designed 2026-10-14 together with CB-6, in the CB-6 section ("HP-11: container successes"), and ships in the same PR. Found by the HP-6 review on 2026-10-14 and reproduced in forked-JVM retry rounds. `master` had the same behaviour before HP-6.
+**Status**: Done on `master` with CB-6 (#132: `9084a83`). Designed 2026-10-14 together with CB-6, in the CB-6 section ("HP-11: container successes"). Found by the HP-6 review on 2026-10-14 and reproduced in forked-JVM retry rounds. `master` had the same behaviour before HP-6.
 
 #### Why
 
@@ -1340,10 +1355,10 @@ Reproduced through both entry points: `@BeforeAll` fails in round 1 and passes i
 - Successes are collected separately from attempts, as `ContainerSuccess` records, and `ReportMerger` turns a success into a final passed attempt only for a container that already has a failure. That replaces the review's sketch of marker attempts inside the attempt list.
 
 #### Acceptance Criteria
-- [ ] A class whose `@BeforeAll` fails in round 1 and passes in round 2 is no longer counted as failed, through both entry points
-- [ ] The same holds for `@AfterAll`, and for a failed container below class level that recovers
-- [ ] A container that fails in every round is still one failed entry, with its history in `retryAttempts`
-- [ ] Containers that never failed add no entries
+- [x] A class whose `@BeforeAll` fails in round 1 and passes in round 2 is no longer counted as failed, through both entry points
+- [x] The same holds for `@AfterAll`, and for a failed container below class level that recovers (below class level: covered by `ReportMerger` unit tests, not by a scenario)
+- [x] A container that fails in every round is still one failed entry, with its history in `retryAttempts`
+- [x] Containers that never failed add no entries
 
 ---
 
@@ -3072,7 +3087,7 @@ Benefits:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: `integration-ctrf-validator/build.gradle`, `integration-ctrf-validator/src/test/resources/schema/ctrf-schema.json`, `.../integration/BaseIntegrationTest.java`, `.../integration/CtrfLogicTest.java`, `.../integration/JsonSchemaValidator.java`, CI workflows
-**Status**: Open (verified 2026-10-08)
+**Status**: Partially done. Requirement 6 is done: CI runs the listener integration with 2 forks (CB-6, #132). Requirement 1, the pinned official schema and a draft-07 validator, is part of HP-5's design. The rest is open.
 
 #### Prompt
 ````
@@ -3116,7 +3131,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: new tests under `src/test/java/io/github/alexshamrai/scenario/` (or a new integration module), fake test classes
-**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-7, HP-6, HP-7, HP-8 and HP-9, each written with its fix. Still open: the CB-6 scenarios (same-JVM rerun, two JVMs, accumulation), CB-2 (nested run), MP-5 (tolerant read) and HP-5 (official schema).
+**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. Still open: CB-2 (nested run), MP-5 (tolerant read) and HP-5 (official schema).
 
 #### Prompt
 ````
@@ -4088,7 +4103,7 @@ Updated 2026-10-08; progress marked 2026-10-14. This replaces the original four-
 ### Already done on `master`
 CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 (its regression is tracked in CB-6), TI-3 (partially)
 
-Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6 and MP-3. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
+Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6 and HP-11. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
 
 ### Phase 1: Stop wrong results and broken builds (small, independent changes)
 1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix. **Done** (#124)
@@ -4101,7 +4116,7 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6 and MP
 
 ### Phase 2: Data model and persistence (changes the report shape, so bump the minor version)
 8. HP-6: One test object per logical test, with `retryAttempts` (also resolves MP-3). **Done** (#130)
-9. CB-6: One report merged under a lock, run identity, atomic writes, together with HP-11 (a class failure that recovers on retry stays failed). Designed 2026-10-14; one PR
+9. CB-6: One report merged under a lock, run identity, atomic writes, together with HP-11 (a class failure that recovers on retry stays failed). **Done** (#132)
 10. HP-5: Conform to the official schema
 11. TI-4: Validator using the official schema and a cross-check against JUnit's counts
 12. MP-5: Read previous reports tolerantly
