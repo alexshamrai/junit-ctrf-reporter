@@ -34,7 +34,6 @@ ext {
     junitMinVersion = '5.10.5'
     lombokVersion = '1.18.48'
     jaksonVersion = '2.22.2'
-    ownerVersion = '1.0.12'
     mockitoVersion = '5.23.0'
     assertjVersion = '3.27.7'
 
@@ -51,7 +50,6 @@ dependencies {
     compileOnly "org.junit.jupiter:junit-jupiter-api"
     compileOnly "org.junit.platform:junit-platform-launcher"
     implementation "com.fasterxml.jackson.core:jackson-databind:${jaksonVersion}"
-    implementation "org.aeonbits.owner:owner:${ownerVersion}"
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
     testImplementation platform("org.junit:junit-bom:${junitVersion}")

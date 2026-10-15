@@ -114,10 +114,16 @@ For more details on JUnit extensions, see the [JUnit 5 User Guide](https://junit
 
 ### Configure Properties
 
-You can configure the CTRF extension in two ways:
+Each setting is looked up in these places, and the first one that sets it wins:
 
-1. **Using a properties file**: Create a `ctrf.properties` file in your project's `src/test/resources` directory.
-2. **Using system properties**: Pass configuration values as JVM system properties using `-D` parameters.
+1. a JVM system property, such as `-Dctrf.report.path=build/ctrf-report.json`;
+2. an environment variable with the same name, then the name in upper case with underscores, such as `CTRF_REPORT_PATH`. Only `ctrf.*` settings have the upper-case form;
+3. a `ctrf.properties` file on the test classpath, usually `src/test/resources/ctrf.properties`, saved as UTF-8;
+4. the default in the [Configuration Reference](#configuration-reference).
+
+The reporter reads its configuration once, when it starts. A value can use another setting or a system property, as in `ctrf.report.path=${user.home}/reports/ctrf.json`; a name that nothing sets expands to an empty string. Numbers may have spaces around them. A number or a `true`/`false` setting that can't be read, or a negative length, logs a warning and the default is used instead.
+
+Up to 0.5.0, `CTRF_*` environment variables were ignored. They are now read, so a `CTRF_*` variable that your CI defines for another step, such as a `CTRF_REPORT_PATH` for a publishing action, configures the reporter too. A relative path is resolved against the test JVM's working directory, which is usually the module's directory. Rename such a variable if it isn't meant for the reporter.
 
 #### Properties File Example
 
