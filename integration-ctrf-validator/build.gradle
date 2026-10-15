@@ -58,7 +58,14 @@ def configureThreads(Test task) {
 test {
     useJUnitPlatform()
 
-    systemProperties += System.properties.findAll { k, v -> k.toString().startsWith("ctrf") }
+    // The same -Dctrf.* and -Dthreads flags as the integration run: the expectations come from them (ExpectedRun)
+    systemProperties += System.properties.findAll { k, v -> k.toString().startsWith("ctrf") || k == "threads" }
+
+    // One command can run an integration module and then validate its report
+    mustRunAfter ':integration-tests-listener:test', ':integration-tests-extension:test'
+
+    // The report and JUnit's event log aren't declared inputs, so always validate
+    outputs.upToDateWhen { false }
 }
 
 // Explicitly mark this module as not for publishing

@@ -12,40 +12,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+/**
+ * Checks what JUnit's event log can't: names, messages, durations, threads and the run's settings. Presence, final
+ * status, retries and flaky of every entry are checked by {@link JunitCrossCheckTest}.
+ */
 public class CtrfLogicTest extends BaseIntegrationTest {
 
-    private static final String LISTENER = "io.github.alexshamrai.launcher.CtrfListener";
-
-    @Test
-    void verifyTestStatuses() {
-        var tests = report.getResults().getTests();
-        assertThat(tests).isNotNull().isNotEmpty();
-
-        tests.forEach(test -> {
-            assertThat(test.getName()).isNotNull().isNotEmpty();
-            assertThat(test.getStatus()).isNotNull();
-        });
-
-        var testNameToExpectedStatus = Map.of(
-            "firstDisabledTest", TestStatus.SKIPPED,
-            "secondDisabledTest", TestStatus.SKIPPED,
-            "firstFailedTest", TestStatus.FAILED,
-            "secondFailedTest", TestStatus.FAILED,
-            "firstSuccessTest", TestStatus.PASSED,
-            "secondSuccessTest", TestStatus.PASSED
-        );
-
-        testNameToExpectedStatus.forEach((testName, expectedStatus) -> {
-            tests.stream()
-                .filter(test -> test.getName() != null && test.getName().contains(testName))
-                .findFirst()
-                .ifPresent(test ->
-                    assertThat(test.getStatus())
-                        .as(testName + " should have " + expectedStatus + " status")
-                        .isEqualTo(expectedStatus)
-                );
-        });
-    }
+    private static final String FAKE_PACKAGE = "io.github.alexshamrai.integration.fake.";
 
     @Test
     void verifySummaryIsCorrect() {
@@ -57,7 +30,7 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         // teardownError, and AssumptionTest's aborted test, which counts as skipped. The listener module also
         // reports BrokenSourceTest's two failed containers, and the four tests of DisabledClassTest and
         // ConditionallySkippedClassTest as skipped.
-        if (isListenerReport()) {
+        if (run.isListener()) {
             assertThat(summary.getTests()).isEqualTo(28);
             assertThat(summary.getPassed()).isEqualTo(14);
             assertThat(summary.getFailed()).isEqualTo(7);
@@ -75,82 +48,53 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assertThat(summary.getStop()).isGreaterThanOrEqualTo(summary.getStart());
 
         var total = summary.getTests();
-        var sum = summary.getPassed() + summary.getFailed() + summary.getSkipped() +
-                  summary.getPending() + summary.getOther();
+        var sum = summary.getPassed() + summary.getFailed() + summary.getSkipped()
+            + summary.getPending() + summary.getOther();
         assertThat(total).isEqualTo(sum);
     }
 
     @Test
     void verifyLongTestDurations() {
-        var tests = report.getResults().getTests();
-        assertThat(tests).isNotNull().isNotEmpty();
+        var minimumDurations = Map.of(
+            testWithId("FirstLongTest", "[method:firstLongTwoSecondTest()]"), 2000L,
+            testWithId("FirstLongTest", "[method:firstLongOneSecondTest()]"), 1000L,
+            testWithId("FirstLongTest", "[method:firstLongHalfSecondTest()]"), 500L,
+            testWithId("SecondLongTest", "[method:secondLongTwoSecondTest()]"), 2000L,
+            testWithId("SecondLongTest", "[method:secondLongOneSecondTest()]"), 1000L,
+            testWithId("SecondLongTest", "[method:secondLongHalfSecondTest()]"), 500L);
 
-        var testNameToDuration = Map.of(
-            "firstLongTwoSecondTest()", 2000L,
-            "firstLongOneSecondTest()", 1000L,
-            "firstLongHalfSecondTest()", 500L,
-            "secondLongTwoSecondTest()", 2000L,
-            "secondLongOneSecondTest()", 1000L,
-            "secondLongHalfSecondTest()", 500L
-        );
-
-        testNameToDuration.forEach((testName, expectedMinDuration) -> {
-            var testOptional = tests.stream()
-                .filter(test -> test.getName() != null && test.getName().equals(testName))
-                .findFirst();
-
-            assertThat(testOptional.isPresent())
-                .as("Test with name '" + testName + "' should be present in the report")
-                .isTrue();
-
-            var test = testOptional.get();
-            assertThat(test.getDuration())
-                .as(testName + " should have duration equal to or longer than " + expectedMinDuration + "ms")
-                .isGreaterThanOrEqualTo(expectedMinDuration);
-        });
+        minimumDurations.forEach((test, minimum) -> assertThat(test.getDuration())
+            .as("duration of %s", test.getTestId())
+            .isGreaterThanOrEqualTo(minimum));
     }
 
-    // On ci tests are run in 2 threads. Test is checking that the number of threads is correct.
     @Test
-    void verifyTestsRunInMultipleThreads() {
-        var tests = report.getResults().getTests();
-        assertThat(tests).isNotNull().isNotEmpty();
-
-        var threadIds = tests.stream()
+    void verifyThreadCountMatchesTheRun() {
+        var threadIds = report.getResults().getTests().stream()
             .map(io.github.alexshamrai.ctrf.model.Test::getThreadId)
             .distinct()
             .toList();
 
-        assertThat(threadIds)
-            .as("Tests should run in exactly 2 different threads")
-            .hasSize(2);
-
-        tests.forEach(test -> {
-            assertThat(test.getThreadId())
-                .as("Test '" + test.getName() + "' should have a thread ID")
-                .isNotNull();
-        });
+        assertThat(threadIds).as("thread IDs").doesNotContainNull();
+        if (expected.threads() <= 1) {
+            assertThat(threadIds).as("thread IDs of a run without -Dthreads").hasSize(1);
+        } else {
+            assertThat(threadIds.size())
+                .as("distinct thread IDs of a run with -Dthreads=%d", expected.threads())
+                .isBetween(2, expected.threads());
+        }
     }
 
-    // Verify that build parameters passed as system properties like "-Dctrf.report.name="Overridden Report Name"" are correctly set
-    // The values should be exactly as in check-ctrf.yml command
+    // The run's -Dctrf.build.* flags, or the module's ctrf.properties: checks that Gradle forwards -Dctrf.* end to end
     @Test
-    void verifyBuildParametersFromSystemProperties() {
+    void verifyBuildValuesMatchTheRun() {
         var environment = report.getResults().getEnvironment();
         assertThat(environment).isNotNull();
 
-        assertThat(environment.getBuildName())
-            .as("Build name should match the value passed via -Dctrf.build.name")
-            .isEqualTo("system-build");
-        assertThat(environment.getBuildNumber())
-            .as("Build number should be the whole number passed via -Dctrf.build.number")
-            .isPositive();
-        assertThat(environment.getBuildId())
-            .as("A whole build number is never written as buildId")
-            .isNull();
-        assertThat(environment.getBuildUrl())
-            .as("Build URL should follow the pattern https://github.com/alexshamrai/junit-ctrf-reporter/actions/runs/ + number")
-            .matches("https://github\\.com/alexshamrai/junit-ctrf-reporter/actions/runs/\\d+");
+        assertThat(environment.getBuildName()).as("buildName").isEqualTo(expected.buildName());
+        assertThat(environment.getBuildNumber()).as("buildNumber").isEqualTo(expected.buildNumber());
+        assertThat(environment.getBuildId()).as("buildId").isEqualTo(expected.buildId());
+        assertThat(environment.getBuildUrl()).as("buildUrl").isEqualTo(expected.buildUrl());
     }
 
     @Test
@@ -164,156 +108,61 @@ public class CtrfLogicTest extends BaseIntegrationTest {
     }
 
     @Test
-    void verifyFlakyTestContainsValidData() {
-        var flakyTest = singleTestNamed("Flaky test passed on the second run");
+    void verifyFlakyTestKeepsItsFailedAttempt() {
+        var flakyTest = testWithId("FlakyTest", "[method:flakyTestPassesOnTheSecondRun()]");
 
-        assertThat(flakyTest.getStatus()).isEqualTo(TestStatus.PASSED);
-        assertThat(flakyTest.getFlaky()).isTrue();
-        assertThat(flakyTest.getRetries()).isEqualTo(1);
+        assertThat(flakyTest.getName()).isEqualTo("Flaky test passed on the second run");
         assertThat(flakyTest.getRetryAttempts())
             .extracting(RetryAttempt::getAttempt, RetryAttempt::getStatus)
             .containsExactly(tuple(1, TestStatus.FAILED));
     }
 
     @Test
-    void verifyGeneratedByFieldIsCorrect() {
-        String reportPath = System.getProperty("ctrf.report.path", "");
-        if (reportPath.contains("listener")) {
-            assertThat(report.getGeneratedBy())
-                .as("The 'generatedBy' field should be set by the listener")
-                .isEqualTo(LISTENER);
-        } else {
-            assertThat(report.getGeneratedBy())
-                .as("The 'generatedBy' field should be set by the extension")
-                .isEqualTo("io.github.alexshamrai.jupiter.CtrfExtension");
-        }
+    void verifyGeneratedByMatchesTheModule() {
+        assertThat(report.getGeneratedBy())
+            .as("generatedBy of a report written by %s", run.module())
+            .isEqualTo(expected.generatedBy());
     }
 
     @Test
-    void verifyEnvironmentHealthIsFalse() {
+    void verifyEnvironmentHealthMatchesTheRun() {
         var environment = report.getResults().getEnvironment();
         assertThat(environment).isNotNull();
 
         assertThat(environment.isHealthy())
-            .as("Environment health should be false")
-            .isFalse();
+            .as("healthy: false when ENV_HEALTHY=false or for the extension module, whose FirstLongTest marks it unhealthy")
+            .isEqualTo(expected.healthy());
     }
 
     @Test
-    void verifyInitializationErrorIsCaptured() {
-        var tests = report.getResults().getTests();
-        assertThat(tests).isNotNull().isNotEmpty();
+    void verifyInitializationErrorsKeepTheirClassAndMessage() {
+        var first = testWithId("InitializationErrorTest", null);
+        var second = testWithId("AnotherInitializationErrorTest", null);
 
-        // Look for the specific InitializationErrorTest (not AnotherInitializationErrorTest)
-        var initErrorTest = tests.stream()
-            .filter(test -> "initializationError".equals(test.getName()))
-            .filter(test -> test.getFilePath() != null
-                && test.getFilePath().contains("InitializationErrorTest")
-                && !test.getFilePath().contains("Another"))
-            .findFirst();
-
-        assertThat(initErrorTest)
-            .as("initializationError test from InitializationErrorTest should be present in the report")
-            .isPresent();
-
-        var test = initErrorTest.get();
-        assertThat(test.getStatus())
-            .as("initializationError should have FAILED status")
-            .isEqualTo(TestStatus.FAILED);
-
-        assertThat(test.getMessage())
-            .as("initializationError should have an error message")
-            .isNotNull()
-            .contains("Simulated initialization failure");
-
-        assertThat(test.getFilePath())
-            .as("initializationError should have filepath pointing to InitializationErrorTest")
-            .contains("InitializationErrorTest");
-    }
-
-    @Test
-    void verifyMultipleInitializationErrorsAreCaptured() {
-        var tests = report.getResults().getTests();
-        assertThat(tests).isNotNull().isNotEmpty();
-
-        // Find all initializationError entries
-        var initErrorTests = tests.stream()
-            .filter(test -> "initializationError".equals(test.getName()))
-            .toList();
-
-        // One entry per class: the retry round is folded into retryAttempts
-        assertThat(initErrorTests)
-            .as("Should have one initializationError entry for each of the two test classes")
-            .hasSize(2);
-
-        // Get distinct filepaths to verify different classes are captured
-        var distinctFilepaths = initErrorTests.stream()
-            .map(io.github.alexshamrai.ctrf.model.Test::getFilePath)
-            .distinct()
-            .toList();
-
-        assertThat(distinctFilepaths)
-            .as("initializationError should come from 2 different test classes")
-            .hasSize(2);
-
-        // Verify InitializationErrorTest is captured
-        assertThat(distinctFilepaths)
-            .as("Should have initializationError from InitializationErrorTest")
-            .anyMatch(path -> path.contains("InitializationErrorTest") && !path.contains("Another"));
-
-        // Verify AnotherInitializationErrorTest is captured
-        assertThat(distinctFilepaths)
-            .as("Should have initializationError from AnotherInitializationErrorTest")
-            .anyMatch(path -> path.contains("AnotherInitializationErrorTest"));
-
-        // Verify distinct error messages
-        var distinctMessages = initErrorTests.stream()
-            .map(io.github.alexshamrai.ctrf.model.Test::getMessage)
-            .distinct()
-            .toList();
-
-        assertThat(distinctMessages)
-            .as("Should have 2 distinct error messages from different test classes")
-            .hasSize(2);
-
-        assertThat(distinctMessages)
-            .as("Should contain the original initialization error message")
-            .anyMatch(msg -> msg.contains("Simulated initialization failure"));
-
-        assertThat(distinctMessages)
-            .as("Should contain the second initialization error message")
-            .anyMatch(msg -> msg.contains("Another initialization failure"));
+        assertThat(first.getName()).isEqualTo("initializationError");
+        assertThat(first.getFilePath()).isEqualTo(FAKE_PACKAGE + "InitializationErrorTest");
+        assertThat(first.getMessage()).contains("Simulated initialization failure");
+        assertThat(second.getName()).isEqualTo("initializationError");
+        assertThat(second.getFilePath()).isEqualTo(FAKE_PACKAGE + "AnotherInitializationErrorTest");
+        assertThat(second.getMessage()).contains("Another initialization failure");
     }
 
     @Test
     void verifyAfterAllFailureIsReportedAsTeardownError() {
-        var entries = report.getResults().getTests().stream()
-            .filter(test -> test.getFilePath() != null && test.getFilePath().endsWith(".AfterAllFailureTest"))
-            .toList();
+        var teardown = testWithId("AfterAllFailureTest", null);
 
-        assertThat(entries)
-            .as("AfterAllFailureTest should report its passing test and the @AfterAll failure")
-            .extracting(io.github.alexshamrai.ctrf.model.Test::getName, io.github.alexshamrai.ctrf.model.Test::getStatus)
-            .contains(
-                tuple("testBeforeFailingTeardown()", TestStatus.PASSED),
-                tuple("teardownError", TestStatus.FAILED));
-        assertThat(entries)
-            .filteredOn(test -> "teardownError".equals(test.getName()))
-            .allSatisfy(test -> assertThat(test.getMessage()).contains("Simulated teardown failure"));
+        assertThat(teardown.getName()).isEqualTo("teardownError");
+        assertThat(teardown.getMessage()).contains("Simulated teardown failure");
+        assertThat(testWithId("AfterAllFailureTest", "[method:testBeforeFailingTeardown()]").getName())
+            .isEqualTo("testBeforeFailingTeardown()");
     }
 
     @Test
     void verifyFailedContainersBelowClassLevelAreReported() {
-        assumeTrue(isListenerReport(), "Only the listener sees containers below class level");
+        assumeTrue(run.isListener(), "Only the listener sees containers below class level");
 
-        var entries = report.getResults().getTests().stream()
-            .filter(test -> test.getFilePath() != null && test.getFilePath().endsWith(".BrokenSourceTest"))
-            .toList();
-
-        assertThat(entries)
-            .as("A failing @MethodSource and a failing @TestFactory should each be reported as failed")
-            .extracting(io.github.alexshamrai.ctrf.model.Test::getName, io.github.alexshamrai.ctrf.model.Test::getStatus)
-            .contains(tuple("usesData(int)", TestStatus.FAILED), tuple("factory()", TestStatus.FAILED));
+        assertThat(testWithId("BrokenSourceTest", "[test-template:usesData(int)]").getName()).isEqualTo("usesData(int)");
+        assertThat(testWithId("BrokenSourceTest", "[test-factory:factory()]").getName()).isEqualTo("factory()");
     }
 
     @Test
@@ -341,44 +190,27 @@ public class CtrfLogicTest extends BaseIntegrationTest {
     }
 
     @Test
-    void verifyTestsOfSkippedClassesAreReportedAsSkipped() {
-        assumeTrue(isListenerReport(), "Only the listener sees tests of classes that JUnit skips as a whole");
+    void verifyTestsOfSkippedClassesAreReportedWithTheirReason() {
+        assumeTrue(run.isListener(), "Only the listener sees tests of classes that JUnit skips as a whole");
 
-        var tests = report.getResults().getTests();
-        var disabledClassTests = tests.stream()
-            .filter(test -> test.getFilePath() != null && test.getFilePath().endsWith(".DisabledClassTest"))
-            .toList();
-        assertThat(disabledClassTests)
-            .as("Each test of a @Disabled class should be skipped")
-            .extracting(io.github.alexshamrai.ctrf.model.Test::getName, io.github.alexshamrai.ctrf.model.Test::getStatus)
-            .containsExactlyInAnyOrder(
-                tuple("firstTestOfDisabledClass()", TestStatus.SKIPPED),
-                tuple("secondTestOfDisabledClass()", TestStatus.SKIPPED));
-        assertThat(disabledClassTests)
-            .as("Each skipped test should carry the class's reason")
-            .allSatisfy(test -> assertThat(test.getMessage()).contains("Simulated disabled class"));
-        assertThat(tests)
-            .filteredOn(test -> test.getFilePath() != null && test.getFilePath().endsWith(".ConditionallySkippedClassTest"))
-            .as("Each test of a class disabled by a condition should be skipped with the condition's reason")
-            .hasSize(2)
-            .allSatisfy(test -> {
-                assertThat(test.getStatus()).isEqualTo(TestStatus.SKIPPED);
-                assertThat(test.getMessage()).contains("ctrf.integration.never.set");
-            });
+        for (String method : List.of("firstTestOfDisabledClass()", "secondTestOfDisabledClass()")) {
+            assertThat(testWithId("DisabledClassTest", "[method:" + method + "]").getMessage())
+                .as("reason for %s", method)
+                .contains("Simulated disabled class");
+        }
+        for (String method : List.of("firstTestOfSkippedClass()", "secondTestOfSkippedClass()")) {
+            assertThat(testWithId("ConditionallySkippedClassTest", "[method:" + method + "]").getMessage())
+                .as("reason for %s", method)
+                .contains("ctrf.integration.never.set");
+        }
     }
 
     @Test
-    void verifyFailedAssumptionIsReportedAsSkipped() {
-        var abortedTest = report.getResults().getTests().stream()
-            .filter(test -> "requiresUnavailableService()".equals(test.getName()))
-            .findFirst();
+    void verifyFailedAssumptionKeepsTheAbortedStatus() {
+        var abortedTest = testWithId("AssumptionTest", "[method:requiresUnavailableService()]");
 
-        assertThat(abortedTest)
-            .as("The test aborted by a failed assumption should be in the report")
-            .isPresent();
-        assertThat(abortedTest.get().getStatus()).isEqualTo(TestStatus.SKIPPED);
-        assertThat(abortedTest.get().getRawStatus()).isEqualTo("aborted");
-        assertThat(abortedTest.get().getMessage()).contains("Simulated assumption failure");
+        assertThat(abortedTest.getRawStatus()).isEqualTo("aborted");
+        assertThat(abortedTest.getMessage()).contains("Simulated assumption failure");
     }
 
     @Test
@@ -406,14 +238,11 @@ public class CtrfLogicTest extends BaseIntegrationTest {
     }
 
     @Test
-    void verifyTestsFailingInEveryRoundAreNotFlaky() {
-        for (String name : List.of("firstFailedTest()", "Second failed test")) {
-            var test = singleTestNamed(name);
-            assertThat(test.getStatus()).as("status of %s", name).isEqualTo(TestStatus.FAILED);
-            assertThat(test.getFlaky()).as("flaky of %s", name).isNull();
-            assertThat(test.getRetryAttempts())
+    void verifyTestsFailingInEveryRoundKeepTheirFailedAttempts() {
+        for (String method : List.of("firstFailedTest()", "secondFailedTest()")) {
+            assertThat(testWithId("DummyFailedTest", "[method:" + method + "]").getRetryAttempts())
                 .extracting(RetryAttempt::getStatus)
-                .as("earlier attempts of %s", name)
+                .as("earlier attempts of %s", method)
                 .containsExactly(TestStatus.FAILED);
         }
     }
@@ -432,18 +261,16 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assertThat(report.getRunId()).as("root runId").isNotBlank();
     }
 
-    private io.github.alexshamrai.ctrf.model.Test singleTestNamed(String name) {
+    /**
+     * The report entry whose testId is the given fake test class's ID, followed by {@code /segment} unless the segment
+     * is {@code null} (a class-level entry). Fails if the report doesn't have exactly one.
+     */
+    private io.github.alexshamrai.ctrf.model.Test testWithId(String fakeClass, String segment) {
+        var testId = "[engine:junit-jupiter]/[class:" + FAKE_PACKAGE + fakeClass + "]" + (segment == null ? "" : "/" + segment);
         var matches = report.getResults().getTests().stream()
-            .filter(test -> name.equals(test.getName()))
+            .filter(test -> testId.equals(test.getTestId()))
             .toList();
-        assertThat(matches).as("entries named %s", name).hasSize(1);
+        assertThat(matches).as("entries with testId %s", testId).hasSize(1);
         return matches.get(0);
     }
-
-    // Decided by the report itself, so a listener-only check never skips silently because of where the
-    // report was written. verifyGeneratedByFieldIsCorrect ties the report path to the expected entry point.
-    private boolean isListenerReport() {
-        return LISTENER.equals(report.getGeneratedBy());
-    }
 }
-

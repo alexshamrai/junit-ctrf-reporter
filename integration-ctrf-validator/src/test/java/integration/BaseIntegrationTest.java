@@ -11,35 +11,17 @@ import java.io.IOException;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public abstract class BaseIntegrationTest {
 
-    private static final String DEFAULT_REPORT_PATH =
-        "For Local Run can be used:" + "../integration-tests-extension/build/test-results/ctrf-report.json";
-
-    protected final ObjectMapper objectMapper;
+    protected final ObjectMapper objectMapper = new ObjectMapper();
+    protected IntegrationRun run;
+    protected ExpectedRun expected;
     protected CtrfJson report;
     protected File reportFile;
 
-    protected BaseIntegrationTest() {
-        this.objectMapper = new ObjectMapper();
-    }
-
     @BeforeAll
     void setup() throws IOException {
-        String reportPath = resolveReportPath();
-        reportFile = new File(reportPath);
-
-        if (!reportFile.exists()) {
-            throw new IOException("Report file not found at: " + reportFile.getAbsolutePath());
-        }
-
+        run = IntegrationRun.locate(System.getProperty("ctrf.report.path"), System.getProperty("ctrf.junit.events.dir"));
+        expected = ExpectedRun.of(run);
+        reportFile = run.reportFile();
         report = objectMapper.readValue(reportFile, CtrfJson.class);
-    }
-
-    private static String resolveReportPath() {
-        String configuredPath = System.getProperty("ctrf.report.path");
-        if (configuredPath == null) {
-            return DEFAULT_REPORT_PATH;
-        }
-
-        return configuredPath;
     }
 }

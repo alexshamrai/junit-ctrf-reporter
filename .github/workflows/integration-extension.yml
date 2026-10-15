@@ -20,6 +20,12 @@ jobs:
 
     env:
       CTRF_REPORT_PATH: 'integration-tests-extension/build/test-results/ctrf-report.json'
+      # Passed to both the report step and the validator, which takes its expectations from them
+      RUN_FLAGS: >-
+        -Dthreads=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.threads || '2' }}
+        -Dctrf.build.name=system-build
+        -Dctrf.build.number=${{ github.run_number }}
+        -Dctrf.build.url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
       - uses: actions/checkout@v6
@@ -33,12 +39,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Generate report with extension
-        run: |
-          ./gradlew :integration-tests-extension:test \
-          -Dthreads=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.threads || '2' }} \
-          -Dctrf.build.name=system-build \
-          -Dctrf.build.number=${{ github.run_number }} \
-          -Dctrf.build.url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} \
+        run: ./gradlew :integration-tests-extension:test $RUN_FLAGS
         if: always()
 
       - name: Publish CTRF Test Report
@@ -61,9 +62,7 @@ jobs:
         if: always()
 
       - name: Run integration tests
-        run: |
-          ./gradlew :integration-ctrf-validator:test \
-          -Dctrf.report.path=../${{ env.CTRF_REPORT_PATH }}
+        run: ./gradlew :integration-ctrf-validator:test $RUN_FLAGS -Dctrf.report.path=../${{ env.CTRF_REPORT_PATH }}
         if: always()
 
       - name: Upload test results
