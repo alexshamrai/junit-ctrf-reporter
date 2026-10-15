@@ -42,10 +42,12 @@ public class ConfigReader {
 
     private static final String REPORT_PATH = "ctrf.report.path";
     private static final String MAX_MESSAGE_LENGTH = "ctrf.max.message.length";
+    private static final String MAX_TRACE_LENGTH = "ctrf.max.trace.length";
     private static final String CALCULATE_STARTUP_DURATION = "ctrf.calculate.startup.duration";
     private static final Map<String, String> DEFAULTS = Map.of(
         REPORT_PATH, "ctrf-report.json",
         MAX_MESSAGE_LENGTH, "500",
+        MAX_TRACE_LENGTH, "20000",
         CALCULATE_STARTUP_DURATION, "false");
 
     private final Map<String, String> systemProperties;
@@ -54,6 +56,7 @@ public class ConfigReader {
 
     private final String reportPath;
     private final int maxMessageLength;
+    private final int maxTraceLength;
     private final String junitVersion;
     private final String reportName;
     private final String appName;
@@ -94,6 +97,7 @@ public class ConfigReader {
 
         this.reportPath = string(REPORT_PATH);
         this.maxMessageLength = length(MAX_MESSAGE_LENGTH);
+        this.maxTraceLength = length(MAX_TRACE_LENGTH);
         this.junitVersion = string("junit.version");
         this.reportName = string("ctrf.report.name");
         this.appName = string("ctrf.app.name");
@@ -119,6 +123,15 @@ public class ConfigReader {
 
     public int getMaxMessageLength() {
         return maxMessageLength;
+    }
+
+    /**
+     * Returns the longest {@code trace} the report holds, in characters; 0 means no limit.
+     *
+     * @return {@code ctrf.max.trace.length}, 20000 by default
+     */
+    public int getMaxTraceLength() {
+        return maxTraceLength;
     }
 
     public String getJUnitVersion() {

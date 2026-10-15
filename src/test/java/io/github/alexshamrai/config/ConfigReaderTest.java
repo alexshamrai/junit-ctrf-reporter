@@ -380,4 +380,20 @@ class ConfigReaderTest {
             thread.setContextClassLoader(original);
         }
     }
+
+    @Test
+    @DisplayName("ctrf.max.trace.length defaults to 20000, and 0 means no limit")
+    void maxTraceLengthDefaultsTo20000AndAcceptsZero() {
+        assertEquals(20_000, new ConfigReader(Map.of(), Map.of(), Map.of()).getMaxTraceLength());
+        assertEquals(0, new ConfigReader(Map.of(), Map.of(), Map.of("ctrf.max.trace.length", "0")).getMaxTraceLength());
+        assertEquals(50_000, new ConfigReader(Map.of(), Map.of("CTRF_MAX_TRACE_LENGTH", " 50000 "), Map.of()).getMaxTraceLength());
+        assertEquals(List.of(), logs.messages());
+    }
+
+    @Test
+    @DisplayName("A negative ctrf.max.trace.length warns, and the default is used")
+    void negativeMaxTraceLengthWarnsAndUsesTheDefault() {
+        assertEquals(20_000, new ConfigReader(Map.of(), Map.of(), Map.of("ctrf.max.trace.length", "-1")).getMaxTraceLength());
+        assertTrue(logs.text().contains("ctrf.max.trace.length"), logs.text());
+    }
 }

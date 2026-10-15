@@ -131,6 +131,7 @@ Up to 0.5.0, `CTRF_*` environment variables were ignored. They are now read, so 
 ```properties
 ctrf.report.path=build/test-results/test/ctrf-report.json
 ctrf.max.message.length=300
+ctrf.max.trace.length=20000
 
 junit.version=5.11.3
 
@@ -179,7 +180,8 @@ The following parameters can be configured in the `ctrf.properties` file:
 | Parameter                         | Description                                                  | Default Value      |
 |-----------------------------------|--------------------------------------------------------------|--------------------|
 | `ctrf.report.path`                | The file path where the CTRF report will be saved            | `ctrf-report.json` |
-| `ctrf.max.message.length`         | Maximum length for error messages in the report              | `500`              |
+| `ctrf.max.message.length`         | Maximum length of a failure's `message`, which is the exception's class and message; a longer one is cut and ends with `...` | `500`              |
+| `ctrf.max.trace.length`           | Maximum length of a failure's `trace`, its stack trace; `0` means no limit. A longer trace keeps the lines that fit, a line saying how much was cut, and every `Caused by:` line | `20000`            |
 | `ctrf.calculate.startup.duration` | Whether to calculate and include test suite startup duration | `false`            |
 | `ctrf.run.id`                     | Run identifier shared by the JVMs of one build; see [Parallel Forks, Retries and Reruns](#parallel-forks-retries-and-reruns) | detected |
 | `junit.version`                   | The version of JUnit used in your project                    |                    |

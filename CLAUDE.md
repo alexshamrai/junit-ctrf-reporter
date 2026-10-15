@@ -169,6 +169,7 @@ Configuration priority (highest to lowest):
 **Key Properties:**
 - `ctrf.report.path` - Output file location (default: `ctrf-report.json`)
 - `ctrf.max.message.length` - Max error message length (default: 500)
+- `ctrf.max.trace.length` - Max stack trace length; keeps whole lines and every `Caused by:` line (default: 20000, 0 = no limit)
 - `ctrf.calculate.startup.duration` - Enable startup duration calculation (default: false)
 - `ctrf.run.id` - Run identifier shared by the JVMs of one build (default: a CI variable, the nearest ancestor JVM, or this JVM)
 - `junit.version` - JUnit version for metadata
