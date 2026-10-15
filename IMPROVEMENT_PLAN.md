@@ -37,7 +37,8 @@ Each improvement item includes:
 | [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) Class failure that recovers on retry | Done, with CB-6 | #132 | `9084a83` |
 | [HP-5](#hp-5-conform-to-the-official-ctrf-schema) Conform to the official CTRF schema | Done | #134 | `291f21d` |
 | [TI-4](#ti-4-validate-integration-output-against-the-official-schema-and-junits-own-counts) Official schema and JUnit counts in the validator | Done: the JUnit event-log cross-check and expectations from the run (#135); the official schema (HP-5, #134); CI with 2 forks (CB-6, #132) | #132, #134, #135 | `9084a83`, `291f21d`, `059992b` |
-| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests; CB-2 and MP-5 don't yet, and scenario outputs aren't validated against the official schema yet | | |
+| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests; CB-2 doesn't yet, and scenario outputs aren't validated against the official schema yet | | |
+| [MP-5](#mp-5-read-previous-reports-tolerantly) Read previous reports tolerantly | Superseded by CB-6; not planned for 0.5.0 | #132 | `9084a83` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -81,7 +82,7 @@ Snapshot of 2026-10-08. For the current state, see [Status on `master` — 2026-
 | CQ-3 Long parameter lists | Stale | The referenced path and method don't exist on `master` |
 | CQ-4 Magic constants | Open | `"initializationError"` is defined in four places |
 | TI-1 Concurrency tests | Open, needs update | Sample code uses removed APIs; real data loss is across JVMs (TI-5) |
-| TI-2 File-system error tests | Open | Add the MP-5 cases |
+| TI-2 File-system error tests | Open | The MP-5 cases are superseded with MP-5; CB-6 added the atomic-write and unparsable-report cases |
 | TI-3 Health-test isolation | Partially done | Reset hook in `@BeforeEach`/`@AfterEach`; still a shared singleton |
 | DI-1 Javadoc | Open | Sample Javadoc repeats the wrong flaky rule |
 | DI-2 Architecture doc | Open | Should describe the target architecture below |
@@ -104,7 +105,7 @@ Snapshot of 2026-10-08. For the current state, see [Status on `master` — 2026-
 | [HP-10](#hp-10-make-the-testexecutionlistener-the-single-core-integration-point) | High | Make the listener the single core integration point |
 | [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) | High | Added 2026-10-14: a class failure that recovers on retry stays failed |
 | [HP-12](#hp-12-fill-suite-with-each-tests-container-hierarchy) | Medium | Added 2026-10-15: fill `suite` with each test's container hierarchy (split from HP-5) |
-| [MP-5](#mp-5-read-previous-reports-tolerantly) | Medium | Reading a previous report is brittle: unknown fields drop history, missing `healthy` means unhealthy |
+| [MP-5](#mp-5-read-previous-reports-tolerantly) | Medium | Reading a previous report is brittle: unknown fields drop history, missing `healthy` means unhealthy. Superseded by CB-6 (2026-10-15) |
 | [MP-6](#mp-6-replace-deprecated-extensioncontextstorecloseableresource) | Medium | Deprecated `CloseableResource`; JUnit 6 already logs a warning for every extension user |
 | [MP-7](#mp-7-never-let-reporter-errors-fail-or-mask-user-tests) | Medium | Reporter errors can fail or mask user tests (by inspection) |
 | [MP-8](#mp-8-separate-message-from-trace-bound-the-trace-size) | Medium | `message` holds the stack trace; `trace` is unbounded |
@@ -1893,9 +1894,24 @@ Files to update:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `CtrfReportFileService.java`, `ctrf/model/Environment.java`, `ctrf/model/*.java`, `CtrfReportManager.java`
-**Status**: Open (verified 2026-10-08, except item 3)
+**Status**: Superseded by CB-6 (#132), decided 2026-10-15. Not planned for 0.5.0.
 
-#### Prompt
+#### Why it is superseded
+
+CB-6 changed when and why a previous report is read. Each JVM reads the report under a lock at the end of its execution, and merges into it only if it has the same `runId`. A report of another run, or one without a `runId`, is replaced. So:
+- **Reports from earlier builds or other tools are replaced anyway.** Failing to read one loses nothing, and a missing `healthy` in one no longer matters (findings 1 and 2).
+- **Finding 1's example is gone.** `runId` is now part of the model.
+- **Finding 3 was in code CB-6 rewrote.** The merge copies `start` and `stop` without unboxing them, and falls back if a merge throws.
+- **The library no longer leaves a broken file itself,** because writes are atomic.
+
+What remains needs a downgrade inside one run: an *older* reporter reading a same-run report written by a *newer* one that added a field.
+- The JVMs of one test task (forks, retry rounds, Surefire reruns) share one classpath, and so one reporter version.
+- Different modules write to their own `ctrf-report.json` by default.
+- A mixed-version merge therefore needs two test tasks or modules on different reporter versions, writing to one report path with a shared run id, or local daemon builds across a downgrade without the per-build `ctrf.run.id`. The README already advises against both.
+
+If that ever matters, the fix is one line: ignore unknown fields when reading (`@JsonIgnoreProperties(ignoreUnknown = true)` on the model, or `FAIL_ON_UNKNOWN_PROPERTIES` off), plus a unit test.
+
+#### Prompt (2026-10-08, kept for reference)
 ````
 Wherever a previously written report is still read (the CB-6 merge or the stopgap), reading must be
 tolerant.
@@ -1921,7 +1937,7 @@ Requirements:
 5. Add unit tests for each case (extends TI-2).
 ````
 
-#### Acceptance Criteria
+#### Acceptance Criteria (superseded; kept for reference)
 - [ ] Reports with spec-valid but unknown fields are read without losing data
 - [ ] A missing `healthy` field does not mark the run unhealthy
 - [ ] Unparsable files are preserved, never silently overwritten
@@ -3371,7 +3387,7 @@ The per-task and whole-branch reviews of #135 left these open.
 **Priority**: High
 **Complexity**: Moderate
 **Files**: new tests under `src/test/java/io/github/alexshamrai/scenario/` (or a new integration module), fake test classes
-**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. Still open: CB-2 (nested run), MP-5 (tolerant read), and validating each scenario's output against the official schema and, since TI-4 (#135), against JUnit's event log. HP-5 (#134) pinned that schema at `schema/ctrf.schema.json`; `CtrfSchemaConformanceTest` shows how to load it in tests.
+**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. Still open: CB-2 (nested run) and validating each scenario's output against the official schema and, since TI-4 (#135), against JUnit's event log. HP-5 (#134) pinned that schema at `schema/ctrf.schema.json`; `CtrfSchemaConformanceTest` shows how to load it in tests.
 
 #### Prompt
 ````
@@ -4343,7 +4359,7 @@ Updated 2026-10-08; progress marked 2026-10-14. This replaces the original four-
 ### Already done on `master`
 CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 (its regression is tracked in CB-6), TI-3 (partially)
 
-Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
+Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
 
 ### Phase 1: Stop wrong results and broken builds (small, independent changes)
 1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix. **Done** (#124)
@@ -4359,7 +4375,7 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 9. CB-6: One report merged under a lock, run identity, atomic writes, together with HP-11 (a class failure that recovers on retry stays failed). **Done** (#132)
 10. HP-5: Conform to the official schema. **Done** (#134); filling `suite` is split out as HP-12 (Phase 4)
 11. TI-4: Validator using the official schema and a cross-check against JUnit's counts. **Done** (#134, #135)
-12. MP-5: Read previous reports tolerantly
+12. MP-5: Read previous reports tolerantly. **Superseded by CB-6** (2026-10-15): only an older reporter reading a same-run report from a newer one is left, which needs a setup the README advises against
 
 ### Phase 3: Architecture and robustness
 13. HP-10: Listener as the single core integration point, then revisit HP-1
