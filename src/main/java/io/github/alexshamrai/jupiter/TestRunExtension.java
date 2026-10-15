@@ -11,6 +11,9 @@ import org.junit.jupiter.api.extension.ExtensionContext;
  * <p>
  * Extensions implementing this interface can use it to set up global resources before tests start
  * executing and to tear down or output reports after all tests have completed.
+ * <p>
+ * The end of the run is a {@link RunEndResource} in the root context's store, which every supported JUnit version
+ * closes once, after the last test.
  */
 public interface TestRunExtension extends BeforeAllCallback {
 
@@ -20,12 +23,7 @@ public interface TestRunExtension extends BeforeAllCallback {
             .getOrComputeIfAbsent(this.getClass(),
                 k -> {
                     beforeAllTests(context);
-                    return new ExtensionContext.Store.CloseableResource() {
-                        @Override
-                        public void close() {
-                            afterAllTests(context);
-                        }
-                    };
+                    return new RunEndResource(() -> afterAllTests(context));
                 });
     }
 
