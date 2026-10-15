@@ -2,7 +2,6 @@ package io.github.alexshamrai.launcher;
 
 import io.github.alexshamrai.CtrfReportManager;
 import io.github.alexshamrai.model.TestDetails;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.platform.engine.TestExecutionResult;
@@ -14,8 +13,6 @@ import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.TestPlan;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.util.Collections;
@@ -56,16 +53,12 @@ public class CtrfListenerTest {
     private TestExecutionResult testExecutionResult;
 
     private CtrfListener ctrfListener;
-    private MockedStatic<CtrfReportManager> mockedStaticManager;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
 
-        mockedStaticManager = Mockito.mockStatic(CtrfReportManager.class);
-        mockedStaticManager.when(CtrfReportManager::getInstance).thenReturn(reportManager);
-
-        ctrfListener = new CtrfListener();
+        ctrfListener = new CtrfListener(reportManager);
 
         // The listener reports only while its test plan owns the run
         when(reportManager.startTestRun(any(), anyString())).thenReturn(true);
@@ -77,12 +70,6 @@ public class CtrfListenerTest {
         when(testIdentifier.getUniqueId()).thenReturn(TEST_UNIQUE_ID);
         when(testIdentifier.isTest()).thenReturn(true);
         when(testIdentifier.getTags()).thenReturn(Set.of(TestTag.create("smoke-test")));
-    }
-
-    @AfterEach
-    void tearDown() {
-        // It's crucial to close the static mock after each test to avoid leakage
-        mockedStaticManager.close();
     }
 
     @Test
@@ -102,7 +89,7 @@ public class CtrfListenerTest {
         TestPlan nestedPlan = mock(TestPlan.class);
         when(reportManager.startTestRun(eq(nestedPlan), anyString())).thenReturn(false);
         when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.SUCCESSFUL);
-        var nested = new CtrfListener();
+        var nested = new CtrfListener(reportManager);
 
         nested.testPlanExecutionStarted(nestedPlan);
         nested.executionStarted(testIdentifier);

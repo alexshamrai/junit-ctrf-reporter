@@ -24,11 +24,12 @@ import java.util.stream.Stream;
  * This listener tracks test execution, captures test results, and generates a JSON report
  * following the CTRF standard. It handles test statuses, and captures relevant test metadata.
  * <p>
- * To use this listener, register it with JUnit Platform launcher or via system property:
+ * To use this listener, register it for the whole test run with a file named
+ * {@code META-INF/services/org.junit.platform.launcher.TestExecutionListener} on the test classpath, usually in
+ * {@code src/test/resources}, that contains its class name:
  * <pre>
  * {@code
- * -Djunit.platform.execution.listeners.deactivate=
- * -Djunit.platform.launcher.listeners.discovery=io.github.alexshamrai.launcher.CtrfListener
+ * io.github.alexshamrai.launcher.CtrfListener
  * }
  * </pre>
  * <p>
@@ -56,7 +57,7 @@ import java.util.stream.Stream;
  */
 public class CtrfListener implements TestExecutionListener {
 
-    private final CtrfReportManager reportManager = CtrfReportManager.getInstance();
+    private final CtrfReportManager reportManager;
     private static final String GENERATED_BY = "io.github.alexshamrai.launcher.CtrfListener";
     private static final String INITIALIZATION_ERROR = "initializationError";
     private static final String TEARDOWN_ERROR = "teardownError";
@@ -86,6 +87,21 @@ public class CtrfListener implements TestExecutionListener {
     private volatile boolean ownsRun;
 
     private volatile TestPlan testPlan;
+
+    /**
+     * Creates the listener, reporting through the JVM's report manager. JUnit calls this constructor when it loads the
+     * listener from {@code META-INF/services}.
+     */
+    public CtrfListener() {
+        this(CtrfReportManager.getInstance());
+    }
+
+    /**
+     * Creates the listener with the report manager it reports through, for tests.
+     */
+    CtrfListener(CtrfReportManager reportManager) {
+        this.reportManager = reportManager;
+    }
 
     @Override
     public void testPlanExecutionStarted(TestPlan testPlan) {

@@ -63,8 +63,8 @@ class CtrfReportManagerTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        var composer = new CtrfJsonComposer(configReader, new StartupDurationProcessor(), "Listener");
-        reportManager = new CtrfReportManager(configReader, ctrfReportFileService, testProcessor, composer, RUN_ID);
+        reportManager = new CtrfReportManager(testProcessor, ctrfReportFileService,
+            generator -> new CtrfJsonComposer(configReader, new StartupDurationProcessor(), generator), RUN_ID, true);
         doAnswer(invocation -> {
             UnaryOperator<CtrfJson> merge = invocation.getArgument(0);
             reportOnDisk = merge.apply(reportOnDisk);
@@ -435,6 +435,36 @@ class CtrfReportManagerTest {
 
         assertEquals(List.of("inside"), testIdsOnDisk());
         verify(testProcessor).createTest(anyString(), any(TestDetails.class), anyLong());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Each run's report is composed for the entry point that started it")
+    void eachRunIsComposedForItsOwnGenerator() {
+        Object listenerPlan = new Object();
+        Object extensionRoot = new Object();
+
+        reportManager.startTestRun(listenerPlan, "io.github.alexshamrai.launcher.CtrfListener");
+        reportManager.finishTestRun(listenerPlan);
+        assertEquals("io.github.alexshamrai.launcher.CtrfListener", reportOnDisk.getGeneratedBy());
+
+        reportManager.startTestRun(extensionRoot, "io.github.alexshamrai.jupiter.CtrfExtension");
+        reportManager.finishTestRun(extensionRoot);
+        assertEquals("io.github.alexshamrai.jupiter.CtrfExtension", reportOnDisk.getGeneratedBy());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A manager created unhealthy writes an unhealthy report")
+    void managerCreatedUnhealthyWritesAnUnhealthyReport() {
+        var unhealthy = new CtrfReportManager(testProcessor, ctrfReportFileService,
+            generator -> new CtrfJsonComposer(configReader, new StartupDurationProcessor(), generator), RUN_ID, false);
+        unhealthy.startTestRun("Listener");
+
+        try (MockedStatic<EnvironmentHealthTracker> healthTracker = Mockito.mockStatic(EnvironmentHealthTracker.class)) {
+            healthTracker.when(EnvironmentHealthTracker::isEnvironmentVariableUnhealthy).thenReturn(false);
+            unhealthy.finishTestRun();
+        }
+
+        assertFalse(reportOnDisk.getResults().getEnvironment().isHealthy());
     }
 
     @org.junit.jupiter.api.Test

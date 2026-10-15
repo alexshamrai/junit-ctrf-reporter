@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
@@ -20,8 +21,8 @@ import static io.github.alexshamrai.ctrf.model.Test.TestStatus.SKIPPED;
 /**
  * Coordinates CTRF test report generation and test execution tracking.
  * <p>
- * This class follows the singleton pattern and serves as the main coordinator
- * for the CTRF reporting library. It delegates specific responsibilities to
+ * This class is the main coordinator of the CTRF reporting library. {@link #getInstance()} is the JVM's default
+ * instance; its collaborators are passed to its constructor. It delegates specific responsibilities to
  * specialized classes:
  * <ul>
  *   <li>{@link TestRun} - one run's owner, start time, and the attempts and container successes it recorded</li>
@@ -42,44 +43,56 @@ public final class CtrfReportManager {
      */
     private static final Object UNNAMED_OWNER = new Object();
 
-    private static final CtrfReportManager INSTANCE = new CtrfReportManager();
+    private static final CtrfReportManager INSTANCE = createDefault();
 
-    private final ConfigReader configReader;
-    private final CtrfReportFileService fileService;
     private final TestProcessor testProcessor;
-    private final CtrfJsonComposer ctrfJsonComposer;
+    private final CtrfReportFileService fileService;
+    private final Function<String, CtrfJsonComposer> composerFactory;
     private final String runId;
 
     private final AtomicReference<TestRun> activeRun = new AtomicReference<>();
-    private final AtomicBoolean isEnvironmentHealthy = new AtomicBoolean(true);
+    private final AtomicBoolean isEnvironmentHealthy;
 
-    private CtrfReportManager() {
-        this.configReader = new ConfigReader();
-        this.fileService = new CtrfReportFileService(configReader);
-        this.testProcessor = new TestProcessor(configReader);
-        this.ctrfJsonComposer = null;
-        this.runId = RunIdResolver.resolve(configReader);
-
-        if (EnvironmentHealthTracker.isEnvironmentVariableUnhealthy()) {
-            isEnvironmentHealthy.set(false);
-        }
+    /**
+     * Creates a manager from its collaborators. The default instance and the tests both use this constructor.
+     *
+     * @param testProcessor   turns JUnit results into CTRF tests
+     * @param fileService     reads and writes the report
+     * @param composerFactory makes the composer of a run, given the run's generator ({@code generatedBy})
+     * @param runId           this JVM's run id
+     * @param healthy         whether the environment is healthy to begin with
+     */
+    CtrfReportManager(TestProcessor testProcessor,
+                      CtrfReportFileService fileService,
+                      Function<String, CtrfJsonComposer> composerFactory,
+                      String runId,
+                      boolean healthy) {
+        this.testProcessor = testProcessor;
+        this.fileService = fileService;
+        this.composerFactory = composerFactory;
+        this.runId = runId;
+        this.isEnvironmentHealthy = new AtomicBoolean(healthy);
     }
 
     /**
-     * Package-private constructor for testing purposes, allowing dependency injection.
+     * Builds the JVM's default manager from this JVM's configuration.
      */
-    CtrfReportManager(ConfigReader configReader,
-                      CtrfReportFileService ctrfReportFileService,
-                      TestProcessor testProcessor,
-                      CtrfJsonComposer ctrfJsonComposer,
-                      String runId) {
-        this.configReader = configReader;
-        this.fileService = ctrfReportFileService;
-        this.testProcessor = testProcessor;
-        this.ctrfJsonComposer = ctrfJsonComposer;
-        this.runId = runId;
+    private static CtrfReportManager createDefault() {
+        var config = new ConfigReader();
+        return new CtrfReportManager(
+            new TestProcessor(config),
+            new CtrfReportFileService(config),
+            generator -> new CtrfJsonComposer(config, new StartupDurationProcessor(), generator),
+            RunIdResolver.resolve(config),
+            !EnvironmentHealthTracker.isEnvironmentVariableUnhealthy());
     }
 
+    /**
+     * Returns the JVM's default manager. The entry points' no-argument constructors, which JUnit calls, and
+     * {@link EnvironmentHealthTracker} use it, so that they all report into the same run.
+     *
+     * @return the default manager
+     */
     public static CtrfReportManager getInstance() {
         return INSTANCE;
     }
@@ -273,19 +286,13 @@ public final class CtrfReportManager {
         List<ContainerSuccess> successes = run.state().getAllContainerSuccesses();
         long startTime = run.startTime();
         boolean healthy = isEnvironmentHealthy.get();
-        CtrfJsonComposer composer = composer(run.generator());
+        CtrfJsonComposer composer = composerFactory.apply(run.generator());
 
         fileService.update(existing -> {
             var merged = ReportMerger.merge(existing, runId, attempts, successes, startTime, testRunStopTime, healthy);
             var summary = SummaryUtil.createSummary(merged.tests(), merged.start(), merged.stop());
             return composer.generateCtrfJson(summary, merged.tests(), merged.healthy(), runId);
         });
-    }
-
-    private CtrfJsonComposer composer(String generator) {
-        return ctrfJsonComposer != null
-            ? ctrfJsonComposer
-            : new CtrfJsonComposer(configReader, new StartupDurationProcessor(), generator);
     }
 
     private void refreshEnvironmentHealthFromEnvVar() {
