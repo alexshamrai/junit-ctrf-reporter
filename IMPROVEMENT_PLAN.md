@@ -1012,9 +1012,10 @@ Benefits:
 - new: `schema/ctrf.schema.json` and `schema/README.md`;
 - build: `build.gradle`, `integration-ctrf-validator/build.gradle`;
 - validator module: `integration-ctrf-validator/src/main/java/io/github/alexshamrai/integration/JsonSchemaValidator.java`, `.../integration/CtrfSchemaValidationTest.java`, `.../integration/CtrfLogicTest.java`, and its bundled `ctrf-schema.json` (deleted);
-- docs: `README.md`, `CLAUDE.md`.
+- docs: `README.md`, `CLAUDE.md`, `INTEGRATION_TESTS.md`.
 
 **Status**: Designed 2026-10-15 against `master` @ `c4093eb`; replaces the 2026-10-08 prompt.
+**Implementation plan**: [`docs/plans/2026-10-15-hp-5-ctrf-schema.md`](docs/plans/2026-10-15-hp-5-ctrf-schema.md)
 
 #### Why
 
