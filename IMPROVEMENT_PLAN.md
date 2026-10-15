@@ -3212,47 +3212,135 @@ Benefits:
 
 **Priority**: High
 **Complexity**: Moderate
-**Files**: `integration-ctrf-validator/build.gradle`, `integration-ctrf-validator/src/test/resources/schema/ctrf-schema.json` (deleted by HP-5), `.../integration/BaseIntegrationTest.java`, `.../integration/CtrfLogicTest.java`, `.../integration/JsonSchemaValidator.java`, CI workflows
-**Status**: Partially done. Requirements 1 and 6 are done, which fixes problems 1 and 2:
+**Files**:
+- integration modules: `integration-tests-listener/build.gradle`, `integration-tests-extension/build.gradle`;
+- validator module: `integration-ctrf-validator/build.gradle`, `.../integration/JunitEvents.java` (new, `src/main`), and in `src/test`: `BaseIntegrationTest.java`, `CtrfLogicTest.java`, `JunitCrossCheckTest.java` (new), `JunitEventsTest.java` (new);
+- CI: `.github/workflows/integration-listener.yml`, `.github/workflows/integration-extension.yml`;
+- docs: `INTEGRATION_TESTS.md`, `CLAUDE.md`.
+
+**Status**: Partially done; the rest designed 2026-10-15 against `master` @ `291f21d`, replacing the 2026-10-08 prompt. Requirements 1 and 6 are done, which fixed problems 1 and 2:
 - requirement 1 shipped with HP-5 (#134: `291f21d`): the validator checks reports against the pinned official schema (`schema/ctrf.schema.json`) with `com.networknt:json-schema-validator` in draft-07 mode, and rejects `filepath` and a string `buildNumber`;
 - requirement 6: CI runs the listener integration with 2 forks (CB-6, #132).
 
-Requirements 2–5 are open: the cross-check against JUnit's XML, assertions by `testId`, a real default report path, and configurable CI expectations.
+#### Why
 
-#### Prompt
-````
-As it stands, the integration validator cannot detect CB-5, CB-6, HP-5 or HP-8. Make it able to.
+The 2026-10-08 prompt listed five problems and six requirements. After HP-5 and CB-6, three problems remain:
+- **Nothing independent checks the report's tests.** The validator compares the report only with numbers written by hand (28/14/7/7 and 22/14/5/3). It can't say which test is missing or has the wrong status, and the numbers only catch a bug like CB-5, CB-6a or HP-8 if whoever wrote them knew the right count.
+- **Some assertions pass when their test is missing.** `CtrfLogicTest.verifyTestStatuses` uses `findFirst().ifPresent(...)` and matches names with `contains()`, so a missing test passes, and "Second failed test" (the display name of `secondFailedTest()`) is never checked.
+- **The validator only passes with CI's exact command line.**
+  - `BaseIntegrationTest.DEFAULT_REPORT_PATH` is a sentence, not a path.
+  - It expects exactly 2 threads, build name `system-build`, a GitHub Actions build URL, and, for the listener, `ENV_HEALTHY=false`.
+  - It tells the listener from the extension by whether the report path contains "listener".
 
-Problems:
-1. The bundled schema is a looser copy of the official one, so `filepath` and a string buildNumber pass
-   (HP-5).
-2. The validator library (com.github.java-json-tools:json-schema-validator 2.2.14) only supports
-   draft-04, while both schemas declare draft-07.
-3. CtrfLogicTest.verifyTestStatuses (lines 31-40) uses findFirst().ifPresent(...), so a missing test
-   passes silently. It also matches with contains(), so "Second failed test" (the display name of
-   secondFailedTest()) is never checked.
-4. BaseIntegrationTest.DEFAULT_REPORT_PATH (lines 14-15) is a sentence, not a path. Running
-   `./gradlew :integration-ctrf-validator:test` without -Dctrf.report.path therefore always fails.
-5. Several tests only pass with the exact CI parameters: exactly 2 threads, build name "system-build",
-   and ENV_HEALTHY=false for the listener.
+  A plain local run fails, and so would CI's manual trigger with another thread count.
 
-Requirements:
-1. Use a pinned copy of the official schema and a draft-07 validator (shared with HP-5).
-2. Cross-check against JUnit's own results for the same run: compare CTRF tests/failed/skipped with the
-   Gradle JUnit XML in build/test-results/test (sum of tests, failures, errors and skipped; folded per
-   logical test once HP-6 is done). This would have caught CB-5, CB-6a and HP-8 automatically.
-3. Assertions must require the test to be present, and match by testId (CB-7) rather than by a
-   display-name substring.
-4. Use a real default path, e.g. ../integration-tests-listener/build/test-results/ctrf-report.json, or
-   fail with a clear message.
-5. Make the CI-specific expectations configurable through system properties.
-6. Add a CI variant with maxParallelForks=2 (CB-6).
-````
+**Gradle's JUnit XML can't be the independent check,** although the 2026-10-08 prompt suggested it. Measured on 2026-10-15 with CI's flags:
+- The extension's XML folds by (class, name) to exactly the report's 22 tests: 29 executions, 14 passed, 5 failed, 3 skipped, 1 flaky.
+- The listener's XML folds to 27 where the report correctly has 28. Gradle names both of `BrokenSourceTest`'s failing containers (`usesData(int)` and `factory()`) `initializationError`, and its XML has no unique IDs to tell them apart.
+- Gradle also names a class's `@AfterAll` failure `executionError`, where the report says `teardownError`.
+
+**JUnit's own event log can be.** JUnit Platform's Open Test Reporting (`junit-platform-reporting`) writes every node's unique ID, which is the report's `testId`, and each start and finish with its result.
+- Measured on 2026-10-15 with a Gradle init script: JUnit 6.1.3 writes `open-test-report.xml` into `junit.platform.reporting.output.dir`. With a plain directory, each JVM overwrites the file and only the retry round's 11 events survive. With `{uniqueNumber}` in the path, each JVM gets its own directory: 4 for the listener, which are 2 forks and 2 JVMs in the retry round.
+- Folded by unique ID, the listener's events give 24 entries plus 2 skipped classes, whose 4 tests the report lists as skipped. That is 28, and every `testId`, final status, `retries` count and `flaky` flag agrees with the report. The extension's events give exactly its 22 entries.
+
+#### Decisions (2026-10-15)
+
+- **The independent check is JUnit's event log, matched by `testId`.**
+  - Rejected: Gradle's JUnit XML totals, for the folding problem above and because they can't check `retries` or `flaky` per test.
+  - Rejected: both together, which adds code and keeps the naming caveat.
+- **CI-specific expectations come from the inputs that produced the report:** the same `-Dthreads` and `-Dctrf.build.*` flags, the same `ENV_HEALTHY` variable, and the module's own `ctrf.properties`.
+  - Rejected: separate `validator.expected.*` properties defaulting to CI's values, which keep local runs failing without flags.
+  - Rejected: dropping the CI-only checks, which leaves nothing that checks end to end that Gradle forwards `-Dctrf.*` to the test JVM.
+- **`CtrfLogicTest` is trimmed and keyed by `testId`.** Checks that the cross-check now makes are deleted. Checks of what JUnit can't know stay, and look the test up by `testId`. The fixed summary counts stay as a guard on the fake test set and on the number of tests inside skipped classes.
+- **No change to the published library,** so no version bump and no release notes.
+
+#### The JUnit cross-check
+
+**Integration modules** (listener and extension `build.gradle`, test-only):
+- `testRuntimeOnly 'org.junit.platform:junit-platform-reporting'`, versioned by the JUnit BOM;
+- the test task sets `junit.platform.reporting.open.xml.enabled=true` and `junit.platform.reporting.output.dir` to `build/test-results/junit-platform/{uniqueNumber}`, so each JVM writes its own `open-test-report.xml`.
+
+**`JunitEvents`** (new, in the validator module's `src/main`, next to `JsonSchemaValidator`):
+- It reads every `open-test-report.xml` under the events directory with the JDK's XML parser, so no new dependency.
+- It pairs started and finished events by unique ID, and orders each node's attempts by finish time.
+- It derives what the report must contain:
+  - **every test node,** with its final status (`SUCCESSFUL` → passed, `FAILED` → failed, `ABORTED` and `SKIPPED` → skipped), `retries` (its attempts minus 1, absent when 0) and `flaky` (the final attempt passed after an earlier failure);
+  - **every container below the engine that failed at least once,** by the same rules. That covers CB-5's failed containers and HP-11's recovered class failures;
+  - **skipped and aborted containers,** separately. JUnit never starts their tests, so its log can't list them; the report must have at least one entry under each, all skipped (HP-8).
+
+**`JunitCrossCheckTest`** (new) checks the report against `JunitEvents`, by `testId`:
+- every entry JUnit's events expect is present, with the same status, `retries` and `flaky`;
+- the report has no other entries, except tests under a skipped or aborted container;
+- each skipped or aborted container has at least one entry under it, all skipped;
+- a missing or empty events directory fails with a message saying how to produce it.
+
+The events directory defaults to `junit-platform/` next to the report (`<module>/build/test-results/junit-platform`). `-Dctrf.junit.events.dir` overrides it.
+
+#### Inputs and CI expectations
+
+**Inputs:**
+- **Report:** `-Dctrf.report.path`, defaulting to `../integration-tests-listener/build/test-results/ctrf-report.json`, relative to the validator module, which is the working directory of its tests. A missing file fails with "No report at <path>. Run `./gradlew :integration-tests-listener:test` first, or pass `-Dctrf.report.path=…`".
+- **Module under test:** the directory that contains the report's `build/` directory, `integration-tests-listener` or `integration-tests-extension`. Any other location fails with a clear message.
+  - It replaces the "path contains listener" heuristic in `verifyGeneratedByFieldIsCorrect`, which now checks `generatedBy` against the module's entry point.
+  - It also replaces `isListenerReport()`'s use of `generatedBy`: listener-only checks use the module.
+
+**Expectations from the run's own inputs:**
+- **Threads:** `-Dthreads`, the property the integration modules read. Unset or 1: exactly one distinct thread name. N > 1: between 2 and N. The validator's `build.gradle` forwards `threads` in addition to `ctrf.*`.
+- **Build name, number and URL:** the `-Dctrf.build.*` values if the validator got them, else the module's `src/test/resources/ctrf.properties`. That's the same precedence the library applies. The number is compared as a `Long`.
+- **Health:** unhealthy if `ENV_HEALTHY=false`, or if the module is the extension, whose `FirstLongTest` marks the environment unhealthy; otherwise healthy.
+
+**Running it:**
+- **CI:** each validator step passes the same `-Dthreads` and `-Dctrf.build.*` flags as its generating step. The listener job keeps `ENV_HEALTHY=false` set for the whole job.
+- **Locally:** `./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test` passes with no flags. Flags are passed once to that one command, and both tasks receive them.
+  - For the extension, add `-Dctrf.report.path=../integration-tests-extension/build/test-results/ctrf-report.json`.
+  - That flag also reaches the extension's own test JVM. Resolved from that module's directory it names the same file, so it is harmless; the docs say so.
+
+#### `CtrfLogicTest`
+
+- **Deleted:** `verifyTestStatuses`, and the status, `retries` and `flaky` assertions elsewhere that the cross-check now makes.
+- **Kept, but looked up by `testId`:** checks of what JUnit can't know.
+  - messages ("Simulated initialization failure" and others), `rawStatus` "aborted", the contents of `retryAttempts`;
+  - durations, thread IDs, and the `testId` shape of class failures;
+  - the tests of skipped classes and their reason.
+
+  One helper builds the full ID from the class and its last segment, for example `testWithId("DummyFailedTest", "[method:secondFailedTest()]")`, and fails if the entry is missing.
+- **Kept as they are:** the fixed summary counts, the summary arithmetic, and the `runId` check.
+
+#### Keeping JUnit's log and the report in step
+
+- **The integration test task deletes `build/test-results/junit-platform` in a `doFirst` action.** That runs once per task, before the first retry round, so directories from earlier builds don't pile up.
+- **The integration modules set a per-build `ctrf.run.id`,** using the snippet the README documents since CB-6.
+  - A second build without `clean` then replaces the report, as the event log is replaced. Without it, the Gradle daemon merges both builds into one report while the log holds only the last build, and the cross-check fails.
+  - The forks and retry rounds of one build share the id, so they still merge.
+
+#### Tests
+
+Each new check is watched failing first:
+- **`JunitEventsTest`:** unit tests on inline XML samples, written before `JunitEvents` exists. They cover a retried test, a flaky test, a recovered container, a skipped class, an aborted test, and attempts spread over several JVM files.
+- **Lost data across forks:** a worktree at `58e36f0` (before CB-6). A Gradle init script adds the event log and 2 forks to the old build without editing it. `JunitCrossCheckTest` must fail and name the lost tests. In CB-6's measurements, that commit lost 12 of 28 tests with 2 forks.
+- **A plain local run:** `./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test` with no flags fails on today's validator (the default path, the thread count, the build values, health), and must pass on the new one.
+- **Final runs:**
+  - the listener with 2 forks and the extension, each with CI's flags, plus the validator;
+  - the listener with `-Dthreads=4`;
+  - the same listener command run twice without `clean`;
+  - `./gradlew :build` and `compat/run.sh 5.10.5 5.14.4 6.1.3`, which this doesn't touch.
+
+#### Docs and delivery
+
+- **`INTEGRATION_TESTS.md`:** the one-command local run, how flags reach both tasks, the event log, and what the cross-check checks.
+- **`CLAUDE.md`:** the integration-test commands.
+- **`IMPROVEMENT_PLAN.md`,** after the merge: TI-4 done.
+- **Delivery:** branch `test/ti-4-junit-cross-check` from `master`, one commit, and a PR description file.
+
+**Out of scope:** TI-5's validation of each scenario's output against the schema; Windows; the Maven compat consumers.
 
 #### Acceptance Criteria
-- [ ] The validator fails on today's `master` output (`filepath`, `buildNumber`, data lost across forks). The schema part is shown: on the pre-HP-5 listener report it fails with 29 errors (HP-5, #134). Lost data is still only caught through the fixed counts, until the JUnit cross-check (requirement 2) exists
+- [ ] The validator fails on output that lost tests across forks (shown on `58e36f0`) and on output that fails the official schema (shown with HP-5, #134: 29 errors on the pre-HP-5 listener report)
 - [x] The validator passes once HP-5 and CB-6 are fixed
-- [ ] The validator runs locally with documented defaults
+- [ ] `./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test` passes with no flags, and with CI's flags passed once
+- [ ] Every report entry is checked against JUnit's event log by `testId`: presence, final status, `retries` and `flaky`
+- [ ] No assertion passes when the test it checks is missing
+- [ ] CI-specific values come from the run's own inputs: CI passes the same flags to both steps, and a run with another thread count passes
 
 ---
 
