@@ -9,6 +9,8 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestWatcher;
 
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * JUnit 5 extension that generates test reports in the CTRF (Common Test Report Format) format.
@@ -46,19 +48,43 @@ import java.util.Optional;
  * class-level condition, never reach the extension and are missing from its report. The JUnit Platform
  * listener {@code io.github.alexshamrai.launcher.CtrfListener} reports them as skipped.
  * <p>
+ * The reporter never changes the outcome of a test or a class: if its own work fails in any callback, the error is
+ * logged as a warning through {@code java.util.logging}, and the test runs on. Only a {@link VirtualMachineError},
+ * such as an {@link OutOfMemoryError}, propagates.
+ * <p>
  * The extension can be configured through a {@code ctrf.properties} file placed in the classpath.
  * See the README for all available configuration options.
  */
 public class CtrfExtension implements TestRunExtension, AfterAllCallback, BeforeEachCallback, TestWatcher {
 
     private static final ExtensionContext.Namespace NAMESPACE = ExtensionContext.Namespace.create(CtrfExtension.class);
-    private final CtrfReportManager reportManager = CtrfReportManager.getInstance();
+    private static final Logger LOGGER = Logger.getLogger(CtrfExtension.class.getName());
     private static final String GENERATED_BY = "io.github.alexshamrai.jupiter.CtrfExtension";
     private static final String INITIALIZATION_ERROR = "initializationError";
     private static final String TEARDOWN_ERROR = "teardownError";
 
+    private final CtrfReportManager reportManager;
+
+    /**
+     * Creates the extension, reporting through the JVM's report manager. JUnit calls this constructor.
+     */
+    public CtrfExtension() {
+        this(CtrfReportManager.getInstance());
+    }
+
+    /**
+     * Creates the extension with the report manager it reports through, for tests.
+     */
+    CtrfExtension(CtrfReportManager reportManager) {
+        this.reportManager = reportManager;
+    }
+
     @Override
     public void beforeAll(ExtensionContext context) {
+        guarded("beforeAll", context, () -> startClass(context));
+    }
+
+    private void startClass(ExtensionContext context) {
         TestRunExtension.super.beforeAll(context);
         context.getParent().ifPresent(CtrfExtension::markChildrenStarted);
         context.getStore(NAMESPACE).put(context.getUniqueId(), new ClassState(System.currentTimeMillis()));
@@ -75,25 +101,27 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
      */
     @Override
     public void afterAll(ExtensionContext context) {
-        context.getExecutionException().ifPresentOrElse(
+        guarded("afterAll", context, () -> context.getExecutionException().ifPresentOrElse(
             error -> reportClassFailure(context, error),
-            () -> reportClassSuccess(context));
+            () -> reportClassSuccess(context)));
     }
 
     @Override
     public void beforeAllTests(ExtensionContext context) {
-        reportManager.startTestRun(GENERATED_BY);
+        guarded("beforeAllTests", context, () -> reportManager.startTestRun(GENERATED_BY));
     }
 
     @Override
     public void afterAllTests(ExtensionContext context) {
-        reportManager.finishTestRun();
+        guarded("afterAllTests", context, () -> reportManager.finishTestRun());
     }
 
     @Override
     public void beforeEach(ExtensionContext context) {
-        markChildrenStarted(context);
-        reportManager.onTestStart(createTestDetails(context));
+        guarded("beforeEach", context, () -> {
+            markChildrenStarted(context);
+            reportManager.onTestStart(createTestDetails(context));
+        });
     }
 
     // The watcher callbacks pass the test's full identity: when another extension failed before this
@@ -102,26 +130,34 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
     // as having started tests.
     @Override
     public void testSuccessful(ExtensionContext context) {
-        markChildrenStarted(context);
-        reportManager.onTestSuccess(createTestDetails(context));
+        guarded("testSuccessful", context, () -> {
+            markChildrenStarted(context);
+            reportManager.onTestSuccess(createTestDetails(context));
+        });
     }
 
     @Override
     public void testFailed(ExtensionContext context, Throwable cause) {
-        markChildrenStarted(context);
-        reportManager.onTestFailure(createTestDetails(context), cause);
+        guarded("testFailed", context, () -> {
+            markChildrenStarted(context);
+            reportManager.onTestFailure(createTestDetails(context), cause);
+        });
     }
 
     @Override
     public void testAborted(ExtensionContext context, Throwable cause) {
-        markChildrenStarted(context);
-        reportManager.onTestAborted(createTestDetails(context), cause);
+        guarded("testAborted", context, () -> {
+            markChildrenStarted(context);
+            reportManager.onTestAborted(createTestDetails(context), cause);
+        });
     }
 
     @Override
     public void testDisabled(ExtensionContext context, Optional<String> reason) {
-        markChildrenStarted(context);
-        reportManager.onTestSkipped(createTestDetails(context), reason);
+        guarded("testDisabled", context, () -> {
+            markChildrenStarted(context);
+            reportManager.onTestSkipped(createTestDetails(context), reason);
+        });
     }
 
     private void reportClassFailure(ExtensionContext context, Throwable error) {
@@ -140,6 +176,29 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
     private void reportClassSuccess(ExtensionContext context) {
         ClassState state = classStateOf(context);
         reportManager.onContainerSuccess(context.getUniqueId(), state != null ? state.startTime() : null);
+    }
+
+    /**
+     * Runs reporter work so that it can't change the outcome of a test or a class: anything it throws is logged as a
+     * warning and dropped, except a {@link VirtualMachineError}, which the JVM can't recover from.
+     */
+    private static void guarded(String callback, ExtensionContext context, Runnable work) {
+        try {
+            work.run();
+        } catch (VirtualMachineError e) {
+            throw e;
+        } catch (Throwable e) {
+            LOGGER.log(Level.WARNING, e, () -> "The CTRF reporter failed in " + callback + " of " + uniqueIdOf(context)
+                + "; the test's outcome is unchanged, but the report may miss it");
+        }
+    }
+
+    private static String uniqueIdOf(ExtensionContext context) {
+        try {
+            return context.getUniqueId();
+        } catch (RuntimeException e) {
+            return "a context without a unique ID";
+        }
     }
 
     /**
