@@ -102,6 +102,7 @@ Snapshot of 2026-10-08. For the current state, see [Status on `master` — 2026-
 | [HP-9](#hp-9-extension-must-not-lose-test-identity-unknown-test) | High | The extension reports "Unknown Test" when an earlier extension's `beforeEach` fails |
 | [HP-10](#hp-10-make-the-testexecutionlistener-the-single-core-integration-point) | High | Make the listener the single core integration point |
 | [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) | High | Added 2026-10-14: a class failure that recovers on retry stays failed |
+| [HP-12](#hp-12-fill-suite-with-each-tests-container-hierarchy) | Medium | Added 2026-10-15: fill `suite` with each test's container hierarchy (split from HP-5) |
 | [MP-5](#mp-5-read-previous-reports-tolerantly) | Medium | Reading a previous report is brittle: unknown fields drop history, missing `healthy` means unhealthy |
 | [MP-6](#mp-6-replace-deprecated-extensioncontextstorecloseableresource) | Medium | Deprecated `CloseableResource`; JUnit 6 already logs a warning for every extension user |
 | [MP-7](#mp-7-never-let-reporter-errors-fail-or-mask-user-tests) | Medium | Reporter errors can fail or mask user tests (by inspection) |
@@ -1005,46 +1006,128 @@ Benefits:
 
 **Priority**: High
 **Complexity**: Moderate
-**Files**: `ctrf/model/*.java`, `CtrfJsonComposer.java`, `config/CtrfConfig.java`, `config/ConfigReader.java`, `integration-ctrf-validator` (schema and validator)
-**Status**: Open (verified 2026-10-08)
+**Files**:
+- model: `ctrf/model/Test.java`, `ctrf/model/Environment.java`, `ctrf/model/Summary.java`, `ctrf/model/CtrfJson.java`;
+- production code: `CtrfJsonComposer.java`, `util/SummaryUtil.java`, and every user of `Test.getFilepath()` (`TestProcessor`, `AttemptFolder`, `ReportMerger`, their tests, the scenario helpers and `integration-ctrf-validator`);
+- new: `schema/ctrf.schema.json` and `schema/README.md`;
+- build: `build.gradle`, `integration-ctrf-validator/build.gradle`;
+- validator module: `integration-ctrf-validator/src/main/java/io/github/alexshamrai/integration/JsonSchemaValidator.java`, `.../integration/CtrfSchemaValidationTest.java`, `.../integration/CtrfLogicTest.java`, and its bundled `ctrf-schema.json` (deleted);
+- docs: `README.md`, `CLAUDE.md`.
 
-#### Prompt
-````
-Make every generated report valid against the official CTRF JSON schema, and validate against that
-schema in CI.
+**Status**: Designed 2026-10-15 against `master` @ `c4093eb`; replaces the 2026-10-08 prompt.
 
-Reference: https://github.com/ctrf-io/ctrf, files schema/ctrf.schema.json and spec/ctrf.md (spec 0.1.0,
-released 2026-10-03). The root, results, summary, environment and test objects all have
-additionalProperties: false. Unknown fields are only allowed inside `extra`.
+#### Why
 
-Verified: a typical report (2 classes, 10 tests, -Dctrf.build.number=123) has 11 validation errors:
-- 10 x "Additional properties are not allowed ('filepath' was unexpected)". The spec field is
-  `filePath` (ctrf/model/Test.java:34).
-- "'123' is not of type 'integer'" at /results/environment/buildNumber (Environment.java:20 is a String).
-The schema bundled in integration-ctrf-validator is a looser copy (no additionalProperties: false,
-buildNumber typed as string), so the same file passes it with 0 errors.
+On 2026-10-15, I validated `master`'s integration reports, generated with CI's flags, against the official schema (`ctrf-io/ctrf` v0.2.0) with a draft-07 validator:
+- **Listener report: 29 errors.** Each of its 28 tests has "Additional properties are not allowed ('filepath' was unexpected)", because the spec field is `filePath`. There is also "'777' is not of type 'integer'" at `results/environment/buildNumber`.
+- **Extension report: 23 errors.** The same two problems: 22 `filepath` errors and the `buildNumber` error.
+- **`specVersion` is `"0.0.0"`.** That matches the schema's pattern but is wrong.
+- **A latent mismatch:** `Test.suite` is a `String`, while the spec wants an array of strings. It is always null today, so it never shows.
 
-Requirements:
-1. Serialize `filePath` (@JsonProperty("filePath")), and still accept the legacy `filepath` when reading
-   (@JsonAlias).
-2. Make buildNumber an Integer by parsing the configured value. If it isn't numeric, log a warning and
-   put the raw value into environment.extra instead of emitting invalid JSON.
-3. Make `suite` a List<String>, ordered top-level to immediate parent, filled from the TestPlan
-   ancestors (listener) or the ExtensionContext parents (extension).
-4. Set `specVersion` to the version actually targeted ("0.1.0"), as a constant updated deliberately.
-5. Add the spec fields other items need: testId (CB-7), retryAttempts (HP-6), summary.flaky and
-   summary.duration, root runId and environment.shardId (CB-6), rawStatus (HP-7).
-6. Replace the bundled schema with a pinned copy of the official one (record the commit), and validate
-   with a draft-07 capable validator such as com.networknt:json-schema-validator (TI-4).
-7. Add a fast unit test in the main module that serializes a fully populated CtrfJson and validates it
-   against the pinned schema.
-````
+The integration validator can't detect any of this (TI-4, points 1 and 2):
+- its bundled schema is a looser copy, without `additionalProperties: false` and with `buildNumber` typed as a string;
+- it uses a draft-04 library, `com.github.java-json-tools:json-schema-validator` 2.2.14, although the schemas are draft-07.
+
+Spec versions: 0.1.0 was tagged on 2026-10-03 and 0.2.0 on 2026-10-10. The only schema change in 0.2.0 is an optional `attemptId` on test objects.
+
+#### Decisions (2026-10-15)
+
+- **Conformance only.** `suite` becomes a list but stays unset. Filling it is [HP-12](#hp-12-fill-suite-with-each-tests-container-hierarchy).
+- **Target spec 0.2.0,** pinned to tag v0.2.0, commit `e325eb3`.
+- **A non-numeric `ctrf.build.number`** goes to `environment.buildId`, with one warning on stderr.
+  - Rejected: putting it under `environment.extra`, which consumers wouldn't show as a build identifier.
+  - Rejected: dropping it.
+- **The Java field is renamed too:** `filepath` becomes `filePath` (`getFilePath()`), with `@JsonAlias("filepath")` for reading.
+  - Rejected: renaming only the JSON property, which would leave the Java getter different from the JSON and from `TestDetails.filePath()`.
+- **The validator is `com.networknt:json-schema-validator` 3.0.8** in draft-07 mode.
+  - It brings Jackson 3, which lives in its own `tools.jackson` package, so it can share a classpath with the library's Jackson 2.
+  - In the main module it is a test dependency only.
+  - Rejected: the 1.5.x line, which uses Jackson 2, because Renovate would later propose the API-breaking jump to 3.x.
+- **No new runtime dependencies.**
+- **Not released on its own.** It ships with Phase 2 as 0.5.0, and the PR has no version bump.
+
+#### Report and model
+
+| Field | Today | After HP-5 |
+|---|---|---|
+| `Test.filePath` | Java and JSON `filepath` | Java and JSON `filePath` (`getFilePath()`); `@JsonAlias("filepath")` keeps old reports readable. Every usage is renamed. |
+| `Test.suite` | `String`, never set | `List<String>`, still never set (HP-12) |
+| `Environment.buildNumber` | `String` | `Long`: the configured value, trimmed, if it is digits only and fits in a `long` |
+| `Environment.buildId` | not present | `String`: any other non-blank `ctrf.build.number`, with one warning on stderr. A blank value sets neither field. |
+| `CtrfJson.specVersion` | `"0.0.0"` | `CtrfJson.SPEC_VERSION = "0.2.0"`, changed only together with the pinned schema |
+| `Summary.duration` | not present | `long`, stop minus start, always written (optional in the spec, like `flaky`) |
+
+- `ConfigReader.getBuildNumber()` stays a `String`, since configuration is text. `CtrfJsonComposer` parses it where it builds the environment.
+- An old report with `"buildNumber": "777"` still reads, because Jackson converts numeric strings to numbers by default. An old report with a non-numeric string there fails to parse and counts as unreadable. Under CB-6 such a report has no `runId`, so it would be replaced anyway. Lenient reading belongs to MP-5.
+- Everything else in today's reports already validates.
+
+#### Validation
+
+**One pinned copy of the official schema**
+- `schema/ctrf.schema.json` at the repository root is the exact file from `ctrf-io/ctrf` tag v0.2.0, commit `e325eb3`.
+- `schema/README.md` records the source URL, the tag and the commit. It also gives the update rule: replace the file and change `CtrfJson.SPEC_VERSION` in the same commit.
+- Both the main module's tests and the integration validator load this file, so there is no second copy to drift.
+- The validator's loose copy, `integration-ctrf-validator/src/test/resources/schema/ctrf-schema.json`, is deleted.
+
+**The validator library**
+- `com.networknt:json-schema-validator` 3.0.8 in draft-07 mode.
+- In the main module it is `testImplementation` only.
+- In `integration-ctrf-validator` it replaces `com.github.java-json-tools:json-schema-validator`. The unused `jackson-module-jsonSchema` is removed too, along with the `jsonSchemaValidatorVersion` and `jacksonModuleJsonSchemaVersion` entries in the root `build.gradle`.
+- `JsonSchemaValidator` in the validator module is rewritten on top of it and keeps its role: validate a report file against a schema file and return the errors.
+
+**A fast unit test in the main module, `CtrfSchemaConformanceTest`**
+- **The library's output must validate.** It builds a report through `CtrfJsonComposer`, the way the library does, with every field the library writes:
+  - `testId`, `filePath`, tags, `threadId`, `rawStatus`, message and trace;
+  - `retries`, `retryAttempts` and `flaky`;
+  - the root `runId`;
+  - every environment value, including a numeric `buildNumber`, and separately the non-numeric case that becomes `buildId`;
+  - the summary with `flaky`, `duration` and the startup-duration `extra`.
+
+  It serializes the report and requires 0 schema errors.
+- **The validator must be strict.** A report with a legacy `filepath` key, and one with a string `buildNumber`, must each be rejected. That proves `additionalProperties: false` and the types are enforced, unlike today's draft-04 setup.
+
+**The integration validator**
+- `CtrfSchemaValidationTest` validates the listener and extension reports against the pinned schema, and checks that `specVersion` equals the pinned version.
+- This delivers TI-4's first requirement. TI-4 keeps the rest, such as the cross-check against JUnit's XML.
+
+#### Tests
+
+- **Watch the new checks fail first.** `CtrfSchemaConformanceTest` fails on today's model with the `filepath` and string `buildNumber` errors. The rewritten integration validator fails the same way on a report from today's `master` (TI-4's acceptance criterion "the validator fails on today's master output"). Then the fixes make both pass.
+- **`CtrfJsonComposerTest`**, for `ctrf.build.number`:
+  - `"777"` gives `buildNumber` 777;
+  - `" 777 "` gives 777;
+  - `"2026.10.15-3"` gives `buildId` and one warning;
+  - a blank or missing value gives neither field.
+- **`SummaryUtilTest`:** `duration` is stop minus start.
+- **`CtrfModelJsonTest`:**
+  - `filePath` is written;
+  - legacy `filepath` is read;
+  - a legacy string `buildNumber` is read;
+  - `specVersion` is `"0.2.0"`.
+- **Existing tests and scenario helpers** move from `getFilepath()` to `getFilePath()`.
+- **Before the PR:**
+  - `./gradlew :build`;
+  - the listener and extension integration runs with the validator, using CI's flags, which now includes the pinned-schema validation;
+  - `compat/run.sh 5.10.5 5.14.4 6.1.3`. `compat/check_report.py` reads only the summary and `runId`, so it isn't affected.
+
+#### Docs and delivery
+
+- **`README.md`:** the `ctrf.build.number` row of the configuration table says that whole numbers go to `buildNumber` and anything else to `buildId`. The README also says the reports follow CTRF 0.2.0.
+- **`CLAUDE.md`:** the model notes mention the pinned schema and its update rule (the schema file and `SPEC_VERSION` change together).
+- **`IMPROVEMENT_PLAN.md`:** TI-4's status records that its first requirement shipped with HP-5.
+- **0.5.0 release notes,** written into the PR description:
+  - the JSON field is now `filePath`, so consumers that read `filepath` must switch;
+  - `buildNumber` is an integer, and non-numeric values move to `buildId`;
+  - the Java getter `getFilepath()` is now `getFilePath()`.
+- **Delivery:** branch `fix/hp-5-ctrf-schema` from `master`, one commit, and a PR description file.
 
 #### Acceptance Criteria
-- [ ] Listener and extension integration reports validate against the pinned official schema with 0 errors
-- [ ] Reports that use the legacy `filepath` field can still be read
-- [ ] Non-numeric build numbers no longer produce invalid reports
-- [ ] `specVersion` matches the pinned schema version
+- [ ] The listener and extension integration reports validate against the pinned official schema with 0 errors
+- [ ] Reports that use `filepath` or a numeric string `buildNumber` can still be read
+- [ ] A non-numeric build number never produces an invalid report; it is written as `buildId`
+- [ ] `specVersion` equals the pinned schema's version
+- [ ] The integration validator rejects a report with `filepath` or a string `buildNumber`
+- [ ] No runtime dependency is added
 
 ---
 
@@ -1359,6 +1442,33 @@ Reproduced through both entry points: `@BeforeAll` fails in round 1 and passes i
 - [x] The same holds for `@AfterAll`, and for a failed container below class level that recovers (below class level: covered by `ReportMerger` unit tests, not by a scenario)
 - [x] A container that fails in every round is still one failed entry, with its history in `retryAttempts`
 - [x] Containers that never failed add no entries
+
+---
+
+### HP-12: Fill `suite` with Each Test's Container Hierarchy
+
+**Priority**: Medium
+**Complexity**: Moderate
+**Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `model/TestDetails.java`, `TestProcessor.java`, `adapter/*`, scenario tests
+**Status**: Open. Split from HP-5 on 2026-10-15; HP-5 types `suite` as a list but leaves it unset.
+
+#### Why
+
+CTRF consumers group and filter tests by `suite`. The spec defines it as "Suite hierarchy from top-level to immediate parent": an array of strings with at least one item. This library never sets it, so every test appears ungrouped.
+
+#### To decide
+
+- **What goes in it:**
+  - display names or class names;
+  - whether the engine ("JUnit Jupiter") is included;
+  - how `@Nested` classes and parameterized or dynamic method containers appear. For example, `["ATest", "Nested"]`, or `["ATest", "usesData(int)"]`.
+- **How each entry point builds it:** the listener walks the `TestPlan` ancestors; the extension walks the `ExtensionContext` parents. Both must give the same `suite` for the same test.
+- **Class-level failure entries:** what `suite` an `initializationError` or `teardownError` entry gets, and how a retry round folds it.
+
+#### Acceptance Criteria
+- [ ] Every test entry has a `suite` that matches the official schema
+- [ ] The listener and the extension produce the same `suite` for the same test
+- [ ] Scenario tests cover nested classes, parameterized tests and class-level failures
 
 ---
 
@@ -4117,7 +4227,7 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 ### Phase 2: Data model and persistence (changes the report shape, so bump the minor version)
 8. HP-6: One test object per logical test, with `retryAttempts` (also resolves MP-3). **Done** (#130)
 9. CB-6: One report merged under a lock, run identity, atomic writes, together with HP-11 (a class failure that recovers on retry stays failed). **Done** (#132)
-10. HP-5: Conform to the official schema
+10. HP-5: Conform to the official schema. Designed 2026-10-15; filling `suite` is split out as HP-12 (Phase 4)
 11. TI-4: Validator using the official schema and a cross-check against JUnit's counts
 12. MP-5: Read previous reports tolerantly
 
@@ -4131,7 +4241,7 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 
 ### Phase 4: Polish
 19. DI-3, DI-1, DI-2: Documentation
-20. MP-4, CQ-2, CQ-4, TI-1, TI-2, SP-2
+20. MP-4, CQ-2, CQ-4, TI-1, TI-2, SP-2, HP-12
 
 ### Not planned
 - CQ-1: superseded by CB-7 and HP-6
