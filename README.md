@@ -54,7 +54,7 @@ Add to your `pom.xml` file:
 <dependency>
     <groupId>io.github.alexshamrai</groupId>
     <artifactId>junit-ctrf-reporter</artifactId>
-    <version>0.4.5</version>
+    <version>0.5.0</version>
     <scope>test</scope>
 </dependency>
 ```
