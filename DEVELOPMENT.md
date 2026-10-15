@@ -55,12 +55,14 @@ It needs Maven and Python 3. CI runs it on every pull request (`.github/workflow
 To test local changes in another project, publish the SNAPSHOT version to your local Maven repository:
 
 ```bash
-./gradlew clean publishToMavenLocal
+VERSION=$(sed -n "s/.*projectVersion = '\(.*\)'/\1/p" build.gradle)
+./gradlew clean publishToMavenLocal -PpublishVersion=$VERSION
+echo $VERSION
 ```
 
-This publishes to `~/.m2/repository/io/github/alexshamrai/junit-ctrf-reporter/<version>/`
+This publishes to `~/.m2/repository/io/github/alexshamrai/junit-ctrf-reporter/<version>/`. Without `-PpublishVersion`, the build publishes under `releaseVersion`, the last released version, so your local repository would hold a local build under a real release's number.
 
-Then in your test project, add:
+Then in your test project, add the printed version:
 
 ```gradle
 repositories {
@@ -69,7 +71,7 @@ repositories {
 }
 
 dependencies {
-    testImplementation 'io.github.alexshamrai:junit-ctrf-reporter:0.4.5-SNAPSHOT'
+    testImplementation 'io.github.alexshamrai:junit-ctrf-reporter:<the printed version>'
 }
 ```
 
@@ -90,7 +92,7 @@ The project uses checkstyle for code quality. Run the checks with:
 - `src/test/resources` - Test resources and configuration files
 
 Automated Release Process
-This project uses GitHub Actions workflows to manage releases to Maven Central. The process involves preparing a release branch, which then automatically triggers the publishing workflow.
+This project uses GitHub Actions workflows to manage releases to Maven Central. The process involves preparing a release branch, then running the publishing workflow on it.
 
 ### Step 1: Prepare Release Branch
 
@@ -105,13 +107,13 @@ This step creates a new release branch, updates version numbers, and generates a
 
 This will:
 *   Create a release branch named `release/X.Y.Z`.
-*   Update `releaseVersion` in `build.gradle`.
-*   Update version numbers in `README.md`.
+*   Update `releaseVersion` and `projectVersion` (the next development version) in `build.gradle`.
+*   Update the Gradle and Maven dependency versions in `README.md`. If either still has another version, the workflow fails before pushing anything.
 *   Create a Pull Request (PR) from `release/X.Y.Z` to `master` for review.
 
 ### Step 2: Publish to Maven Central
 
-This step is **automatically triggered** when a Pull Request is opened from a `release/*` branch to `master`. The workflow will publish the artifact to Maven Central.
+Run it yourself: in the **Actions** tab, select **Publish to Maven Central**, click **Run workflow**, and choose the `release/X.Y.Z` branch. It doesn't start on its own: Step 1 pushes the release branch with the workflow's `GITHUB_TOKEN`, and GitHub doesn't let such a push start other workflows. The workflow only runs on `release/*` branches.
 
 The `Publish to Maven Central` workflow will:
 *   Extract the version from `build.gradle`.
@@ -121,13 +123,13 @@ The `Publish to Maven Central` workflow will:
 ### Step 3: Review and Merge
 
 1.  Review the automatically created Pull Request.
-2.  **Crucially, this PR needs to be merged into `master` to finalize the release.**
+2.  Once the artifact is on Maven Central, merge this PR into `master` to finalize the release.
 
 ### Step 4: Post-Release
 
 1.  **Verify the publication**: Check the `Publish to Maven Central` workflow run for the artifact URL.
 2.  **Wait for synchronization**: It may take 15-30 minutes for the artifact to appear on Maven Central.
-3.  **Create a GitHub Release (optional)**: Document the changes in a GitHub release using the created tag (e.g., `v0.4.0`).
+3.  **Create a GitHub Release**: Document the changes in a GitHub release, creating the tag (e.g., `v0.5.0`) on `master`.
 
 Prerequisites (First-Time Setup)
 Before you can publish releases, you need to configure four GitHub Secrets:

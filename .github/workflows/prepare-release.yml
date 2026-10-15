@@ -74,8 +74,8 @@ jobs:
           # Update Maven dependency version in <version> tag
           sed -i "s|<version>[0-9.]*</version>|<version>${{ env.RELEASE_VERSION }}</version>|" README.md
 
-          # Update Gradle dependency version
-          sed -i "s|implementation 'io.github.alexshamrai:junit-ctrf-reporter:[0-9.]*'|implementation 'io.github.alexshamrai:junit-ctrf-reporter:${{ env.RELEASE_VERSION }}'|" README.md
+          # Update Gradle dependency version, whatever its configuration (testImplementation, implementation)
+          sed -i "s|'io.github.alexshamrai:junit-ctrf-reporter:[0-9.]*'|'io.github.alexshamrai:junit-ctrf-reporter:${{ env.RELEASE_VERSION }}'|" README.md
 
           # Update Markdown link (e.g. ![Maven Central](...) )
           sed -i "s|\/junit-ctrf-reporter\/[0-9.]*\/jar|\/junit-ctrf-reporter\/${{ env.RELEASE_VERSION }}\/jar|g" README.md
@@ -86,6 +86,16 @@ jobs:
           echo "Updated README.md:"
           cat README.md | grep "junit-ctrf-reporter:" || true
           cat README.md | grep -E "(<version>)" || true
+
+          # Stop before anything is pushed if a dependency snippet still has another version
+          if ! grep -q "'io.github.alexshamrai:junit-ctrf-reporter:${{ env.RELEASE_VERSION }}'" README.md; then
+            echo "❌ README.md's Gradle dependency was not updated to ${{ env.RELEASE_VERSION }}"
+            exit 1
+          fi
+          if ! grep -q "<version>${{ env.RELEASE_VERSION }}</version>" README.md; then
+            echo "❌ README.md's Maven dependency was not updated to ${{ env.RELEASE_VERSION }}"
+            exit 1
+          fi
 
       - name: Commit and push changes
         run: |
@@ -128,7 +138,7 @@ jobs:
           
           ## Next Steps
           
-          **The package has been published to Maven Central from this release branch.**
+          **Publish it:** run the **Publish to Maven Central** workflow on \`${{ env.BRANCH_NAME }}\` (Actions → Publish to Maven Central → Run workflow). This workflow pushed the branch with \`GITHUB_TOKEN\`, which can't start other workflows, so publishing doesn't start on its own.
           
           1. ⏳ Wait 15-30 minutes for Maven Central synchronization
           2. ✅ Verify the package at: https://search.maven.org/artifact/io.github.alexshamrai/junit-ctrf-reporter/${{ env.RELEASE_VERSION }}/jar
@@ -150,6 +160,7 @@ jobs:
           echo "**Next Version:** ${{ env.NEXT_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** release/${{ env.RELEASE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🚀 The publish job will run next automatically" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Next: run the Publish to Maven Central workflow on release/${{ env.RELEASE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "A push made with GITHUB_TOKEN can't start other workflows, so publishing doesn't start on its own." >> $GITHUB_STEP_SUMMARY
           echo "After publishing completes, validate the package before merging the PR." >> $GITHUB_STEP_SUMMARY
