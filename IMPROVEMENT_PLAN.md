@@ -20,7 +20,7 @@ Each improvement item includes:
 
 ## Status on `master` — 2026-10-14
 
-`master` @ `c4093eb` (updated 2026-10-15). None of this is released yet; Phase 2 ships as 0.5.0.
+`master` @ `291f21d` (updated 2026-10-15). None of this is released yet; Phase 2 ships as 0.5.0.
 
 | Item | Status | PR | Commits |
 |---|---|---|---|
@@ -35,8 +35,9 @@ Each improvement item includes:
 | [CQ-1](#cq-1-extract-feature-envy-from-ctrfreportmanager) Feature envy | Superseded; HP-6 removed `FlakyTestDetector` | #130 | `56518bd` |
 | [CB-6](#cb-6-rework-report-persistence-forks-accumulation-same-jvm-reruns) One report per run (forks, accumulation, same-JVM reruns) | Done | #132 | `9084a83` |
 | [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) Class failure that recovers on retry | Done, with CB-6 | #132 | `9084a83` |
-| [TI-4](#ti-4-validate-integration-output-against-the-official-schema-and-junits-own-counts) Official schema and JUnit counts in the validator | Partially done: CI runs the listener integration with 2 forks (CB-6) | #132 | `9084a83` |
-| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests; CB-2, MP-5 and HP-5 don't yet | | |
+| [HP-5](#hp-5-conform-to-the-official-ctrf-schema) Conform to the official CTRF schema | Done | #134 | `291f21d` |
+| [TI-4](#ti-4-validate-integration-output-against-the-official-schema-and-junits-own-counts) Official schema and JUnit counts in the validator | Partially done: the pinned official schema with a draft-07 validator (HP-5); CI runs the listener integration with 2 forks (CB-6) | #132, #134 | `9084a83`, `291f21d` |
+| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests; CB-2 and MP-5 don't yet, and scenario outputs aren't validated against the official schema yet | | |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -1014,7 +1015,7 @@ Benefits:
 - validator module: `integration-ctrf-validator/src/main/java/io/github/alexshamrai/integration/JsonSchemaValidator.java`, `.../integration/CtrfSchemaValidationTest.java`, `.../integration/CtrfLogicTest.java`, and its bundled `ctrf-schema.json` (deleted);
 - docs: `README.md`, `CLAUDE.md`, `INTEGRATION_TESTS.md`.
 
-**Status**: Designed 2026-10-15 against `master` @ `c4093eb`; replaces the 2026-10-08 prompt.
+**Status**: Done on `master` (#134: `291f21d`). Designed 2026-10-15 against `master` @ `c4093eb`; replaces the 2026-10-08 prompt. Follow-ups: [Deferred from the review](#deferred-from-the-hp-5-review).
 **Implementation plan**: [`docs/plans/2026-10-15-hp-5-ctrf-schema.md`](docs/plans/2026-10-15-hp-5-ctrf-schema.md)
 
 #### Why
@@ -1119,16 +1120,30 @@ Spec versions: 0.1.0 was tagged on 2026-10-03 and 0.2.0 on 2026-10-10. The only 
 - **0.5.0 release notes,** written into the PR description:
   - the JSON field is now `filePath`, so consumers that read `filepath` must switch;
   - `buildNumber` is an integer, and non-numeric values move to `buildId`;
-  - the Java getter `getFilepath()` is now `getFilePath()`.
+  - `specVersion` is `"0.2.0"`, and `summary.duration` is new;
+  - Java API: `getFilepath()`/`setFilepath()`/`builder().filepath()` are now `getFilePath()`/`setFilePath()`/`builder().filePath()`; `Environment.getBuildNumber()` returns a `Long` and `getBuildId()` is new; `Test.getSuite()` returns a `List<String>`; the all-args constructors of `Environment` and `Summary` gain the new fields. (The last three were added by the final review of #134.)
 - **Delivery:** branch `fix/hp-5-ctrf-schema` from `master`, one commit, and a PR description file.
 
+#### Deferred from the HP-5 review
+
+The per-task and whole-branch reviews of #134 left these open.
+- **A build number that isn't plain digits warns on every run.** Azure Pipelines' default build number (`20261015.1`) and TeamCity's (`1.0.42`) both go to `buildId` with a warning, and such reports have no `buildNumber`. A `ctrf.build.id` setting would let these CI systems set `buildId` directly without the warning, and keep `buildNumber` for a numeric counter (for example Azure's `Build.BuildId`).
+- **`./gradlew :build` doesn't run `:javadoc`.** Only publishing does (`compat/run.sh`, CI's compat jobs, the release). A Lombok-generated type in a method signature passed every review and `:build`, and only compat caught it before the PR. Adding `javadoc` to `check` would catch it locally.
+- **The validator task must be run with `--rerun`,** because Gradle doesn't treat the report file as an input. Declaring `ctrf.report.path` as an input file would fix it (TI-4, requirements 4 and 5).
+- **`CtrfSchemaConformanceTest` asserts only "0 schema errors".** Most fields it covers are optional in the schema, so a field the library silently stopped writing would still pass.
+- **The `Test.filePath` Javadoc says reports "before 0.5.0" used `filepath`.** It becomes wrong if a 0.4.x patch release is cut from `master` before 0.5.0.
+- **Small leftovers:**
+  - `CtrfLogicTest` still says "filepath" in an assertion message and a variable name;
+  - `CtrfSchemaValidationTest` keeps hand-written summary checks that the schema now enforces;
+  - the rejection tests match networknt's message format (`/pointer: …`), so a validator upgrade that changes it fails them loudly.
+
 #### Acceptance Criteria
-- [ ] The listener and extension integration reports validate against the pinned official schema with 0 errors
-- [ ] Reports that use `filepath` or a numeric string `buildNumber` can still be read
-- [ ] A non-numeric build number never produces an invalid report; it is written as `buildId`
-- [ ] `specVersion` equals the pinned schema's version
-- [ ] The integration validator rejects a report with `filepath` or a string `buildNumber`
-- [ ] No runtime dependency is added
+- [x] The listener and extension integration reports validate against the pinned official schema with 0 errors
+- [x] Reports that use `filepath` or a numeric string `buildNumber` can still be read
+- [x] A non-numeric build number never produces an invalid report; it is written as `buildId`
+- [x] `specVersion` equals the pinned schema's version
+- [x] The integration validator rejects a report with `filepath` or a string `buildNumber`
+- [x] No runtime dependency is added
 
 ---
 
@@ -1276,7 +1291,7 @@ The final review of #130 rated these as minor:
 - [x] A test that passes after a failed attempt has `flaky: true`, and `summary.flaky` counts such tests
 - [x] A third retry round extends `retryAttempts` instead of nesting it
 - [x] Recording a result is O(1): the MP-3 measurement scales linearly
-- [ ] Reports validate against the official schema once HP-5 lands
+- [x] Reports validate against the official schema once HP-5 lands (#134)
 
 ---
 
@@ -3197,8 +3212,12 @@ Benefits:
 
 **Priority**: High
 **Complexity**: Moderate
-**Files**: `integration-ctrf-validator/build.gradle`, `integration-ctrf-validator/src/test/resources/schema/ctrf-schema.json`, `.../integration/BaseIntegrationTest.java`, `.../integration/CtrfLogicTest.java`, `.../integration/JsonSchemaValidator.java`, CI workflows
-**Status**: Partially done. Requirement 6 is done: CI runs the listener integration with 2 forks (CB-6, #132). Requirement 1, the pinned official schema and a draft-07 validator, is part of HP-5's design. The rest is open.
+**Files**: `integration-ctrf-validator/build.gradle`, `integration-ctrf-validator/src/test/resources/schema/ctrf-schema.json` (deleted by HP-5), `.../integration/BaseIntegrationTest.java`, `.../integration/CtrfLogicTest.java`, `.../integration/JsonSchemaValidator.java`, CI workflows
+**Status**: Partially done. Requirements 1 and 6 are done, which fixes problems 1 and 2:
+- requirement 1 shipped with HP-5 (#134: `291f21d`): the validator checks reports against the pinned official schema (`schema/ctrf.schema.json`) with `com.networknt:json-schema-validator` in draft-07 mode, and rejects `filepath` and a string `buildNumber`;
+- requirement 6: CI runs the listener integration with 2 forks (CB-6, #132).
+
+Requirements 2–5 are open: the cross-check against JUnit's XML, assertions by `testId`, a real default report path, and configurable CI expectations.
 
 #### Prompt
 ````
@@ -3231,8 +3250,8 @@ Requirements:
 ````
 
 #### Acceptance Criteria
-- [ ] The validator fails on today's `master` output (`filepath`, `buildNumber`, data lost across forks)
-- [ ] The validator passes once HP-5 and CB-6 are fixed
+- [ ] The validator fails on today's `master` output (`filepath`, `buildNumber`, data lost across forks). The schema part is shown: on the pre-HP-5 listener report it fails with 29 errors (HP-5, #134). Lost data is still only caught through the fixed counts, until the JUnit cross-check (requirement 2) exists
+- [x] The validator passes once HP-5 and CB-6 are fixed
 - [ ] The validator runs locally with documented defaults
 
 ---
@@ -3242,7 +3261,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: new tests under `src/test/java/io/github/alexshamrai/scenario/` (or a new integration module), fake test classes
-**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. Still open: CB-2 (nested run), MP-5 (tolerant read) and HP-5 (official schema).
+**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. Still open: CB-2 (nested run), MP-5 (tolerant read), and validating each scenario's output against the official schema. HP-5 (#134) pinned that schema at `schema/ctrf.schema.json`; `CtrfSchemaConformanceTest` shows how to load it in tests.
 
 #### Prompt
 ````
@@ -4214,7 +4233,7 @@ Updated 2026-10-08; progress marked 2026-10-14. This replaces the original four-
 ### Already done on `master`
 CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 (its regression is tracked in CB-6), TI-3 (partially)
 
-Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6 and HP-11. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
+Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11 and HP-5. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
 
 ### Phase 1: Stop wrong results and broken builds (small, independent changes)
 1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix. **Done** (#124)
@@ -4228,8 +4247,8 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 ### Phase 2: Data model and persistence (changes the report shape, so bump the minor version)
 8. HP-6: One test object per logical test, with `retryAttempts` (also resolves MP-3). **Done** (#130)
 9. CB-6: One report merged under a lock, run identity, atomic writes, together with HP-11 (a class failure that recovers on retry stays failed). **Done** (#132)
-10. HP-5: Conform to the official schema. Designed 2026-10-15; filling `suite` is split out as HP-12 (Phase 4)
-11. TI-4: Validator using the official schema and a cross-check against JUnit's counts
+10. HP-5: Conform to the official schema. **Done** (#134); filling `suite` is split out as HP-12 (Phase 4)
+11. TI-4: Validator using the official schema and a cross-check against JUnit's counts. The official schema is **done** with HP-5 (#134); the cross-check is open
 12. MP-5: Read previous reports tolerantly
 
 ### Phase 3: Architecture and robustness
