@@ -10,7 +10,7 @@ JUnit CTRF Reporter is a Java library that generates test reports following the 
 - Requires Java 17+ (development requires Java 21+)
 - Published to Maven Central as `io.github.alexshamrai:junit-ctrf-reporter`
 - Uses Gradle for build management
-- Current version: 0.4.1 (release), 0.4.2-SNAPSHOT (development)
+- Current version: `releaseVersion` (the last release) and `projectVersion` (development) in `build.gradle`
 
 ## Common Commands
 
@@ -238,19 +238,19 @@ integration-ctrf-validator/        # Schema and logic validation tests
 
 The project uses GitHub Actions for automated releases to Maven Central:
 
-1. **Prepare Release**: Run "Prepare Release" workflow with version number (e.g., 0.4.0)
+1. **Prepare Release**: Run "Prepare Release" workflow with version number (e.g., 0.5.0)
    - Creates `release/X.Y.Z` branch
-   - Updates `releaseVersion` in `build.gradle`
-   - Updates version in `README.md`
+   - Updates `releaseVersion` and `projectVersion` (the next development version) in `build.gradle`
+   - Updates the Gradle and Maven dependency versions in `README.md`, and fails before pushing if either wasn't updated
    - Opens PR to `master`
 
-2. **Publish**: Automatically triggered when PR from `release/*` is opened
+2. **Publish**: Run the "Publish to Maven Central" workflow on `release/X.Y.Z` yourself. The release branch is pushed with `GITHUB_TOKEN`, which can't start other workflows, so publishing never starts on its own
    - Builds and signs artifact with GPG
    - Publishes to Maven Central
 
-3. **Merge**: Review and merge PR to finalize release
+3. **Merge**: Merge the PR once the artifact is on Maven Central (15-30 min sync time)
 
-4. **Post-Release**: Verify publication on Maven Central (15-30 min sync time)
+4. **Post-Release**: Create the GitHub Release `vX.Y.Z` on `master`
 
 **Manual release alternative:** Update versions → `./gradlew build` → `./gradlew publishAllPublicationsToMavenCentralRepository`
 
