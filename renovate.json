@@ -14,6 +14,11 @@
       "matchPackageNames": ["org.junit:junit-bom"],
       "matchCurrentValue": "/^5\\.10\\./",
       "allowedVersions": "/^5\\.10\\./"
+    },
+    {
+      "description": "compat/ consumers pin their versions on purpose: run.sh passes the JUnit and reporter versions under test, and Renovate's Maven manager reads only pom.xml, not pom-ctrf-first.xml. Update them by hand.",
+      "matchFileNames": ["compat/**"],
+      "enabled": false
     }
   ]
 }
