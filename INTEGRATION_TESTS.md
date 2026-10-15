@@ -81,7 +81,7 @@ For the listener-based tests, environment health is controlled via the `ENV_HEAL
   env:
     ENV_HEALTHY: 'false'
   ```
-- **Local Testing**: Must set the environment variable manually:
+- **Local Testing**: Set the environment variable to check the unhealthy path as CI does. The validator then expects `healthy: false`; without it, it expects a healthy listener report:
   ```bash
   export ENV_HEALTHY=false
   ./gradlew clean :integration-tests-listener:test
@@ -116,27 +116,38 @@ Both approaches are validated by `integration-ctrf-validator` module:
 
 ```java
 @Test
-void verifyEnvironmentHealthIsFalse() {
+void verifyEnvironmentHealthMatchesTheRun() {
     var environment = report.getResults().getEnvironment();
     assertThat(environment).isNotNull();
+
     assertThat(environment.isHealthy())
-        .as("Environment health should be false")
-        .isFalse();
+        .as("healthy: false when ENV_HEALTHY=false or for the extension module, whose FirstLongTest marks it unhealthy")
+        .isEqualTo(expected.healthy());
 }
 ```
 
-This test ensures that the `environment.healthy` field in the generated CTRF report is correctly set to `false`.
+This test ensures that the `environment.healthy` field in the generated CTRF report matches what the run was set up to produce.
 
 The `integration-ctrf-validator` module contains validation logic for json file that`integration-tests-extension` and `integration-tests-listener` modules create after test execution.
 ```
-integration-tests/
-├── build.gradle                 # Integration tests build configuration
-├── src/
-    ├── test/
-        ├── java/
-        │   └── io/github/alexshamrai/integration/
-        │       ├── CtrfSchemaValidationTest.java  # Validates report schema compliance
-        │       └── CtrfLogicTest.java             # Verifies logical correctness of the report
+integration-ctrf-validator/
+├── build.gradle                 # Validator build configuration
+└── src/
+    ├── main/java/io/github/alexshamrai/integration/
+    │   ├── JsonSchemaValidator.java       # Validates JSON against the CTRF schema
+    │   └── JunitEvents.java               # Folds JUnit's event log into what the report must contain
+    └── test/java/
+        ├── integration/
+        │   ├── BaseIntegrationTest.java         # Loads the report and the run's expectations
+        │   ├── IntegrationRun.java              # Where the report and the event log are, from the settings
+        │   ├── ExpectedRun.java                 # What the run's settings say the report holds
+        │   ├── CtrfSchemaValidationTest.java    # Validates report schema compliance
+        │   ├── JunitCrossCheckTest.java         # Checks every entry against JUnit's event log
+        │   ├── CtrfLogicTest.java               # Verifies logical correctness of the report
+        │   ├── IntegrationRunTest.java          # Unit tests of IntegrationRun
+        │   └── ExpectedRunTest.java             # Unit tests of ExpectedRun
+        └── io/github/alexshamrai/integration/
+            └── JunitEventsTest.java             # Unit tests of JunitEvents
 ```
 
 The schema is the official CTRF schema pinned at `schema/ctrf.schema.json` in the repository root (see `schema/README.md`). The module's `build.gradle` adds it to the test resources.
@@ -145,16 +156,16 @@ The schema is the official CTRF schema pinned at `schema/ctrf.schema.json` in th
 
 The integration tests follow a two-phase execution process:
 
-1. **Report Generation Phase**: 
+1. **Report Generation Phase**:
    - Executes the fake test classes to generate a CTRF report
    - Uses the `integration-tests-listener:test` or `integration-tests-extension:test` Gradle task
    - Ignores test failures (since some tests are designed to fail)
+   - Also writes JUnit's own event log (Open Test Reporting) to `build/test-results/junit-platform/<number>/open-test-report.xml`, one file per JVM: each fork and each retry round
+   - Gives each run its own `ctrf.run.id`, so a second run without `clean` replaces both the report and the event log
 
 2. **Validation Phase**:
-   - Validates the generated report against the CTRF schema
-   - Verifies the logical correctness of the report content
    - Uses the `integration-ctrf-validator:test` Gradle task
-   - Runs `CtrfSchemaValidationTest` and `CtrfLogicTest`
+   - Runs `CtrfSchemaValidationTest`, `JunitCrossCheckTest` and `CtrfLogicTest`, plus unit tests of its helpers
 
 ### Validation Tests
 
@@ -167,70 +178,77 @@ This test validates that the generated report complies with the CTRF schema:
 - Checks that the validator rejects a report with the legacy `filepath` key or a string `buildNumber`
 - Ensures all test entries have valid names and statuses
 
+#### JunitCrossCheckTest
+
+This test checks every report entry against JUnit's own event log of the same run, by `testId` (the JUnit unique ID):
+
+- Every test JUnit ran, and every container that failed at least once, is in the report with the same final status, `retries` and `flaky`
+- The report has no other entries, except a skipped container's own entry and the tests within it, which JUnit never starts and so can't list
+- Each class or test method that JUnit skipped as a whole is covered: the report's entries for it or within it are all skipped, and there is at least one when JUnit's log lists none of its tests
+- A truncated event log (its JVM died) is read up to its last complete event, and the failure names the log
+
 #### CtrfLogicTest
 
-This test verifies the logical correctness of the report content:
+This test checks what JUnit's event log can't, looking each test up by `testId` and failing if it's missing:
 
-- Checks that test statuses are correctly reported (passed, failed, skipped)
-- Verifies that summary statistics match the actual test results
-- Validates that test durations are accurately captured, especially for long-running tests
+- Summary counts for the fake test set, and that `summary.duration` spans the run
+- Names, messages, `rawStatus`, `retryAttempts`, durations and the `testId` of class-level failures
+- The run's settings: thread count, build name, number and URL, environment health and `generatedBy`
 
 ## Running Integration Tests
 
-To run the integration tests you should consequently execute tests from 2 modules
+One command generates the listener's report and validates it:
+
 ```bash
-# Generate the CTRF report only
-./gradlew clean :integration-tests-listener:test 
-
-# Validate the generated report only
-./gradlew :integration-ctrf-validator:test
-````
-
-### Parallel Test Execution
-
-The integration tests support parallel execution through the `threads` system property:
-```bash
-./gradlew :integration-tests-listener:test -Dthreads=4
+./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test
 ```
 
-This configures JUnit to run tests concurrently, which helps verify that the CTRF extension correctly handles parallel test execution.
+With no flags, the validator expects what that run produces: one thread, the build values from the module's `src/test/resources/ctrf.properties`, and a healthy environment (the extension module's `FirstLongTest` always marks it unhealthy, so for it the validator expects `healthy: false`). For the extension module, pass its report:
+
+```bash
+./gradlew clean :integration-tests-extension:test :integration-ctrf-validator:test \
+  -Dctrf.report.path=../integration-tests-extension/build/test-results/ctrf-report.json
+```
+
+`-Dctrf.report.path` also reaches the extension's own test JVM, where `../integration-tests-extension/…` resolved from that module's directory is the same file, so it's harmless.
+
+### Settings
+
+Pass a setting once to the one command, and both tasks receive it. The validator takes its expectations from the same inputs:
+
+| Setting | Effect on the run | What the validator expects |
+|---|---|---|
+| `-Dthreads=N` | runs tests on N threads | between 2 and N distinct thread names (exactly 1 without it) |
+| `-Dforks=N` | runs N forked JVMs | nothing; the report and JUnit's event log must still agree |
+| `-Dctrf.build.name`, `-Dctrf.build.number`, `-Dctrf.build.url` | override `ctrf.properties` | the same values in `environment`; a non-numeric build number as `buildId` |
+| `ENV_HEALTHY=false` (environment variable) | marks the environment unhealthy | `healthy: false` (the extension module's `FirstLongTest` always marks it unhealthy) |
+| `-Dctrf.report.path` | where the validator reads the report | default `../integration-tests-listener/build/test-results/ctrf-report.json` |
+| `-Dctrf.junit.events.dir` | where the validator reads JUnit's event log | default `junit-platform` next to the report |
+
+When the two tasks run in separate commands, pass the same settings to both.
 
 ## Run tests exactly as in CI
 
-To run the integration tests exactly as in CI, in order to verify all the parameters processing locally (dynamic parameters, like build.number and build.url are hardcoded here):
+CI passes the same flags to the report step and the validator step. Locally, in one command:
 
 ### For integration-tests-listener
 
-**Note:** The listener module requires `ENV_HEALTHY=false` environment variable to be set for the environment health validation test to pass.
-
 ```bash
-# Set environment variable (Unix/Linux/macOS)
-export ENV_HEALTHY=false
-
-# Or set inline (Unix/Linux/macOS)
-ENV_HEALTHY=false ./gradlew clean :integration-tests-listener:test -Dthreads=2 \
+ENV_HEALTHY=false ./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test \
+  -Dforks=2 -Dthreads=2 \
   -Dctrf.build.name=system-build \
   -Dctrf.build.number=777 \
   -Dctrf.build.url=https://github.com/alexshamrai/junit-ctrf-reporter/actions/runs/12345678
-```
-
-```bash
-./gradlew :integration-ctrf-validator:test -Dctrf.report.path=../integration-tests-listener/build/test-results/ctrf-report.json
 ```
 
 ### For integration-tests-extension
 
-**Note:** The extension module sets environment health programmatically via `EnvironmentHealthTracker.markEnvironmentUnhealthy()` in test code, so no environment variable is needed.
-
 ```bash
-./gradlew clean :integration-tests-extension:test -Dthreads=2 \
+./gradlew clean :integration-tests-extension:test :integration-ctrf-validator:test -Dthreads=2 \
   -Dctrf.build.name=system-build \
   -Dctrf.build.number=777 \
-  -Dctrf.build.url=https://github.com/alexshamrai/junit-ctrf-reporter/actions/runs/12345678
-```
-
-```bash
-./gradlew :integration-ctrf-validator:test -Dctrf.report.path=../integration-tests-extension/build/test-results/ctrf-report.json
+  -Dctrf.build.url=https://github.com/alexshamrai/junit-ctrf-reporter/actions/runs/12345678 \
+  -Dctrf.report.path=../integration-tests-extension/build/test-results/ctrf-report.json
 ```
 
 ## Conclusion

@@ -20,7 +20,13 @@ jobs:
 
     env:
       CTRF_REPORT_PATH: 'integration-tests-listener/build/test-results/ctrf-report.json'
-      ENV_HEALTHY: 'false' ## required for ctrf-validator test to pass env.healthy check
+      ENV_HEALTHY: 'false' ## the report must say unhealthy; the validator reads the same variable
+      # Passed to both the report step and the validator, which takes its expectations from them
+      RUN_FLAGS: >-
+        -Dthreads=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.threads || '2' }}
+        -Dctrf.build.name=system-build
+        -Dctrf.build.number=${{ github.run_number }}
+        -Dctrf.build.url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
       - uses: actions/checkout@v6
@@ -34,13 +40,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Generate report with listener
-        run: |
-          ./gradlew :integration-tests-listener:test \
-          -Dthreads=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.threads || '2' }} \
-          -Dforks=2 \
-          -Dctrf.build.name=system-build \
-          -Dctrf.build.number=${{ github.run_number }} \
-          -Dctrf.build.url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} \
+        run: ./gradlew :integration-tests-listener:test -Dforks=2 $RUN_FLAGS
         if: always()
 
       - name: Publish CTRF Test Report
@@ -63,9 +63,7 @@ jobs:
         if: always()
 
       - name: Run integration tests
-        run: |
-          ./gradlew :integration-ctrf-validator:test \
-          -Dctrf.report.path=../${{ env.CTRF_REPORT_PATH }}
+        run: ./gradlew :integration-ctrf-validator:test $RUN_FLAGS -Dctrf.report.path=../${{ env.CTRF_REPORT_PATH }}
         if: always()
 
       - name: Upload test results

@@ -16,6 +16,8 @@ dependencies {
     testImplementation platform("org.junit:junit-bom:${rootProject.ext.junitVersion}")
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // JUnit's own event log, which integration-ctrf-validator cross-checks the CTRF report against
+    testRuntimeOnly 'org.junit.platform:junit-platform-reporting'
     testImplementation project(':')
 }
 
@@ -66,6 +68,16 @@ tasks.withType(Test).configureEach {
 
     configureThreads(it)
     configureForks(it)
+
+    // JUnit's event log: one open-test-report.xml per JVM (each fork and each retry round)
+    def junitEvents = layout.buildDirectory.dir('test-results/junit-platform').get().asFile
+    systemProperty 'junit.platform.reporting.open.xml.enabled', 'true'
+    systemProperty 'junit.platform.reporting.output.dir', "${junitEvents}/{uniqueNumber}"
+    doFirst {
+        // Runs once per task, before the first retry round: the log and the report both cover this run only
+        junitEvents.deleteDir()
+        systemProperty 'ctrf.run.id', UUID.randomUUID().toString()
+    }
 }
 
 test {

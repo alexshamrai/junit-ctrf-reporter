@@ -35,31 +35,24 @@ JUnit CTRF Reporter is a Java library that generates test reports following the 
 Integration tests are split across three modules and must be run sequentially:
 
 ```bash
-# Generate CTRF report using listener-based tests
-./gradlew clean :integration-tests-listener:test
+# Generate the listener's report and validate it (no flags: the validator expects a plain local run)
+./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test
 
-# Or using extension-based tests
-./gradlew clean :integration-tests-extension:test
+# The same for the extension
+./gradlew clean :integration-tests-extension:test :integration-ctrf-validator:test \
+  -Dctrf.report.path=../integration-tests-extension/build/test-results/ctrf-report.json
 
-# Validate the generated report (runs after either above)
-./gradlew :integration-ctrf-validator:test
-
-# Run with parallel execution
-./gradlew :integration-tests-listener:test -Dthreads=4
-
-# Run exactly as CI (with all parameters)
-./gradlew clean :integration-tests-listener:test -Dthreads=2 \
+# Exactly as CI: the same flags reach both tasks, and the validator expects them
+ENV_HEALTHY=false ./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test \
+  -Dforks=2 -Dthreads=2 \
   -Dctrf.build.name=system-build \
   -Dctrf.build.number=777 \
   -Dctrf.build.url=https://github.com/alexshamrai/junit-ctrf-reporter/actions/runs/12345678
-
-./gradlew :integration-ctrf-validator:test \
-  -Dctrf.report.path=../integration-tests-listener/build/test-results/ctrf-report.json
 ```
 
 **Important:** Integration tests use a two-phase process:
-1. Generate report by running fake tests that are designed to succeed, fail, or be skipped
-2. Validate the generated CTRF JSON against schema and logical correctness
+1. Generate the report by running fake tests that are designed to succeed, fail, or be skipped. The same run writes JUnit's own event log to `build/test-results/junit-platform/`
+2. Validate the report: against the official schema, against JUnit's event log by `testId` (`JunitCrossCheckTest`), and for what JUnit can't know (`CtrfLogicTest`). The validator takes its expectations from the same `-Dthreads`, `-Dctrf.build.*` and `ENV_HEALTHY` as the run; see `INTEGRATION_TESTS.md`
 
 ### Running Single Tests
 
