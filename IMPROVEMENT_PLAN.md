@@ -48,6 +48,7 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 ## Phase 3 Design — 0.5.1
 
 **Status**: Designed 2026-10-15 against `master` @ `635b4e6`, after the 0.5.0 release. Ships as **0.5.1**.
+**Implementation plan**: [`docs/plans/2026-10-15-phase-3-0.5.1.md`](docs/plans/2026-10-15-phase-3-0.5.1.md)
 **Items**:
 - [HP-10](#hp-10-make-the-testexecutionlistener-the-single-core-integration-point) with [HP-1](#hp-1-refactor-singleton-pattern-in-ctrfreportmanager);
 - [CB-2](#cb-2-a-nested-junit-run-ends-the-outer-run-re-scoped-from-race-condition-in-finishtestrun);
