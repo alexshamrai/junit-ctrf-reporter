@@ -4,9 +4,16 @@ import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.ctrf.model.Environment;
 import io.github.alexshamrai.ctrf.model.Summary;
 import io.github.alexshamrai.ctrf.model.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.util.Collections;
 import java.util.List;
 
@@ -14,17 +21,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CtrfJsonComposerTest {
 
     private static final String DEFAULT_REPORT_FORMAT = "CTRF";
-    private static final String DEFAULT_SPEC_VERSION = "0.0.0";
+    private static final String DEFAULT_SPEC_VERSION = "0.2.0";
+    private final ByteArrayOutputStream errContent = new ByteArrayOutputStream();
+    private final PrintStream originalErr = System.err;
     private ConfigReader configReader;
     private StartupDurationProcessor startupDurationProcessor;
     private CtrfJsonComposer composer;
 
     @BeforeEach
     void setUp() {
+        System.setErr(new PrintStream(errContent));
         configReader = Mockito.mock(ConfigReader.class);
         startupDurationProcessor = new StartupDurationProcessor();
         composer = new CtrfJsonComposer(configReader, startupDurationProcessor, "Listener");
@@ -34,7 +45,7 @@ public class CtrfJsonComposerTest {
         Mockito.when(configReader.getAppName()).thenReturn("mockedAppName");
         Mockito.when(configReader.getAppVersion()).thenReturn("mockedAppVersion");
         Mockito.when(configReader.getBuildName()).thenReturn("mockedBuildName");
-        Mockito.when(configReader.getBuildNumber()).thenReturn("mockedBuildNumber");
+        Mockito.when(configReader.getBuildNumber()).thenReturn("777");
         Mockito.when(configReader.getBuildUrl()).thenReturn("mockedBuildUrl");
         Mockito.when(configReader.getRepositoryName()).thenReturn("mockedRepositoryName");
         Mockito.when(configReader.getRepositoryUrl()).thenReturn("mockedRepositoryUrl");
@@ -45,6 +56,11 @@ public class CtrfJsonComposerTest {
         Mockito.when(configReader.getOsVersion()).thenReturn("mockedOsVersion");
         Mockito.when(configReader.getTestEnvironment()).thenReturn("mockedTestEnvironment");
         Mockito.when(configReader.calculateStartupDuration()).thenReturn(false);
+    }
+
+    @AfterEach
+    void restoreStandardError() {
+        System.setErr(originalErr);
     }
 
     @org.junit.jupiter.api.Test
@@ -73,7 +89,8 @@ public class CtrfJsonComposerTest {
         assertEquals("mockedAppName", environment.getAppName());
         assertEquals("mockedAppVersion", environment.getAppVersion());
         assertEquals("mockedBuildName", environment.getBuildName());
-        assertEquals("mockedBuildNumber", environment.getBuildNumber());
+        assertEquals(777L, environment.getBuildNumber());
+        assertNull(environment.getBuildId());
         assertEquals("mockedBuildUrl", environment.getBuildUrl());
         assertEquals("mockedRepositoryName", environment.getRepositoryName());
         assertEquals("mockedRepositoryUrl", environment.getRepositoryUrl());
@@ -158,5 +175,57 @@ public class CtrfJsonComposerTest {
 
         assertEquals("run-1", first.getRunId());
         assertNotEquals(first.getReportId(), second.getReportId());
+    }
+
+    @ParameterizedTest(name = "\"{0}\" is buildNumber {1}")
+    @CsvSource({"777, 777", "' 777 ', 777", "0, 0", "00123, 123", "9223372036854775807, 9223372036854775807"})
+    void wholeBuildNumberIsWrittenAsBuildNumber(String configured, long expected) {
+        Mockito.when(configReader.getBuildNumber()).thenReturn(configured);
+
+        var environment = composeEnvironment();
+
+        assertEquals(expected, environment.getBuildNumber());
+        assertNull(environment.getBuildId());
+        assertEquals("", errContent.toString());
+    }
+
+    @ParameterizedTest(name = "\"{0}\" is buildId \"{1}\"")
+    @CsvSource({
+        "2026.10.15-3, 2026.10.15-3",
+        "' 2026.10.15-3 ', 2026.10.15-3",
+        "+777, +777",
+        "-1, -1",
+        "1e3, 1e3",
+        "9223372036854775808, 9223372036854775808",
+        "١٢٣, ١٢٣"
+    })
+    void otherBuildNumberIsWrittenAsBuildIdWithOneWarning(String configured, String expected) {
+        Mockito.when(configReader.getBuildNumber()).thenReturn(configured);
+
+        var environment = composeEnvironment();
+
+        assertNull(environment.getBuildNumber());
+        assertEquals(expected, environment.getBuildId());
+        var warnings = errContent.toString().lines().toList();
+        assertEquals(1, warnings.size());
+        assertTrue(warnings.get(0).contains("buildId"));
+        assertTrue(warnings.get(0).contains(expected));
+    }
+
+    @ParameterizedTest(name = "\"{0}\" sets neither field")
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\t"})
+    void blankBuildNumberSetsNeitherField(String configured) {
+        Mockito.when(configReader.getBuildNumber()).thenReturn(configured);
+
+        var environment = composeEnvironment();
+
+        assertNull(environment.getBuildNumber());
+        assertNull(environment.getBuildId());
+        assertEquals("", errContent.toString());
+    }
+
+    private Environment composeEnvironment() {
+        return composer.generateCtrfJson(Summary.builder().build(), List.of(), true, "run-1").getResults().getEnvironment();
     }
 }

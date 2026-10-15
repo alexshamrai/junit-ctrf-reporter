@@ -20,7 +20,7 @@ class ExtensionTestIdentityScenarioTest {
         assertThat(result.tests()).hasSize(1);
         Test test = result.tests().get(0);
         assertThat(test.getName()).isEqualTo("importantBusinessTest()");
-        assertThat(test.getFilepath()).isEqualTo(ExtFailingSetupFixture.class.getName());
+        assertThat(test.getFilePath()).isEqualTo(ExtFailingSetupFixture.class.getName());
         assertThat(test.getTags()).contains("payments", "scenario-fixture");
         assertThat(test.getStatus()).isEqualTo(FAILED);
         assertThat(test.getMessage()).contains("fixture setup failed");
@@ -34,7 +34,7 @@ class ExtensionTestIdentityScenarioTest {
         assertThat(result.tests()).hasSize(1);
         Test test = result.tests().get(0);
         assertThat(test.getName()).isEqualTo("importantBusinessTest()");
-        assertThat(test.getFilepath()).isEqualTo(ExtAbortedSetupFixture.class.getName());
+        assertThat(test.getFilePath()).isEqualTo(ExtAbortedSetupFixture.class.getName());
         assertThat(test.getTags()).contains("payments", "scenario-fixture");
         assertThat(test.getStatus()).isEqualTo(SKIPPED);
         assertThat(test.getRawStatus()).isEqualTo("aborted");

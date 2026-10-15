@@ -210,7 +210,7 @@ final class ScenarioRunner {
         }
 
         List<Test> testsOf(Class<?> fixture) {
-            return tests().stream().filter(test -> fixture.getName().equals(test.getFilepath())).toList();
+            return tests().stream().filter(test -> fixture.getName().equals(test.getFilePath())).toList();
         }
     }
 }

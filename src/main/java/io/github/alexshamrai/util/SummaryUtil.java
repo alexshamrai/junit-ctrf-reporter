@@ -25,7 +25,7 @@ public class SummaryUtil {
      * @param tests the test results to summarize, one per test
      * @param startTime the test run start timestamp
      * @param stopTime the test run stop timestamp
-     * @return a Summary object with status counts, the flaky count and timing information
+     * @return a Summary object with status counts, the flaky count, start, stop and duration
      */
     public static Summary createSummary(List<Test> tests, long startTime, long stopTime) {
         Map<Test.TestStatus, Long> statusCounts = tests.stream()
@@ -46,6 +46,7 @@ public class SummaryUtil {
             .flaky((int) flaky)
             .start(startTime)
             .stop(stopTime)
+            .duration(stopTime - startTime)
             .build();
     }
 

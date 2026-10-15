@@ -143,11 +143,24 @@ public class CtrfLogicTest extends BaseIntegrationTest {
             .as("Build name should match the value passed via -Dctrf.build.name")
             .isEqualTo("system-build");
         assertThat(environment.getBuildNumber())
-            .as("Build number should be numeric")
-            .matches("\\d+");
+            .as("Build number should be the whole number passed via -Dctrf.build.number")
+            .isPositive();
+        assertThat(environment.getBuildId())
+            .as("A whole build number is never written as buildId")
+            .isNull();
         assertThat(environment.getBuildUrl())
             .as("Build URL should follow the pattern https://github.com/alexshamrai/junit-ctrf-reporter/actions/runs/ + number")
             .matches("https://github\\.com/alexshamrai/junit-ctrf-reporter/actions/runs/\\d+");
+    }
+
+    @Test
+    void verifySummaryDurationSpansTheRun() {
+        var summary = report.getResults().getSummary();
+
+        assertThat(summary.getDuration())
+            .as("summary.duration should be stop minus start, across every JVM merged into the report")
+            .isEqualTo(summary.getStop() - summary.getStart())
+            .isPositive();
     }
 
     @Test
@@ -194,9 +207,9 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         // Look for the specific InitializationErrorTest (not AnotherInitializationErrorTest)
         var initErrorTest = tests.stream()
             .filter(test -> "initializationError".equals(test.getName()))
-            .filter(test -> test.getFilepath() != null
-                && test.getFilepath().contains("InitializationErrorTest")
-                && !test.getFilepath().contains("Another"))
+            .filter(test -> test.getFilePath() != null
+                && test.getFilePath().contains("InitializationErrorTest")
+                && !test.getFilePath().contains("Another"))
             .findFirst();
 
         assertThat(initErrorTest)
@@ -213,7 +226,7 @@ public class CtrfLogicTest extends BaseIntegrationTest {
             .isNotNull()
             .contains("Simulated initialization failure");
 
-        assertThat(test.getFilepath())
+        assertThat(test.getFilePath())
             .as("initializationError should have filepath pointing to InitializationErrorTest")
             .contains("InitializationErrorTest");
     }
@@ -235,7 +248,7 @@ public class CtrfLogicTest extends BaseIntegrationTest {
 
         // Get distinct filepaths to verify different classes are captured
         var distinctFilepaths = initErrorTests.stream()
-            .map(io.github.alexshamrai.ctrf.model.Test::getFilepath)
+            .map(io.github.alexshamrai.ctrf.model.Test::getFilePath)
             .distinct()
             .toList();
 
@@ -275,7 +288,7 @@ public class CtrfLogicTest extends BaseIntegrationTest {
     @Test
     void verifyAfterAllFailureIsReportedAsTeardownError() {
         var entries = report.getResults().getTests().stream()
-            .filter(test -> test.getFilepath() != null && test.getFilepath().endsWith(".AfterAllFailureTest"))
+            .filter(test -> test.getFilePath() != null && test.getFilePath().endsWith(".AfterAllFailureTest"))
             .toList();
 
         assertThat(entries)
@@ -294,7 +307,7 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assumeTrue(isListenerReport(), "Only the listener sees containers below class level");
 
         var entries = report.getResults().getTests().stream()
-            .filter(test -> test.getFilepath() != null && test.getFilepath().endsWith(".BrokenSourceTest"))
+            .filter(test -> test.getFilePath() != null && test.getFilePath().endsWith(".BrokenSourceTest"))
             .toList();
 
         assertThat(entries)
@@ -323,8 +336,8 @@ public class CtrfLogicTest extends BaseIntegrationTest {
 
         assertThat(classFailures).allSatisfy(test ->
             assertThat(test.getTestId())
-                .as("testId of the %s of %s", test.getName(), test.getFilepath())
-                .isEqualTo("[engine:junit-jupiter]/[class:" + test.getFilepath() + "]"));
+                .as("testId of the %s of %s", test.getName(), test.getFilePath())
+                .isEqualTo("[engine:junit-jupiter]/[class:" + test.getFilePath() + "]"));
     }
 
     @Test
@@ -333,7 +346,7 @@ public class CtrfLogicTest extends BaseIntegrationTest {
 
         var tests = report.getResults().getTests();
         var disabledClassTests = tests.stream()
-            .filter(test -> test.getFilepath() != null && test.getFilepath().endsWith(".DisabledClassTest"))
+            .filter(test -> test.getFilePath() != null && test.getFilePath().endsWith(".DisabledClassTest"))
             .toList();
         assertThat(disabledClassTests)
             .as("Each test of a @Disabled class should be skipped")
@@ -345,7 +358,7 @@ public class CtrfLogicTest extends BaseIntegrationTest {
             .as("Each skipped test should carry the class's reason")
             .allSatisfy(test -> assertThat(test.getMessage()).contains("Simulated disabled class"));
         assertThat(tests)
-            .filteredOn(test -> test.getFilepath() != null && test.getFilepath().endsWith(".ConditionallySkippedClassTest"))
+            .filteredOn(test -> test.getFilePath() != null && test.getFilePath().endsWith(".ConditionallySkippedClassTest"))
             .as("Each test of a class disabled by a condition should be skipped with the condition's reason")
             .hasSize(2)
             .allSatisfy(test -> {

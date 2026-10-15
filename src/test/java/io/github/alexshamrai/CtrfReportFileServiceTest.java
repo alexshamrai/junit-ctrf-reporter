@@ -100,6 +100,24 @@ class CtrfReportFileServiceTest {
     }
 
     @Test
+    @DisplayName("A 0.4 report whose buildNumber isn't a number can't be read, so it reaches the merge function as null")
+    void legacyReportWithANonNumericBuildNumberReachesTheMergeAsNull() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.writeString(report, "{\"reportFormat\":\"CTRF\",\"specVersion\":\"0.0.0\","
+            + "\"results\":{\"environment\":{\"buildNumber\":\"2026.10.15-3\",\"healthy\":true}}}");
+        List<CtrfJson> seen = new ArrayList<>();
+
+        serviceFor(report).update(existing -> {
+            seen.add(existing);
+            return marker("fresh");
+        });
+
+        assertThat(seen).containsExactly((CtrfJson) null);
+        assertThat(readMarker(report)).isEqualTo("fresh");
+        assertThat(errContent.toString()).contains("can't be read");
+    }
+
+    @Test
     @DisplayName("A write that fails halfway leaves the previous report parseable and unchanged")
     void writeThatFailsHalfwayLeavesThePreviousReport() throws IOException {
         Path report = tempDir.resolve("ctrf.json");

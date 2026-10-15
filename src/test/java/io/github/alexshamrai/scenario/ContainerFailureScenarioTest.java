@@ -52,7 +52,7 @@ class ContainerFailureScenarioTest {
         var result = ScenarioRunner.runWithListener(AfterAllFailureFixture.class);
 
         assertThat(result.tests())
-            .extracting(Test::getName, Test::getStatus, Test::getFilepath)
+            .extracting(Test::getName, Test::getStatus, Test::getFilePath)
             .containsExactlyInAnyOrder(
                 tuple("ok()", PASSED, AfterAllFailureFixture.class.getName()),
                 tuple("teardownError", FAILED, AfterAllFailureFixture.class.getName()));

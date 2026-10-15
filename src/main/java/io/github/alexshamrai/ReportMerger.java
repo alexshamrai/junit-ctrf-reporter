@@ -99,7 +99,7 @@ final class ReportMerger {
                 withRecoveries.add(Test.builder()
                     .testId(latest.getTestId())
                     .name(latest.getName())
-                    .filepath(latest.getFilepath())
+                    .filePath(latest.getFilePath())
                     .tags(latest.getTags())
                     .status(PASSED)
                     .start(success.start())

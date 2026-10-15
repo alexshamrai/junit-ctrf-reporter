@@ -40,7 +40,7 @@ public class TestProcessor {
             .testId(details.uniqueId())
             .name(displayName) // Use the displayName parameter
             .tags(details.tags() != null ? new ArrayList<>(details.tags()) : new ArrayList<>())
-            .filepath(details.filePath())
+            .filePath(details.filePath())
             .start(details.startTime())
             .stop(stopTime)
             .duration(stopTime - details.startTime())

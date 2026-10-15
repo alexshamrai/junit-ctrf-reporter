@@ -1,38 +1,45 @@
 package integration;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.alexshamrai.ctrf.model.CtrfJson;
 import io.github.alexshamrai.ctrf.model.Test.TestStatus;
 import io.github.alexshamrai.integration.JsonSchemaValidator;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class CtrfSchemaValidationTest extends BaseIntegrationTest {
 
-    private static final String SCHEMA_PATH = "src/test/resources/schema/ctrf-schema.json";
+    private JsonSchemaValidator schemaValidator;
 
-    private final JsonSchemaValidator schemaValidator;
-
-    public CtrfSchemaValidationTest() {
-        super();
-        this.schemaValidator = new JsonSchemaValidator();
+    @BeforeAll
+    void loadThePinnedSchema() throws IOException {
+        try (InputStream schema = getClass().getResourceAsStream("/ctrf.schema.json")) {
+            assertThat(schema)
+                .as("ctrf.schema.json should be on the test classpath; see schema/README.md")
+                .isNotNull();
+            schemaValidator = new JsonSchemaValidator(schema);
+        }
     }
 
     @Test
     void validateSchemaCompliance() throws IOException {
-        var validationResult = schemaValidator.validateAgainstSchema(reportFile, SCHEMA_PATH);
-        assertThat(validationResult.isSuccess())
-            .as("Schema validation failed" + validationResult.getErrors().toString())
-            .isTrue();
+        assertThat(schemaValidator.validate(Files.readString(reportFile.toPath())))
+            .as("Errors against the official CTRF schema in %s", reportFile)
+            .isEmpty();
 
         assertThat(report.getReportFormat())
             .as("Report format should be 'CTRF'")
             .isEqualTo("CTRF");
         assertThat(report.getSpecVersion())
-            .as("Spec version should match pattern x.y.z")
-            .matches("^[0-9]+\\.[0-9]+\\.[0-9]+$");
+            .as("Spec version should be the version of the pinned schema")
+            .isEqualTo(CtrfJson.SPEC_VERSION);
 
         assertThat(report.getResults()).isNotNull();
 
@@ -69,6 +76,26 @@ public class CtrfSchemaValidationTest extends BaseIntegrationTest {
             .isGreaterThanOrEqualTo(0);
 
         validateTests(report.getResults().getTests());
+    }
+
+    @Test
+    void validatorRejectsTheLegacyFilepathKey() throws IOException {
+        var tree = (ObjectNode) objectMapper.readTree(reportFile);
+        var firstTest = (ObjectNode) tree.at("/results/tests/0");
+        firstTest.remove("filePath");
+        firstTest.put("filepath", "integration.LegacyTest");
+
+        assertThat(schemaValidator.validate(objectMapper.writeValueAsString(tree)))
+            .anySatisfy(error -> assertThat(error).startsWith("/results/tests/0:").contains("'filepath'"));
+    }
+
+    @Test
+    void validatorRejectsAStringBuildNumber() throws IOException {
+        var tree = (ObjectNode) objectMapper.readTree(reportFile);
+        ((ObjectNode) tree.at("/results/environment")).put("buildNumber", "777");
+
+        assertThat(schemaValidator.validate(objectMapper.writeValueAsString(tree)))
+            .anySatisfy(error -> assertThat(error).startsWith("/results/environment/buildNumber:"));
     }
 
     private void validateTests(List<io.github.alexshamrai.ctrf.model.Test> tests) {

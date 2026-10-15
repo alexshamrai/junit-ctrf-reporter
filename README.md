@@ -19,7 +19,7 @@ CTRF is a universal JSON test report schema that addresses the lack of a standar
 
 ## Features
 
-- Generates CTRF-compliant JSON test reports for JUnit 5 tests
+- Generates JSON test reports for JUnit 5 tests that follow CTRF 0.2.0 and validate against its [official schema](https://github.com/ctrf-io/ctrf/blob/v0.2.0/schema/ctrf.schema.json)
 - Captures test status, duration, and failure details
 - Supports customization of report content via configuration
 - Tracks and includes environment information
@@ -180,7 +180,7 @@ The following parameters can be configured in the `ctrf.properties` file:
 | `ctrf.app.name`                   | Name of the application under test                           |                    |
 | `ctrf.app.version`                | Version of the application under test                        |                    |
 | `ctrf.build.name`                 | Name or ID of the build                                      |                    |
-| `ctrf.build.number`               | Build number from your CI/CD system                          |                    |
+| `ctrf.build.number`               | Build number from your CI/CD system. A whole number is written as `buildNumber`; any other value, such as `2026.10.15-3`, as `buildId` |                    |
 | `ctrf.build.url`                  | URL to the build in your CI/CD system                        |                    |
 | `ctrf.repository.name`            | Name of the source code repository                           |                    |
 | `ctrf.repository.url`             | URL to the source code repository                            |                    |
@@ -272,7 +272,7 @@ When the environment is marked unhealthy, the CTRF report includes:
     "environment": {
       "healthy": false,
       "appName": "My Application",
-      "buildNumber": "123"
+      "buildNumber": 123
       // ... other environment fields
     }
   }

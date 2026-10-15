@@ -194,7 +194,7 @@ class ReportMergerTest {
         return Test.builder()
             .testId(testId)
             .name(testId)
-            .filepath("com.example.DbTest")
+            .filePath("com.example.DbTest")
             .status(status)
             .start(start)
             .stop(start + 5)

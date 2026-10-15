@@ -26,5 +26,9 @@ public class Summary {
     private Integer suites;
     private long start;
     private long stop;
+    /**
+     * Run duration in milliseconds: {@code stop} minus {@code start}.
+     */
+    private long duration;
     private Extra extra;
 }

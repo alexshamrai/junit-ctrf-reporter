@@ -40,8 +40,7 @@ ext {
 
     slf4jVersion = '2.0.19'
     logbackVersion = '1.6.3'
-    jacksonModuleJsonSchemaVersion = '2.22.2'
-    jsonSchemaValidatorVersion = '2.2.14'
+    networkntValidatorVersion = '3.0.8'
 }
 
 version = projectVersion
@@ -61,6 +60,20 @@ dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter-params"
     testImplementation "org.mockito:mockito-core:${mockitoVersion}"
     testImplementation "org.assertj:assertj-core:${assertjVersion}"
+    // Validates reports against the pinned official CTRF schema. It uses Jackson 3 (tools.jackson), apart from the library's Jackson 2
+    testImplementation "com.networknt:json-schema-validator:${networkntValidatorVersion}"
+    // A logging provider for the validator, so tests don't print SLF4J's "no providers" warning
+    testRuntimeOnly "org.slf4j:slf4j-nop:${slf4jVersion}"
+}
+
+sourceSets {
+    test {
+        resources {
+            // The pinned official CTRF schema; see schema/README.md
+            srcDir 'schema'
+            exclude 'README.md'
+        }
+    }
 }
 
 test {

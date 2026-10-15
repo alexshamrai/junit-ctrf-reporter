@@ -74,4 +74,60 @@ class CtrfModelJsonTest {
         assertThat(withRunId.get("runId").asText()).isEqualTo("run-1");
         assertThat(withoutRunId.has("runId")).isFalse();
     }
+
+    @org.junit.jupiter.api.Test
+    void filePathIsWrittenAsFilePath() throws Exception {
+        var json = objectMapper.readTree(objectMapper.writeValueAsString(
+            Test.builder().name("test1()").filePath("com.example.PaymentTest").build()));
+
+        assertThat(json.get("filePath").asText()).isEqualTo("com.example.PaymentTest");
+        assertThat(json.has("filepath")).isFalse();
+    }
+
+    @org.junit.jupiter.api.Test
+    void legacyFilepathIsReadIntoFilePath() throws Exception {
+        var test = objectMapper.readValue("{\"name\":\"test1()\",\"filepath\":\"com.example.PaymentTest\"}", Test.class);
+
+        assertThat(test.getFilePath()).isEqualTo("com.example.PaymentTest");
+    }
+
+    @org.junit.jupiter.api.Test
+    void buildNumberIsWrittenAsANumberAndBuildIdAsAString() throws Exception {
+        var json = objectMapper.readTree(objectMapper.writeValueAsString(
+            Environment.builder().buildNumber(777L).buildId("2026.10.15-3").build()));
+
+        assertThat(json.get("buildNumber").isIntegralNumber()).isTrue();
+        assertThat(json.get("buildNumber").asLong()).isEqualTo(777L);
+        assertThat(json.get("buildId").asText()).isEqualTo("2026.10.15-3");
+    }
+
+    @org.junit.jupiter.api.Test
+    void legacyStringBuildNumberIsReadAsANumber() throws Exception {
+        var environment = objectMapper.readValue("{\"buildNumber\":\"777\",\"healthy\":true}", Environment.class);
+
+        assertThat(environment.getBuildNumber()).isEqualTo(777L);
+    }
+
+    @org.junit.jupiter.api.Test
+    void specVersionIsTheSupportedCtrfVersion() {
+        assertThat(CtrfJson.SPEC_VERSION).isEqualTo("0.2.0");
+        assertThat(CtrfJson.builder().build().getSpecVersion()).isEqualTo(CtrfJson.SPEC_VERSION);
+    }
+
+    @org.junit.jupiter.api.Test
+    void summaryWritesItsDuration() throws Exception {
+        var json = objectMapper.readTree(objectMapper.writeValueAsString(
+            Summary.builder().start(1_000L).stop(3_500L).duration(2_500L).build()));
+
+        assertThat(json.get("duration").asLong()).isEqualTo(2_500L);
+    }
+
+    @org.junit.jupiter.api.Test
+    void suiteIsWrittenAsAnArray() throws Exception {
+        var json = objectMapper.readTree(objectMapper.writeValueAsString(
+            Test.builder().name("test1()").suite(List.of("PaymentTest", "Refunds")).build()));
+
+        assertThat(json.get("suite").isArray()).isTrue();
+        assertThat(json.get("suite").get(1).asText()).isEqualTo("Refunds");
+    }
 }

@@ -17,7 +17,14 @@ public class Environment {
     private String appName;
     private String appVersion;
     private String buildName;
-    private String buildNumber;
+    /**
+     * {@code ctrf.build.number} when it is a whole number. CTRF types {@code buildNumber} as an integer.
+     */
+    private Long buildNumber;
+    /**
+     * {@code ctrf.build.number} when it isn't a whole number, such as {@code 2026.10.15-3}.
+     */
+    private String buildId;
     private String buildUrl;
     private String repositoryName;
     private String repositoryUrl;
