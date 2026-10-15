@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Data
@@ -69,7 +70,8 @@ public class Test {
 
         @JsonValue
         public String toLowerCase() {
-            return name().toLowerCase();
+            // Locale.ROOT: under a Turkish locale, the I of "FAILED" would become a dotless i, which no CTRF consumer reads
+            return name().toLowerCase(Locale.ROOT);
         }
     }
 }

@@ -35,6 +35,15 @@ if ! "$ROOT/gradlew" -p "$ROOT" publishMavenPublicationToCompatRepository -Ppubl
   exit 1
 fi
 
+# The reporter has no runtime dependencies: neither its POM nor its Gradle module metadata may declare one
+for metadata in $(find "$CTRF_REPO" -name '*.pom' -o -name '*.module'); do
+  if grep -q '<dependency>\|"dependencies"' "$metadata"; then
+    echo "$(basename "$metadata") declares dependencies, but the reporter must have none:"
+    grep -E '<artifactId>|"module"' "$metadata" | sed 's/^/  /'
+    exit 1
+  fi
+done
+
 failures=0
 
 # run_consumer LABEL OUTPUT_DIR JUNIT_VERSION KIND COMMAND...

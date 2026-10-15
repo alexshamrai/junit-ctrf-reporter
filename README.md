@@ -21,6 +21,7 @@ CTRF is a universal JSON test report schema that addresses the lack of a standar
 
 - Generates JSON test reports for JUnit 5 tests that follow CTRF 0.2.0 and validate against its [official schema](https://github.com/ctrf-io/ctrf/blob/v0.2.0/schema/ctrf.schema.json)
 - Captures test status, duration, and failure details
+- No runtime dependencies: besides the JUnit your tests already use, it adds nothing to your test classpath
 - Supports customization of report content via configuration
 - Tracks and includes environment information
 - Handles parallel test execution
@@ -61,7 +62,7 @@ Add to your `pom.xml` file:
 
 #### JUnit version
 
-The reporter does not bring JUnit with it: it runs on the JUnit version your project already uses. It is tested with JUnit 5.10, 5.14 and 6.1.
+The reporter does not bring JUnit with it: it runs on the JUnit version your project already uses. It is tested with JUnit 5.10, 5.14 and 6.1. It has no other runtime dependencies either. Up to 0.5.0 it brought `jackson-databind` and `owner` onto the test runtime classpath; if your tests use either of them, for example through a library that looks for Jackson at run time, such as REST Assured or WireMock, declare it as a test dependency yourself.
 
 On Gradle 9 and later, the JUnit Platform launcher must be on the test runtime classpath, as Gradle requires:
 

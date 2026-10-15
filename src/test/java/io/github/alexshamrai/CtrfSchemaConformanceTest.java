@@ -8,6 +8,7 @@ import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.SpecificationVersion;
 import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.ctrf.model.Test;
+import io.github.alexshamrai.json.CtrfJsonMapper;
 import io.github.alexshamrai.model.TestDetails;
 import io.github.alexshamrai.util.SummaryUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -138,7 +139,7 @@ class CtrfSchemaConformanceTest {
     private String composeReport(List<Test> tests) throws IOException {
         var summary = SummaryUtil.createSummary(tests, 900L, 1_100L);
         var composer = new CtrfJsonComposer(configReader, new StartupDurationProcessor(), GENERATED_BY);
-        return objectMapper.writeValueAsString(composer.generateCtrfJson(summary, tests, true, "run-1"));
+        return CtrfJsonMapper.write(composer.generateCtrfJson(summary, tests, true, "run-1"));
     }
 
     private static List<String> schemaErrorsOf(String report) {
