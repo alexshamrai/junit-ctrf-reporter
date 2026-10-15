@@ -21,6 +21,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
+import java.util.logging.Logger;
 
 /**
  * Reads and writes the CTRF report file at {@code ctrf.report.path}.
@@ -44,6 +45,7 @@ public class CtrfReportFileService {
      * thread would silently drop the lock another thread holds.
      */
     private static final Object JVM_LOCK = new Object();
+    private static final Logger LOGGER = Logger.getLogger(CtrfReportFileService.class.getName());
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ConfigReader configReader;
@@ -64,7 +66,7 @@ public class CtrfReportFileService {
      * Threads of this JVM take turns, and other JVMs are kept out by an exclusive lock on {@code <report>.lock}.
      * The report is read fresh while the lock is held. After the lock timeout, or on a file system that can't
      * lock files, the report is written without the lock. Errors, including one thrown by {@code merge}, are
-     * printed to the standard error and leave the report as it was.
+     * logged as warnings and leave the report as it was.
      *
      * @param merge receives the current report, or {@code null} if there is none or it can't be parsed, and
      *              returns the report to write
@@ -82,7 +84,7 @@ public class CtrfReportFileService {
             try {
                 writeAtomically(report, merge.apply(readExisting(report)));
             } catch (RuntimeException e) {
-                System.err.println("Failed to write results to file: " + configReader.getReportPath() + " - " + e);
+                LOGGER.warning("Failed to write results to file: " + configReader.getReportPath() + " - " + e);
             } finally {
                 release(lock);
             }
@@ -91,7 +93,7 @@ public class CtrfReportFileService {
 
     /**
      * Takes the exclusive lock on {@code <report>.lock}, waiting up to the lock timeout. Returns {@code null},
-     * after printing why, when the file system can't lock files or the lock stays taken; the report is then
+     * after logging why, when the file system can't lock files or the lock stays taken; the report is then
      * written without it.
      */
     private FileLock lockAcrossJvms(Path report) {
@@ -106,7 +108,7 @@ public class CtrfReportFileService {
                     return lock;
                 }
                 if (System.nanoTime() >= deadline) {
-                    System.err.println("Could not lock " + lockFile + " within " + lockTimeout.toMillis()
+                    LOGGER.warning("Could not lock " + lockFile + " within " + lockTimeout.toMillis()
                         + " ms; writing the report without the lock");
                     closeQuietly(channel);
                     return null;
@@ -114,12 +116,12 @@ public class CtrfReportFileService {
                 Thread.sleep(LOCK_POLL_INTERVAL.toMillis());
             }
         } catch (IOException | UnsupportedOperationException e) {
-            System.err.println("Could not lock " + lockFile + "; writing the report without the lock - " + e.getMessage());
+            LOGGER.warning("Could not lock " + lockFile + "; writing the report without the lock - " + e.getMessage());
             closeQuietly(channel);
             return null;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            System.err.println("Interrupted while waiting for " + lockFile + "; writing the report without the lock");
+            LOGGER.warning("Interrupted while waiting for " + lockFile + "; writing the report without the lock");
             closeQuietly(channel);
             return null;
         }
@@ -148,7 +150,7 @@ public class CtrfReportFileService {
         try {
             return objectMapper.readValue(report.toFile(), CtrfJson.class);
         } catch (IOException e) {
-            System.err.println("Ignoring the existing report, which can't be read: " + report + " - " + e.getMessage());
+            LOGGER.warning("Ignoring the existing report, which can't be read: " + report + " - " + e.getMessage());
             return null;
         }
     }
@@ -179,7 +181,7 @@ public class CtrfReportFileService {
                 Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 return;
             } catch (AtomicMoveNotSupportedException e) {
-                System.err.println("Can't replace " + target + " atomically; replacing it in place");
+                LOGGER.warning("Can't replace " + target + " atomically; replacing it in place");
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
                 return;
             } catch (NoSuchFileException e) {
@@ -204,9 +206,9 @@ public class CtrfReportFileService {
 
     private void printWriteFailure(IOException e) {
         if (e instanceof AccessDeniedException) {
-            System.err.println("Access denied: " + configReader.getReportPath() + " - " + e.getMessage());
+            LOGGER.warning("Access denied: " + configReader.getReportPath() + " - " + e.getMessage());
         } else {
-            System.err.println("Failed to write results to file: " + configReader.getReportPath() + " - " + e.getMessage());
+            LOGGER.warning("Failed to write results to file: " + configReader.getReportPath() + " - " + e.getMessage());
         }
     }
 

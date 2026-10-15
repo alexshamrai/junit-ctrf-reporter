@@ -10,14 +10,12 @@ import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.model.TestDetails;
 import io.github.alexshamrai.util.SummaryUtil;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.PrintStream;
 import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Set;
@@ -42,11 +40,11 @@ class CtrfSchemaConformanceTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ConfigReader configReader = mock(ConfigReader.class);
     private final TestProcessor processor = new TestProcessor(configReader);
-    private final PrintStream originalErr = System.err;
+    @RegisterExtension
+    final LogCapture logs = new LogCapture(CtrfJsonComposer.class);
 
     @BeforeEach
     void configureEveryEnvironmentValue() {
-        System.setErr(new PrintStream(new ByteArrayOutputStream()));
         when(configReader.getJUnitVersion()).thenReturn("6.1.3");
         when(configReader.getReportName()).thenReturn("Nightly");
         when(configReader.getAppName()).thenReturn("payments");
@@ -66,11 +64,6 @@ class CtrfSchemaConformanceTest {
         when(configReader.calculateStartupDuration()).thenReturn(true);
     }
 
-    @AfterEach
-    void restoreStandardError() {
-        System.setErr(originalErr);
-    }
-
     @org.junit.jupiter.api.Test
     @DisplayName("A report with every field the library writes has no schema errors")
     void fullyPopulatedReportConformsToTheSchema() throws IOException {
@@ -86,6 +79,7 @@ class CtrfSchemaConformanceTest {
 
         assertThat(objectMapper.readTree(report).at("/results/environment/buildId").asText()).isEqualTo("2026.10.15-3");
         assertThat(schemaErrorsOf(report)).isEmpty();
+        assertThat(logs.text()).contains("buildId");
     }
 
     @org.junit.jupiter.api.Test

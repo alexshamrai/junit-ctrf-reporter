@@ -4,16 +4,14 @@ import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.ctrf.model.Environment;
 import io.github.alexshamrai.ctrf.model.Summary;
 import io.github.alexshamrai.ctrf.model.Test;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
 import java.util.Collections;
 import java.util.List;
 
@@ -27,15 +25,14 @@ public class CtrfJsonComposerTest {
 
     private static final String DEFAULT_REPORT_FORMAT = "CTRF";
     private static final String DEFAULT_SPEC_VERSION = "0.2.0";
-    private final ByteArrayOutputStream errContent = new ByteArrayOutputStream();
-    private final PrintStream originalErr = System.err;
+    @RegisterExtension
+    final LogCapture logs = new LogCapture(CtrfJsonComposer.class);
     private ConfigReader configReader;
     private StartupDurationProcessor startupDurationProcessor;
     private CtrfJsonComposer composer;
 
     @BeforeEach
     void setUp() {
-        System.setErr(new PrintStream(errContent));
         configReader = Mockito.mock(ConfigReader.class);
         startupDurationProcessor = new StartupDurationProcessor();
         composer = new CtrfJsonComposer(configReader, startupDurationProcessor, "Listener");
@@ -56,11 +53,6 @@ public class CtrfJsonComposerTest {
         Mockito.when(configReader.getOsVersion()).thenReturn("mockedOsVersion");
         Mockito.when(configReader.getTestEnvironment()).thenReturn("mockedTestEnvironment");
         Mockito.when(configReader.calculateStartupDuration()).thenReturn(false);
-    }
-
-    @AfterEach
-    void restoreStandardError() {
-        System.setErr(originalErr);
     }
 
     @org.junit.jupiter.api.Test
@@ -186,7 +178,7 @@ public class CtrfJsonComposerTest {
 
         assertEquals(expected, environment.getBuildNumber());
         assertNull(environment.getBuildId());
-        assertEquals("", errContent.toString());
+        assertEquals(List.of(), logs.messages());
     }
 
     @ParameterizedTest(name = "\"{0}\" is buildId \"{1}\"")
@@ -206,7 +198,7 @@ public class CtrfJsonComposerTest {
 
         assertNull(environment.getBuildNumber());
         assertEquals(expected, environment.getBuildId());
-        var warnings = errContent.toString().lines().toList();
+        var warnings = logs.messages();
         assertEquals(1, warnings.size());
         assertTrue(warnings.get(0).contains("buildId"));
         assertTrue(warnings.get(0).contains(expected));
@@ -222,7 +214,7 @@ public class CtrfJsonComposerTest {
 
         assertNull(environment.getBuildNumber());
         assertNull(environment.getBuildId());
-        assertEquals("", errContent.toString());
+        assertEquals(List.of(), logs.messages());
     }
 
     private Environment composeEnvironment() {
