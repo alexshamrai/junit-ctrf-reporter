@@ -20,7 +20,7 @@ Each improvement item includes:
 
 ## Status on `master` — 2026-10-14
 
-`master` @ `059992b` (updated 2026-10-15). None of this is released yet; Phase 2 ships as 0.5.0.
+`master` @ `aee31fc` (updated 2026-10-15). Phases 1 and 2 are released as [0.5.0](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.0) (2026-10-15, Maven Central `io.github.alexshamrai:junit-ctrf-reporter:0.5.0`, release PR #136).
 
 | Item | Status | PR | Commits |
 |---|---|---|---|
@@ -4371,6 +4371,8 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 7. TI-5: Write the regression scenario for each of the fixes above alongside it. **Done** for items 1–6; TI-5 itself stays partially done
 
 ### Phase 2: Data model and persistence (changes the report shape, so bump the minor version)
+
+**Released as 0.5.0** on 2026-10-15, together with Phase 1 (release PR #136).
 8. HP-6: One test object per logical test, with `retryAttempts` (also resolves MP-3). **Done** (#130)
 9. CB-6: One report merged under a lock, run identity, atomic writes, together with HP-11 (a class failure that recovers on retry stays failed). **Done** (#132)
 10. HP-5: Conform to the official schema. **Done** (#134); filling `suite` is split out as HP-12 (Phase 4)
