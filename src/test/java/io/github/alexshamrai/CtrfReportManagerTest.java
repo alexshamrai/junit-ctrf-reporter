@@ -16,9 +16,14 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.UnaryOperator;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
@@ -70,6 +75,7 @@ class CtrfReportManagerTest {
     @org.junit.jupiter.api.Test
     @DisplayName("onTestStart should store test details in the map")
     void onTestStart_storesDetails() {
+        reportManager.startTestRun("Listener");
         var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Test Details");
         var testResult = new Test();
 
@@ -84,6 +90,7 @@ class CtrfReportManagerTest {
     @org.junit.jupiter.api.Test
     @DisplayName("onTestSuccess should process a successful test result")
     void onTestSuccess_processesResult() {
+        reportManager.startTestRun("Listener");
         var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Success Test");
         var testResult = new Test();
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(testResult);
@@ -99,6 +106,7 @@ class CtrfReportManagerTest {
     @org.junit.jupiter.api.Test
     @DisplayName("A result without a recorded start keeps the identity it was given, with start equal to stop")
     void onTestSuccess_withoutRecordedStart_usesGivenIdentity() {
+        reportManager.startTestRun("Listener");
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(new Test());
         var given = new TestDetails(5_000L, Set.of("payments"), "com.example.PaymentTest", "id-1", "importantBusinessTest()");
 
@@ -115,6 +123,7 @@ class CtrfReportManagerTest {
     @org.junit.jupiter.api.Test
     @DisplayName("A result with a recorded start keeps the recorded start time")
     void onTestSuccess_withRecordedStart_usesRecordedStartTime() {
+        reportManager.startTestRun("Listener");
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(new Test());
         reportManager.onTestStart(new TestDetails(1_000L, Set.of(), "com.example.PaymentTest", "id-1", "importantBusinessTest()"));
 
@@ -128,6 +137,7 @@ class CtrfReportManagerTest {
     @org.junit.jupiter.api.Test
     @DisplayName("onTestFailure should process a failed test result")
     void onTestFailure_processesResult() {
+        reportManager.startTestRun("Listener");
         var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Failure Test");
         var testResult = new Test();
         var cause = new RuntimeException("error");
@@ -143,6 +153,7 @@ class CtrfReportManagerTest {
     @org.junit.jupiter.api.Test
     @DisplayName("onTestSkipped should create a skipped test")
     void onTestSkipped_createsSkippedTest() {
+        reportManager.startTestRun("Listener");
         var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Skipped Test");
         var testResult = new Test();
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(testResult);
@@ -156,6 +167,7 @@ class CtrfReportManagerTest {
     @org.junit.jupiter.api.Test
     @DisplayName("onTestAborted should record the test as skipped with the assumption message")
     void onTestAborted_recordsSkippedTestWithAssumptionMessage() {
+        reportManager.startTestRun("Listener");
         var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Aborted Test");
         var testResult = new Test();
         when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(testResult);
@@ -370,6 +382,86 @@ class CtrfReportManagerTest {
         assertTrue(recovered.getFlaky());
         assertEquals(recovered.getStart(), recovered.getStop());
         assertEquals(0L, recovered.getDuration());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("While one owner's run is active, another owner can neither start a run nor finish it")
+    void anotherOwnerCanNeitherStartNorFinishTheActiveRun() {
+        Object outer = new Object();
+        Object nested = new Object();
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong()))
+            .thenReturn(Test.builder().testId("id-1").name("test").build());
+
+        assertTrue(reportManager.startTestRun(outer, "Listener"));
+        assertFalse(reportManager.startTestRun(nested, "Listener"));
+        reportManager.finishTestRun(nested);
+        verifyNoInteractions(ctrfReportFileService);
+
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "id-1", "test"));
+        reportManager.onTestSuccess("id-1");
+        assertTrue(reportManager.startTestRun(outer, "Listener"));
+        reportManager.finishTestRun(outer);
+
+        verify(ctrfReportFileService).update(any());
+        assertEquals(List.of("id-1"), testIdsOnDisk());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Once the active run has finished, another owner starts the next one")
+    void anotherOwnerStartsTheNextRunOnceTheActiveOneFinished() {
+        Object first = new Object();
+        Object second = new Object();
+        reportManager.startTestRun(first, "Listener");
+        reportManager.finishTestRun(first);
+
+        assertTrue(reportManager.startTestRun(second, "Listener"));
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Results recorded while no run is active are dropped")
+    void resultsOutsideARunAreDropped() {
+        Object owner = new Object();
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong()))
+            .thenAnswer(call -> Test.builder().testId(call.<TestDetails>getArgument(1).uniqueId()).name("test").build());
+
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "outside", "outside"));
+        reportManager.onTestSuccess("outside");
+        reportManager.onTestSkipped(new TestDetails(1_000L, Set.of(), null, "skipped", "skipped"), Optional.empty());
+        reportManager.onContainerSuccess("class-1", 1_000L);
+        reportManager.startTestRun(owner, "Listener");
+        reportManager.onTestStart(new TestDetails(2_000L, Set.of(), null, "inside", "inside"));
+        reportManager.onTestSuccess("inside");
+        reportManager.finishTestRun(owner);
+
+        assertEquals(List.of("inside"), testIdsOnDisk());
+        verify(testProcessor).createTest(anyString(), any(TestDetails.class), anyLong());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Of owners starting runs at the same time, exactly one gets the run")
+    void concurrentStartsGiveTheRunToExactlyOneOwner() throws Exception {
+        int owners = 8;
+        var pool = Executors.newFixedThreadPool(owners);
+        var start = new CountDownLatch(1);
+        List<Future<Boolean>> started = new ArrayList<>();
+        for (int i = 0; i < owners; i++) {
+            Object owner = new Object();
+            started.add(pool.submit(() -> {
+                start.await();
+                return reportManager.startTestRun(owner, "Listener");
+            }));
+        }
+
+        start.countDown();
+        int winners = 0;
+        for (Future<Boolean> result : started) {
+            if (result.get(10, TimeUnit.SECONDS)) {
+                winners++;
+            }
+        }
+        pool.shutdown();
+
+        assertEquals(1, winners);
     }
 
     private void finishWithEnvironmentVariableHealthy() {

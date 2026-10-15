@@ -56,21 +56,6 @@ class TestStateTrackerTest {
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("Should clear all state")
-    void shouldClearAllState() {
-        var test = Test.builder().name("test1").build();
-        var details = new TestDetails(System.currentTimeMillis(), Set.of(), null, "id-1", "Test");
-
-        tracker.addAttempt(test);
-        tracker.putTestDetails("id-1", details);
-
-        tracker.clear();
-
-        assertThat(tracker.getAllAttempts()).isEmpty();
-        assertThat(tracker.removeTestDetails("id-1")).isNull();
-    }
-
-    @org.junit.jupiter.api.Test
     @DisplayName("Should maintain order of added tests")
     void shouldMaintainOrderOfTests() {
         var test1 = Test.builder().name("test1").build();
@@ -120,8 +105,8 @@ class TestStateTrackerTest {
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("Container successes are kept in order and cleared with the attempts")
-    void shouldKeepContainerSuccessesUntilCleared() {
+    @DisplayName("Container successes are kept in order")
+    void shouldKeepContainerSuccessesInOrder() {
         var first = new ContainerSuccess("class-1", 1L, 2L);
         var second = new ContainerSuccess("class-2", 3L, 4L);
 
@@ -129,7 +114,5 @@ class TestStateTrackerTest {
         tracker.addContainerSuccess(second);
 
         assertThat(tracker.getAllContainerSuccesses()).containsExactly(first, second);
-        tracker.clear();
-        assertThat(tracker.getAllContainerSuccesses()).isEmpty();
     }
 }
