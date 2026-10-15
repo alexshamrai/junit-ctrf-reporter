@@ -7,6 +7,7 @@ import io.github.alexshamrai.ctrf.model.RetryAttempt;
 import io.github.alexshamrai.ctrf.model.Summary;
 import io.github.alexshamrai.ctrf.model.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,6 +23,9 @@ class ReportMergerTest {
 
     private static final String RUN = "run-1";
     private static final String CLASS_ID = "[engine:junit-jupiter]/[class:com.example.DbTest]";
+
+    @RegisterExtension
+    final LogCapture logs = new LogCapture(ReportMerger.class);
 
     @org.junit.jupiter.api.Test
     @DisplayName("Without a report on disk, the run is this JVM's results")
@@ -188,6 +192,7 @@ class ReportMergerTest {
 
         assertThat(run.tests()).extracting(Test::getTestId).containsExactly("id-1");
         assertThat(run.start()).isEqualTo(100L);
+        assertThat(logs.text()).contains("Ignoring the existing report, which can't be merged");
     }
 
     private static Test attempt(String testId, Test.TestStatus status, long start) {

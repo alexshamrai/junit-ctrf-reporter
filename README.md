@@ -193,6 +193,19 @@ The following parameters can be configured in the `ctrf.properties` file:
 
 All mandatory parameters have default values
 
+## Logging
+
+The reporter logs warnings, for example about a report it can't read or lock, through `java.util.logging`. Its loggers are named after its classes, which all start with `io.github.alexshamrai`. By default the warnings go to the standard error.
+
+To hide them, pass `-Djava.util.logging.config.file=<path>` to the test JVM, pointing to a file like this one:
+
+```properties
+handlers = java.util.logging.ConsoleHandler
+io.github.alexshamrai.level = SEVERE
+```
+
+If your project routes `java.util.logging` to SLF4J or Log4j, for example with `jul-to-slf4j`, the warnings go there.
+
 ## Environment Health Tracking
 
 The library supports tracking environment health status during test execution. This feature allows you to mark when tests are running in a degraded or problematic environment, which is then reflected in the CTRF report.

@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 /**
@@ -26,6 +27,7 @@ public class CtrfJsonComposer {
 
     private static final String TOOL_NAME = "JUnit";
     private static final Pattern WHOLE_NUMBER = Pattern.compile("[0-9]+");
+    private static final Logger LOGGER = Logger.getLogger(CtrfJsonComposer.class.getName());
     private final ConfigReader configReader;
     private final StartupDurationProcessor startupDurationProcessor;
     private final String generatedBy;
@@ -116,7 +118,7 @@ public class CtrfJsonComposer {
             environment.setBuildNumber(number);
             return;
         }
-        System.err.println("ctrf.build.number is not a whole number, so the report gives it as buildId: " + value);
+        LOGGER.warning("ctrf.build.number is not a whole number, so the report gives it as buildId: " + value);
         environment.setBuildId(value);
     }
 

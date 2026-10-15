@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Logger;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
@@ -25,6 +26,8 @@ import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
  * passed attempt, so its failure is reported as recovered: passed and flaky (HP-11).
  */
 final class ReportMerger {
+
+    private static final Logger LOGGER = Logger.getLogger(ReportMerger.class.getName());
 
     private ReportMerger() {
         // Utility class - prevent instantiation
@@ -48,7 +51,7 @@ final class ReportMerger {
             try {
                 return mergeWithSameRun(existing, attempts, successes, start, stop, healthy);
             } catch (RuntimeException e) {
-                System.err.println("Ignoring the existing report, which can't be merged: " + e);
+                LOGGER.warning("Ignoring the existing report, which can't be merged: " + e);
             }
         }
         return new MergedRun(AttemptFolder.fold(withRecoveries(attempts, successes)), start, stop, healthy);

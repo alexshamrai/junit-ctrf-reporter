@@ -5,15 +5,12 @@ import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.config.CtrfConfig;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
 import org.aeonbits.owner.ConfigFactory;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,21 +33,11 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 class CtrfReportFileServiceTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final ByteArrayOutputStream errContent = new ByteArrayOutputStream();
-    private final PrintStream originalErr = System.err;
+    @RegisterExtension
+    final LogCapture logs = new LogCapture(CtrfReportFileService.class);
 
     @TempDir
     Path tempDir;
-
-    @BeforeEach
-    void captureStandardError() {
-        System.setErr(new PrintStream(errContent));
-    }
-
-    @AfterEach
-    void restoreStandardError() {
-        System.setErr(originalErr);
-    }
 
     @Test
     @DisplayName("update creates missing directories and writes the report, with its lock file next to it")
@@ -62,7 +49,7 @@ class CtrfReportFileServiceTest {
         assertThat(readMarker(report)).isEqualTo("first");
         assertThat(report.resolveSibling("ctrf.json.lock")).exists();
         assertThat(tempFilesNextTo(report)).isEmpty();
-        assertThat(errContent.toString()).isEmpty();
+        assertThat(logs.text()).isEmpty();
     }
 
     @Test
@@ -96,7 +83,7 @@ class CtrfReportFileServiceTest {
 
         assertThat(seen).containsExactly((CtrfJson) null);
         assertThat(readMarker(report)).isEqualTo("fresh");
-        assertThat(errContent.toString()).contains("can't be read");
+        assertThat(logs.text()).contains("can't be read");
     }
 
     @Test
@@ -114,7 +101,7 @@ class CtrfReportFileServiceTest {
 
         assertThat(seen).containsExactly((CtrfJson) null);
         assertThat(readMarker(report)).isEqualTo("fresh");
-        assertThat(errContent.toString()).contains("can't be read");
+        assertThat(logs.text()).contains("can't be read");
     }
 
     @Test
@@ -128,7 +115,7 @@ class CtrfReportFileServiceTest {
 
         assertThat(readMarker(report)).isEqualTo("first");
         assertThat(tempFilesNextTo(report)).isEmpty();
-        assertThat(errContent.toString()).contains("Failed to write results to file");
+        assertThat(logs.text()).contains("Failed to write results to file");
     }
 
     @Test
@@ -143,10 +130,10 @@ class CtrfReportFileServiceTest {
         })).doesNotThrowAnyException();
 
         assertThat(readMarker(report)).isEqualTo("first");
-        assertThat(errContent.toString()).contains("composing failed");
+        assertThat(logs.text()).contains("composing failed");
         service.update(existing -> marker("third"));
         assertThat(readMarker(report)).isEqualTo("third");
-        assertThat(errContent.toString()).doesNotContain("Could not lock");
+        assertThat(logs.text()).doesNotContain("Could not lock");
         assertThat(tempFilesNextTo(report)).isEmpty();
     }
 
@@ -165,7 +152,7 @@ class CtrfReportFileServiceTest {
         assertThat(report).isDirectory();
         assertThat(inside).exists();
         assertThat(tempFilesNextTo(report)).isEmpty();
-        assertThat(errContent.toString()).contains("Failed to write results to file");
+        assertThat(logs.text()).contains("Failed to write results to file");
         assertThat(elapsedMillis).isGreaterThanOrEqualTo(900L);
     }
 
@@ -214,7 +201,7 @@ class CtrfReportFileServiceTest {
         }
 
         assertThat(readMarker(report)).isEqualTo("written anyway");
-        assertThat(errContent.toString()).contains("Could not lock");
+        assertThat(logs.text()).contains("Could not lock");
     }
 
     @Test
@@ -243,7 +230,7 @@ class CtrfReportFileServiceTest {
             assertThatCode(() -> serviceFor(readOnly.resolve("sub/ctrf.json")).update(existing -> marker("never")))
                 .doesNotThrowAnyException();
 
-            assertThat(errContent.toString()).contains("Access denied");
+            assertThat(logs.text()).contains("Access denied");
         } finally {
             readOnly.toFile().setWritable(true);
         }
