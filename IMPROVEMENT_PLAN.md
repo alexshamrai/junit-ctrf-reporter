@@ -3222,6 +3222,8 @@ Benefits:
 - requirement 1 shipped with HP-5 (#134: `291f21d`): the validator checks reports against the pinned official schema (`schema/ctrf.schema.json`) with `com.networknt:json-schema-validator` in draft-07 mode, and rejects `filepath` and a string `buildNumber`;
 - requirement 6: CI runs the listener integration with 2 forks (CB-6, #132).
 
+**Implementation plan**: [`docs/plans/2026-10-15-ti-4-junit-cross-check.md`](docs/plans/2026-10-15-ti-4-junit-cross-check.md)
+
 #### Why
 
 The 2026-10-08 prompt listed five problems and six requirements. After HP-5 and CB-6, three problems remain:
