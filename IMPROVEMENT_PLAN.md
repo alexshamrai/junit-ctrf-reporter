@@ -20,7 +20,7 @@ Each improvement item includes:
 
 ## Status on `master` — 2026-10-14
 
-`master` @ `291f21d` (updated 2026-10-15). None of this is released yet; Phase 2 ships as 0.5.0.
+`master` @ `059992b` (updated 2026-10-15). None of this is released yet; Phase 2 ships as 0.5.0.
 
 | Item | Status | PR | Commits |
 |---|---|---|---|
@@ -36,7 +36,7 @@ Each improvement item includes:
 | [CB-6](#cb-6-rework-report-persistence-forks-accumulation-same-jvm-reruns) One report per run (forks, accumulation, same-JVM reruns) | Done | #132 | `9084a83` |
 | [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) Class failure that recovers on retry | Done, with CB-6 | #132 | `9084a83` |
 | [HP-5](#hp-5-conform-to-the-official-ctrf-schema) Conform to the official CTRF schema | Done | #134 | `291f21d` |
-| [TI-4](#ti-4-validate-integration-output-against-the-official-schema-and-junits-own-counts) Official schema and JUnit counts in the validator | Partially done: the pinned official schema with a draft-07 validator (HP-5); CI runs the listener integration with 2 forks (CB-6) | #132, #134 | `9084a83`, `291f21d` |
+| [TI-4](#ti-4-validate-integration-output-against-the-official-schema-and-junits-own-counts) Official schema and JUnit counts in the validator | Done: the JUnit event-log cross-check and expectations from the run (#135); the official schema (HP-5, #134); CI with 2 forks (CB-6, #132) | #132, #134, #135 | `9084a83`, `291f21d`, `059992b` |
 | [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests; CB-2 and MP-5 don't yet, and scenario outputs aren't validated against the official schema yet | | |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
@@ -3218,7 +3218,7 @@ Benefits:
 - CI: `.github/workflows/integration-listener.yml`, `.github/workflows/integration-extension.yml`;
 - docs: `INTEGRATION_TESTS.md`, `CLAUDE.md`.
 
-**Status**: Partially done; the rest designed 2026-10-15 against `master` @ `291f21d`, replacing the 2026-10-08 prompt. Requirements 1 and 6 are done, which fixed problems 1 and 2:
+**Status**: Done on `master` (#135: `059992b`). Designed 2026-10-15 against `master` @ `291f21d`, replacing the 2026-10-08 prompt. Follow-ups: [Deferred from the review](#deferred-from-the-ti-4-review). Earlier parts:
 - requirement 1 shipped with HP-5 (#134: `291f21d`): the validator checks reports against the pinned official schema (`schema/ctrf.schema.json`) with `com.networknt:json-schema-validator` in draft-07 mode, and rejects `filepath` and a string `buildNumber`;
 - requirement 6: CI runs the listener integration with 2 forks (CB-6, #132).
 
@@ -3268,12 +3268,17 @@ The 2026-10-08 prompt listed five problems and six requirements. After HP-5 and 
 - It derives what the report must contain:
   - **every test node,** with its final status (`SUCCESSFUL` → passed, `FAILED` → failed, `ABORTED` and `SKIPPED` → skipped), `retries` (its attempts minus 1, absent when 0) and `flaky` (the final attempt passed after an earlier failure);
   - **every container below the engine that failed at least once,** by the same rules. That covers CB-5's failed containers and HP-11's recovered class failures;
-  - **skipped and aborted containers,** separately. JUnit never starts their tests, so its log can't list them; the report must have at least one entry under each, all skipped (HP-8).
+  - **skipped and aborted containers,** separately. JUnit never starts their tests, so its log can't list them; the report must have at least one entry for or within each, all skipped (HP-8).
+- *Corrected by the final review of #135:*
+  - **A skipped container's own ID counts as covered.** For a skipped `@ParameterizedTest`, `@RepeatedTest` or `@TestFactory`, the library writes one skipped entry under the container's own ID.
+  - **A container aborted after its tests ran,** such as an assumption failing in `@AfterAll`, is covered by its listed tests. Only the report entries JUnit's log doesn't list must be skipped, and at least one is required only when the log lists none.
+  - **A JVM that dies leaves a truncated log.** Open Test Reporting writes `</e:events>` only when the test plan finishes. `JunitEvents` reads such a log up to its last complete event, so the unfinished attempt is ignored. The cross-check's failure message names the truncated logs.
+  - **Errors name the log file,** and a log whose root isn't Open Test Reporting events 0.2.0 fails clearly.
 
 **`JunitCrossCheckTest`** (new) checks the report against `JunitEvents`, by `testId`:
 - every entry JUnit's events expect is present, with the same status, `retries` and `flaky`;
-- the report has no other entries, except tests under a skipped or aborted container;
-- each skipped or aborted container has at least one entry under it, all skipped;
+- the report has no other entries, except entries for or within a skipped or aborted container;
+- for each skipped or aborted container, the report's entries for or within it that JUnit's log doesn't list are all skipped, and there is at least one when the log lists none of its tests;
 - a missing or empty events directory fails with a message saying how to produce it.
 
 The events directory defaults to `junit-platform/` next to the report (`<module>/build/test-results/junit-platform`). `-Dctrf.junit.events.dir` overrides it.
@@ -3336,13 +3341,28 @@ Each new check is watched failing first:
 
 **Out of scope:** TI-5's validation of each scenario's output against the schema; Windows; the Maven compat consumers.
 
+#### Deferred from the TI-4 review
+
+The per-task and whole-branch reviews of #135 left these open.
+- **The full validator needs `clean`.** `FlakyTest` keeps its attempt counter in `build/tmp`. On a run without `clean`, the flaky fixture passes on its first attempt, so `CtrfLogicTest`'s flaky expectations fail. The cross-check itself passes. Keying the counter by `ctrf.run.id` would make reruns behave like clean runs.
+- **A failing JUnit engine shows up as an unknown entry.** The library reports an engine-level failure, but `JunitEvents` ignores the engine. This only happens when the whole fake suite is broken.
+- **Without `-Dctrf.report.path`, the extension's one-command run validates the listener's report.** It may be stale, and the run passes. A default derived from whichever integration task ran would avoid it.
+- **The integration modules override a `-Dctrf.run.id` you pass yourself,** because each build sets a fresh one.
+- **Small gaps:**
+  - `ExpectedRun` doesn't mirror the library for build numbers above `Long.MAX_VALUE`, or for its environment-variable configuration layer;
+  - a missing module `ctrf.properties` surfaces as a bare `NoSuchFileException`;
+  - recovering a truncated log assumes Open Test Reporting's `e:` prefix;
+  - an unused `configureThreads` helper remains in the validator's `build.gradle`;
+  - the configuration cache wasn't checked against the integration modules' `doFirst`.
+- **TI-5 can reuse the cross-check:** the forked-JVM scenario tests could check their reports against JUnit's event log the same way.
+
 #### Acceptance Criteria
-- [ ] The validator fails on output that lost tests across forks (shown on `58e36f0`) and on output that fails the official schema (shown with HP-5, #134: 29 errors on the pre-HP-5 listener report)
+- [x] The validator fails on output that lost tests across forks (shown on `58e36f0`: 10 missing entries and a skipped class's 2 lost tests) and on output that fails the official schema (shown with HP-5, #134: 29 errors on the pre-HP-5 listener report)
 - [x] The validator passes once HP-5 and CB-6 are fixed
-- [ ] `./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test` passes with no flags, and with CI's flags passed once
-- [ ] Every report entry is checked against JUnit's event log by `testId`: presence, final status, `retries` and `flaky`
-- [ ] No assertion passes when the test it checks is missing
-- [ ] CI-specific values come from the run's own inputs: CI passes the same flags to both steps, and a run with another thread count passes
+- [x] `./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test` passes with no flags, and with CI's flags passed once
+- [x] Every report entry is checked against JUnit's event log by `testId`: presence, final status, `retries` and `flaky`
+- [x] No assertion passes when the test it checks is missing
+- [x] CI-specific values come from the run's own inputs: CI passes the same flags to both steps, and a run with another thread count passes (`-Dthreads=4` checked locally)
 
 ---
 
@@ -3351,7 +3371,7 @@ Each new check is watched failing first:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: new tests under `src/test/java/io/github/alexshamrai/scenario/` (or a new integration module), fake test classes
-**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. Still open: CB-2 (nested run), MP-5 (tolerant read), and validating each scenario's output against the official schema. HP-5 (#134) pinned that schema at `schema/ctrf.schema.json`; `CtrfSchemaConformanceTest` shows how to load it in tests.
+**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. Still open: CB-2 (nested run), MP-5 (tolerant read), and validating each scenario's output against the official schema and, since TI-4 (#135), against JUnit's event log. HP-5 (#134) pinned that schema at `schema/ctrf.schema.json`; `CtrfSchemaConformanceTest` shows how to load it in tests.
 
 #### Prompt
 ````
@@ -4323,7 +4343,7 @@ Updated 2026-10-08; progress marked 2026-10-14. This replaces the original four-
 ### Already done on `master`
 CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 (its regression is tracked in CB-6), TI-3 (partially)
 
-Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11 and HP-5. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
+Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
 
 ### Phase 1: Stop wrong results and broken builds (small, independent changes)
 1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix. **Done** (#124)
@@ -4338,7 +4358,7 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 8. HP-6: One test object per logical test, with `retryAttempts` (also resolves MP-3). **Done** (#130)
 9. CB-6: One report merged under a lock, run identity, atomic writes, together with HP-11 (a class failure that recovers on retry stays failed). **Done** (#132)
 10. HP-5: Conform to the official schema. **Done** (#134); filling `suite` is split out as HP-12 (Phase 4)
-11. TI-4: Validator using the official schema and a cross-check against JUnit's counts. The official schema is **done** with HP-5 (#134); the cross-check is open
+11. TI-4: Validator using the official schema and a cross-check against JUnit's counts. **Done** (#134, #135)
 12. MP-5: Read previous reports tolerantly
 
 ### Phase 3: Architecture and robustness
