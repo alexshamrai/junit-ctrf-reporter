@@ -1,14 +1,15 @@
 package io.github.alexshamrai;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.alexshamrai.config.ConfigReader;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
+import io.github.alexshamrai.json.CtrfJsonMapper;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileSystemException;
@@ -47,7 +48,6 @@ public class CtrfReportFileService {
     private static final Object JVM_LOCK = new Object();
     private static final Logger LOGGER = Logger.getLogger(CtrfReportFileService.class.getName());
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private final ConfigReader configReader;
     private final Duration lockTimeout;
 
@@ -148,8 +148,8 @@ public class CtrfReportFileService {
             return null;
         }
         try {
-            return objectMapper.readValue(report.toFile(), CtrfJson.class);
-        } catch (IOException e) {
+            return CtrfJsonMapper.read(Files.readString(report, StandardCharsets.UTF_8), CtrfJson.class);
+        } catch (IOException | RuntimeException e) {
             LOGGER.warning("Ignoring the existing report, which can't be read: " + report + " - " + e.getMessage());
             return null;
         }
@@ -162,7 +162,7 @@ public class CtrfReportFileService {
     private void writeAtomically(Path report, CtrfJson ctrfJson) {
         Path temp = report.resolveSibling("." + report.getFileName() + "." + UUID.randomUUID() + ".tmp");
         try {
-            objectMapper.writeValue(temp.toFile(), ctrfJson);
+            Files.writeString(temp, CtrfJsonMapper.write(ctrfJson), StandardCharsets.UTF_8);
             moveOver(temp, report);
         } catch (IOException e) {
             printWriteFailure(e);

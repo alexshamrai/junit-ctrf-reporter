@@ -49,7 +49,10 @@ dependencies {
     compileOnly platform("org.junit:junit-bom:${junitMinVersion}")
     compileOnly "org.junit.jupiter:junit-jupiter-api"
     compileOnly "org.junit.platform:junit-platform-launcher"
-    implementation "com.fasterxml.jackson.core:jackson-databind:${jaksonVersion}"
+    // The model keeps its Jackson annotations for users who read it with their own Jackson. The library doesn't use
+    // them at run time, so they are compile-only and the published POM has no dependencies
+    compileOnly platform("com.fasterxml.jackson:jackson-bom:${jaksonVersion}")
+    compileOnly "com.fasterxml.jackson.core:jackson-annotations"
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
     testImplementation platform("org.junit:junit-bom:${junitVersion}")
@@ -58,7 +61,9 @@ dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter-params"
     testImplementation "org.mockito:mockito-core:${mockitoVersion}"
     testImplementation "org.assertj:assertj-core:${assertjVersion}"
-    // Validates reports against the pinned official CTRF schema. It uses Jackson 3 (tools.jackson), apart from the library's Jackson 2
+    // Jackson wrote the reports up to 0.5.0: the tests compare the library's own JSON code with it, and read reports with it
+    testImplementation "com.fasterxml.jackson.core:jackson-databind:${jaksonVersion}"
+    // Validates reports against the pinned official CTRF schema. It uses Jackson 3 (tools.jackson), apart from the tests' Jackson 2
     testImplementation "com.networknt:json-schema-validator:${networkntValidatorVersion}"
     // A logging provider for the validator, so tests don't print SLF4J's "no providers" warning
     testRuntimeOnly "org.slf4j:slf4j-nop:${slf4jVersion}"

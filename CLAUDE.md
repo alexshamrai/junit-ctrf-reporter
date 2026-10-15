@@ -118,6 +118,7 @@ CtrfReportFileService.update (under a JVM lock and a lock on <report>.lock)
 | **TestProcessor**               | Converts JUnit test execution data (status, duration, failures) into CTRF Test objects                |
 | **CtrfJsonComposer**            | Assembles final CTRF JSON structure with metadata (tool, environment, summary)                        |
 | **CtrfReportFileService**       | `update`: locked fresh read, merge function, atomic write                                             |
+| **CtrfJsonMapper**              | Writes and reads the model as JSON without a library (`JsonWriter`, `JsonParser`); ignores unknown fields |
 | **ConfigReader**                | Reads the configuration once: system property → env var (exact name, then `CTRF_X_Y` for `ctrf.*` keys) → `ctrf.properties` (UTF-8) → default; `${...}` references; an invalid number or boolean warns and uses the default |
 | **SuiteExecutionErrorHandler**  | Captures suite-level initialization/execution failures                                                |
 | **StartupDurationProcessor**    | Optionally calculates test suite startup duration                                                     |
@@ -126,7 +127,7 @@ CtrfReportFileService.update (under a JVM lock and a lock on <report>.lock)
 
 All model classes in `io.github.alexshamrai.ctrf.model` use:
 - **Lombok**: `@Data`, `@Builder` for boilerplate reduction
-- **Jackson**: `@JsonInclude(NON_NULL)` to omit null fields from JSON output
+- **Jackson annotations** (`@JsonInclude(NON_NULL)`, `@JsonAlias`, `@JsonValue`), compile-only: they serve users who read the model with their own Jackson. The library writes and reads JSON itself, with `io.github.alexshamrai.json.CtrfJsonMapper`, which applies the same rules; `JacksonDifferentialTest` keeps its output byte-identical to Jackson's
 
 **Schema:** reports must validate against the official CTRF schema, pinned at `schema/ctrf.schema.json`. It is version 0.2.0, and `schema/README.md` has its source tag and commit. `CtrfSchemaConformanceTest` and the integration validator load it as a test resource; it is not in the published jar. To move to a new CTRF version, replace the file and change `CtrfJson.SPEC_VERSION` in the same commit. Field names follow the spec exactly, for example `filePath`; `buildNumber` is an integer, and a non-numeric `ctrf.build.number` goes to `buildId`.
 
@@ -191,6 +192,7 @@ src/main/java/io/github/alexshamrai/
 │   └── CtrfListener.java          # JUnit Platform Listener entry point
 ├── ctrf/model/                    # CTRF model classes (CtrfJson, Test, Summary, etc.)
 ├── config/                        # Configuration loading (ConfigReader)
+├── json/                          # Own JSON writer, parser and model binding (internal)
 ├── model/
 │   └── TestDetails.java           # Internal DTO for test data
 ├── util/                          # Utilities (SummaryUtil, TestDetailsUtil)

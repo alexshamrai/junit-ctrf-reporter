@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -100,6 +101,62 @@ class CtrfReportFileServiceTest {
         assertThat(seen).containsExactly((CtrfJson) null);
         assertThat(readMarker(report)).isEqualTo("fresh");
         assertThat(logs.text()).contains("can't be read");
+    }
+
+    @Test
+    @DisplayName("A report with fields this version doesn't know reaches the merge function, instead of being replaced")
+    void reportWithUnknownFieldsReachesTheMerge() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.writeString(report, "{\"generatedBy\":\"first\",\"fieldFromTheFuture\":{\"a\":[1]}}");
+        List<String> seen = new ArrayList<>();
+
+        serviceFor(report).update(existing -> {
+            seen.add(existing.getGeneratedBy());
+            return marker("second");
+        });
+
+        assertThat(seen).containsExactly("first");
+        assertThat(logs.text()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Review Focus 3: a report nested too deeply to read is replaced, with a warning")
+    void deeplyNestedReportIsReplaced() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.writeString(report, "{\"extra\":{\"a\":" + "[".repeat(100_000) + "]".repeat(100_000) + "}}");
+        List<CtrfJson> seen = new ArrayList<>();
+
+        serviceFor(report).update(existing -> {
+            seen.add(existing);
+            return marker("fresh");
+        });
+
+        assertThat(seen).containsExactly((CtrfJson) null);
+        assertThat(readMarker(report)).isEqualTo("fresh");
+        assertThat(logs.text()).contains("can't be read");
+    }
+
+    @Test
+    @DisplayName("Text with a lone surrogate is written as an escape")
+    void loneSurrogateDoesNotFailTheReport() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+
+        serviceFor(report).update(existing -> marker("broken " + (char) 0xD83D));
+
+        assertThat(Files.readString(report, StandardCharsets.UTF_8)).contains("\"generatedBy\":\"broken \\uD83D\"");
+        assertThat(logs.text()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("The report is written as UTF-8")
+    void reportIsWrittenAsUtf8() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        String text = "Gr" + (char) 0xFC + (char) 0xDF + "e " + (char) 0x65E5 + (char) 0x672C;
+
+        serviceFor(report).update(existing -> marker(text));
+
+        assertThat(new String(Files.readAllBytes(report), StandardCharsets.UTF_8)).contains(text);
+        assertThat(readMarker(report)).isEqualTo(text);
     }
 
     @Test
@@ -257,11 +314,12 @@ class CtrfReportFileServiceTest {
     }
 
     /**
-     * Fails while Jackson serializes it, after the report's first fields are already written.
+     * Fails while the report is turned into JSON.
      */
     static final class Exploding {
 
-        public String getValue() {
+        @Override
+        public String toString() {
             throw new IllegalStateException("boom");
         }
     }
