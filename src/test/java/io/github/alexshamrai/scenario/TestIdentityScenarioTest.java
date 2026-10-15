@@ -40,8 +40,8 @@ class TestIdentityScenarioTest {
 
         assertThat(result.tests()).hasSize(2);
         assertThat(result.tests()).allSatisfy(test -> {
-            assertThat(test.getRetries()).as("retries of %s", test.getFilepath()).isNull();
-            assertThat(test.getFlaky()).as("flaky of %s", test.getFilepath()).isNull();
+            assertThat(test.getRetries()).as("retries of %s", test.getFilePath()).isNull();
+            assertThat(test.getFlaky()).as("flaky of %s", test.getFilePath()).isNull();
         });
     }
 }

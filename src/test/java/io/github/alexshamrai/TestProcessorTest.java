@@ -75,7 +75,7 @@ public class TestProcessorTest {
         assertNotNull(result);
         assertEquals(displayName, result.getName());
         assertEquals(new ArrayList<>(tags), result.getTags());
-        assertEquals(filePath, result.getFilepath());
+        assertEquals(filePath, result.getFilePath());
         assertEquals(startTime, result.getStart());
         assertEquals(stopTime, result.getStop());
         assertEquals(1000, result.getDuration());

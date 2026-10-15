@@ -115,4 +115,11 @@ class SummaryUtilTest {
         assertEquals(3, summary.getTests());
         assertEquals(1, summary.getFlaky());
     }
+
+    @org.junit.jupiter.api.Test
+    void durationIsStopMinusStart() {
+        var summary = SummaryUtil.createSummary(List.of(), 1_000L, 3_500L);
+
+        assertEquals(2_500L, summary.getDuration());
+    }
 }

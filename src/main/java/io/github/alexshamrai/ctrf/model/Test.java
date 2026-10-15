@@ -1,5 +1,6 @@
 package io.github.alexshamrai.ctrf.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.AllArgsConstructor;
@@ -27,7 +28,11 @@ public class Test {
     private long duration;
     private Long start;
     private Long stop;
-    private String suite;
+    /**
+     * Suite hierarchy, from the top level to the immediate parent. When set, it has at least one entry. The library
+     * doesn't set it yet.
+     */
+    private List<String> suite;
     private String message;
     private String trace;
     private String snippet;
@@ -36,7 +41,11 @@ public class Test {
     private String rawStatus;
     private List<String> tags;
     private String type;
-    private String filepath;
+    /**
+     * Where the test is defined: its class name. Reports written before 0.5.0 call it {@code filepath}, which is still read.
+     */
+    @JsonAlias("filepath")
+    private String filePath;
     private Integer retries;
     private Boolean flaky;
     /**

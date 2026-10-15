@@ -24,6 +24,12 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class CtrfJson {
     /**
+     * The CTRF version this library writes: the version of the official schema pinned at {@code schema/ctrf.schema.json}.
+     * Change it only together with that file.
+     */
+    public static final String SPEC_VERSION = "0.2.0";
+
+    /**
      * The format of the report.
      * This is a required field and must always be "CTRF".
      */
@@ -32,11 +38,10 @@ public class CtrfJson {
 
     /**
      * The version of the specification.
-     * This is a required field and must be a valid semver string.
-     * Current version is "0.0.0".
+     * This is a required field and must be a valid semver string: {@link #SPEC_VERSION}.
      */
     @Builder.Default
-    private String specVersion = "0.0.0";
+    private String specVersion = SPEC_VERSION;
 
     /**
      * A unique identifier for the report, typically a UUID.

@@ -136,11 +136,10 @@ integration-tests/
         ├── java/
         │   └── io/github/alexshamrai/integration/
         │       ├── CtrfSchemaValidationTest.java  # Validates report schema compliance
-        │       ├── CtrfLogicTest.java             # Verifies logical correctness of the report
-        └── resources/
-            └── schema/
-                └── ctrf-schema.json               # CTRF schema definition
+        │       └── CtrfLogicTest.java             # Verifies logical correctness of the report
 ```
+
+The schema is the official CTRF schema pinned at `schema/ctrf.schema.json` in the repository root (see `schema/README.md`). The module's `build.gradle` adds it to the test resources.
 
 ## Test Execution Flow
 
@@ -163,9 +162,9 @@ The integration tests follow a two-phase execution process:
 
 This test validates that the generated report complies with the CTRF schema:
 
-- Verifies the report against the JSON schema definition
-- Checks that required fields are present and have correct formats
-- Validates that the report format is "CTRF" and the spec version follows the pattern x.y.z
+- Validates the report against the official CTRF schema in draft-07 mode, so unknown properties and wrong types are errors
+- Checks that the report format is "CTRF" and that `specVersion` equals `CtrfJson.SPEC_VERSION`
+- Checks that the validator rejects a report with the legacy `filepath` key or a string `buildNumber`
 - Ensures all test entries have valid names and statuses
 
 #### CtrfLogicTest

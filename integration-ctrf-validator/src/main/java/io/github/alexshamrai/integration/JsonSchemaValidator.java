@@ -1,72 +1,29 @@
 package io.github.alexshamrai.integration;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.fge.jsonschema.core.exceptions.ProcessingException;
-import com.github.fge.jsonschema.core.report.ProcessingReport;
-import com.github.fge.jsonschema.main.JsonSchema;
-import com.github.fge.jsonschema.main.JsonSchemaFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.networknt.schema.InputFormat;
+import com.networknt.schema.Schema;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SpecificationVersion;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
+import java.io.InputStream;
 import java.util.List;
 
+/**
+ * Validates JSON documents against a JSON schema in draft-07 mode, the draft of the official CTRF schema.
+ */
 public class JsonSchemaValidator {
-    private static final Logger log = LoggerFactory.getLogger(JsonSchemaValidator.class);
-    private final ObjectMapper objectMapper;
-    private final JsonSchemaFactory schemaFactory;
 
-    public JsonSchemaValidator() {
-        this.objectMapper = new ObjectMapper();
-        this.schemaFactory = JsonSchemaFactory.byDefault();
+    private final Schema schema;
+
+    public JsonSchemaValidator(InputStream schemaJson) {
+        this.schema = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_7).getSchema(schemaJson);
     }
 
-    public ValidationResult validateAgainstSchema(File jsonFile, String schemaPath) throws IOException {
-        try {
-            String schemaContent = FileUtility.readFileContent(schemaPath);
-            JsonNode schemaNode = objectMapper.readTree(schemaContent);
-            JsonSchema schema = schemaFactory.getJsonSchema(schemaNode);
-
-            JsonNode jsonNode = objectMapper.readTree(jsonFile);
-
-            ProcessingReport report = schema.validate(jsonNode);
-            
-            ValidationResult result = new ValidationResult(report.isSuccess());
-            
-            if (!report.isSuccess()) {
-                report.forEach(processingMessage -> 
-                    result.addError(processingMessage.getMessage())
-                );
-            }
-            
-            return result;
-        } catch (ProcessingException e) {
-            log.error("Error validating JSON against schema", e);
-            throw new IOException("Error validating JSON against schema", e);
-        }
-    }
-
-    public class ValidationResult {
-        private final boolean success;
-        private final List<String> errors = new ArrayList<>();
-        
-        public ValidationResult(boolean success) {
-            this.success = success;
-        }
-        
-        public void addError(String error) {
-            errors.add(error);
-        }
-        
-        public boolean isSuccess() {
-            return success;
-        }
-        
-        public List<String> getErrors() {
-            return errors;
-        }
+    /**
+     * Returns one message per violation, each starting with the JSON pointer of the value that fails, such as
+     * {@code /results/tests/0: property 'filepath' is not defined in the schema ...}. Empty when the document is valid.
+     */
+    public List<String> validate(String json) {
+        return schema.validate(json, InputFormat.JSON).stream().map(Object::toString).toList();
     }
 }

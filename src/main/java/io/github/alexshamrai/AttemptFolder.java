@@ -110,7 +110,7 @@ final class AttemptFolder {
         return Test.builder()
             .testId(test.getTestId())
             .name(test.getName())
-            .filepath(test.getFilepath())
+            .filePath(test.getFilePath())
             .tags(test.getTags())
             .status(earlier.getStatus())
             .duration(earlier.getDuration())
@@ -129,8 +129,8 @@ final class AttemptFolder {
         if (attempt.getTestId() != null) {
             return "testId:" + attempt.getTestId();
         }
-        if (attempt.getFilepath() != null && attempt.getName() != null) {
-            return "filepath:" + attempt.getFilepath() + "#" + attempt.getName();
+        if (attempt.getFilePath() != null && attempt.getName() != null) {
+            return "filepath:" + attempt.getFilePath() + "#" + attempt.getName();
         }
         return null;
     }

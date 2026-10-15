@@ -110,7 +110,7 @@ def generateTimelineHtml(tests, summary) {
         def startTime = test.start
         def stopTime = test.stop
         def duration = test.duration
-        def filepath = test.filepath ?: 'Unknown'
+        def filepath = test.filePath ?: 'Unknown'
         def threadName = test.threadId ?: filepath
 
         def startTimeUtc = convertTimestampToUtc(startTime)

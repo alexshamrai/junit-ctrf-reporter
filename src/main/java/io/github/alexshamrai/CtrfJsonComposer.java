@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Composes the final CTRF JSON object from test results and configuration.
@@ -24,6 +25,7 @@ import java.util.UUID;
 public class CtrfJsonComposer {
 
     private static final String TOOL_NAME = "JUnit";
+    private static final Pattern WHOLE_NUMBER = Pattern.compile("[0-9]+");
     private final ConfigReader configReader;
     private final StartupDurationProcessor startupDurationProcessor;
     private final String generatedBy;
@@ -79,12 +81,11 @@ public class CtrfJsonComposer {
      * @return an Environment object containing all available environment information
      */
     private Environment composeEnvironment(boolean isEnvironmentHealthy) {
-        return Environment.builder()
+        var environment = Environment.builder()
             .reportName(configReader.getReportName())
             .appName(configReader.getAppName())
             .appVersion(configReader.getAppVersion())
             .buildName(configReader.getBuildName())
-            .buildNumber(configReader.getBuildNumber())
             .buildUrl(configReader.getBuildUrl())
             .repositoryName(configReader.getRepositoryName())
             .repositoryUrl(configReader.getRepositoryUrl())
@@ -96,5 +97,38 @@ public class CtrfJsonComposer {
             .testEnvironment(configReader.getTestEnvironment())
             .healthy(isEnvironmentHealthy)
             .build();
+        setBuildNumber(environment, configReader.getBuildNumber());
+        return environment;
+    }
+
+    /**
+     * CTRF types {@code buildNumber} as an integer. A whole number goes there; any other value goes to
+     * {@code buildId}, with a warning, so the report stays valid. A blank value sets neither.
+     * It takes the built Environment, not its Lombok builder, which javadoc can't resolve.
+     */
+    private static void setBuildNumber(Environment environment, String configured) {
+        if (configured == null || configured.isBlank()) {
+            return;
+        }
+        var value = configured.strip();
+        var number = toWholeNumber(value);
+        if (number != null) {
+            environment.setBuildNumber(number);
+            return;
+        }
+        System.err.println("ctrf.build.number is not a whole number, so the report gives it as buildId: " + value);
+        environment.setBuildId(value);
+    }
+
+    private static Long toWholeNumber(String value) {
+        if (!WHOLE_NUMBER.matcher(value).matches()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            // More digits than a long holds
+            return null;
+        }
     }
 }

@@ -153,13 +153,13 @@ class AttemptFolderTest {
         var templates = "[engine:junit-jupiter]/[class:com.example.ATest]/[test-template:";
         var tests = AttemptFolder.fold(List.of(
             Test.builder().testId("[engine:junit-jupiter]/[class:com.example.BTest]/[method:shouldWork()]")
-                .filepath(CLASS_B).name("shouldWork()").status(FAILED).build(),
+                .filePath(CLASS_B).name("shouldWork()").status(FAILED).build(),
             Test.builder().testId("[engine:junit-jupiter]/[class:com.example.ATest]/[method:shouldWork()]")
-                .filepath(CLASS_A).name("shouldWork()").status(PASSED).build(),
+                .filePath(CLASS_A).name("shouldWork()").status(PASSED).build(),
             Test.builder().testId(templates + "first(int)]/[test-template-invocation:#1]")
-                .filepath(CLASS_A).name("[1] 1").status(FAILED).build(),
+                .filePath(CLASS_A).name("[1] 1").status(FAILED).build(),
             Test.builder().testId(templates + "second(int)]/[test-template-invocation:#1]")
-                .filepath(CLASS_A).name("[1] 1").status(PASSED).build()));
+                .filePath(CLASS_A).name("[1] 1").status(PASSED).build()));
 
         assertThat(tests).hasSize(4).allSatisfy(test -> assertThat(test.getRetries()).isNull());
     }
@@ -167,8 +167,8 @@ class AttemptFolderTest {
     @org.junit.jupiter.api.Test
     @DisplayName("Entries without a testId fold by file path and name, apart from entries with a testId")
     void entriesWithoutTestIdFoldByFilePathAndNameOnly() {
-        var legacyFailed = Test.builder().filepath(CLASS_A).name("test1()").status(FAILED).build();
-        var legacyPassed = Test.builder().filepath(CLASS_A).name("test1()").status(PASSED).build();
+        var legacyFailed = Test.builder().filePath(CLASS_A).name("test1()").status(FAILED).build();
+        var legacyPassed = Test.builder().filePath(CLASS_A).name("test1()").status(PASSED).build();
         var current = attempt(TEST_1, "test1()", PASSED, 300L);
 
         var tests = AttemptFolder.fold(List.of(legacyFailed, legacyPassed, current));
@@ -216,7 +216,7 @@ class AttemptFolderTest {
     @org.junit.jupiter.api.Test
     @DisplayName("Unfolding gives the earlier attempts with the test's identity, then the final attempt")
     void unfoldGivesEarlierAttemptsThenTheFinalAttempt() {
-        var test = Test.builder().testId(TEST_1).filepath(CLASS_A).name("test1()").tags(List.of("smoke"))
+        var test = Test.builder().testId(TEST_1).filePath(CLASS_A).name("test1()").tags(List.of("smoke"))
             .status(PASSED).start(300L).stop(305L).duration(5).threadId("worker-1")
             .retries(1).flaky(true)
             .retryAttempts(List.of(RetryAttempt.builder().attempt(1).status(FAILED).duration(7)
@@ -226,7 +226,7 @@ class AttemptFolderTest {
         var attempts = AttemptFolder.unfold(List.of(test));
 
         assertThat(attempts).containsExactly(
-            Test.builder().testId(TEST_1).filepath(CLASS_A).name("test1()").tags(List.of("smoke"))
+            Test.builder().testId(TEST_1).filePath(CLASS_A).name("test1()").tags(List.of("smoke"))
                 .status(FAILED).duration(7).start(100L).stop(107L).message("boom").trace("trace of boom").build(),
             test.toBuilder().retries(null).flaky(null).retryAttempts(null).build());
         assertThat(test.getRetryAttempts()).as("the input is not changed").hasSize(1);
@@ -307,7 +307,7 @@ class AttemptFolderTest {
     private static Test attempt(String testId, String name, Test.TestStatus status, long start) {
         return Test.builder()
             .testId(testId)
-            .filepath(CLASS_A)
+            .filePath(CLASS_A)
             .name(name)
             .status(status)
             .start(start)

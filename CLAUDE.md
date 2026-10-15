@@ -135,6 +135,8 @@ All model classes in `io.github.alexshamrai.ctrf.model` use:
 - **Lombok**: `@Data`, `@Builder` for boilerplate reduction
 - **Jackson**: `@JsonInclude(NON_NULL)` to omit null fields from JSON output
 
+**Schema:** reports must validate against the official CTRF schema, pinned at `schema/ctrf.schema.json`. It is version 0.2.0, and `schema/README.md` has its source tag and commit. `CtrfSchemaConformanceTest` and the integration validator load it as a test resource; it is not in the published jar. To move to a new CTRF version, replace the file and change `CtrfJson.SPEC_VERSION` in the same commit. Field names follow the spec exactly, for example `filePath`; `buildNumber` is an integer, and a non-numeric `ctrf.build.number` goes to `buildId`.
+
 Hierarchy:
 ```
 CtrfJson (root)
@@ -211,6 +213,7 @@ src/main/java/io/github/alexshamrai/
 ├── SuiteExecutionErrorHandler.java # Suite-level error handling
 └── StartupDurationProcessor.java  # Optional startup duration calculation
 
+schema/                            # Pinned official CTRF schema (test resource only)
 integration-tests-extension/       # Integration tests using CtrfExtension
 integration-tests-listener/        # Integration tests using CtrfListener
 integration-ctrf-validator/        # Schema and logic validation tests
