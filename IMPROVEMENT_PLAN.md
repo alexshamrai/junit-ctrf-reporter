@@ -39,8 +39,261 @@ Each improvement item includes:
 | [TI-4](#ti-4-validate-integration-output-against-the-official-schema-and-junits-own-counts) Official schema and JUnit counts in the validator | Done: the JUnit event-log cross-check and expectations from the run (#135); the official schema (HP-5, #134); CI with 2 forks (CB-6, #132) | #132, #134, #135 | `9084a83`, `291f21d`, `059992b` |
 | [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests; CB-2 doesn't yet, and scenario outputs aren't validated against the official schema yet | | |
 | [MP-5](#mp-5-read-previous-reports-tolerantly) Read previous reports tolerantly | Superseded by CB-6; not planned for 0.5.0 | #132 | `9084a83` |
+| [Phase 3](#phase-3-design--051) HP-10, HP-1, CB-2, MP-6, MP-7, MP-8, MP-9, HP-3 | Designed 2026-10-15 for 0.5.1 | | |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
+
+---
+
+## Phase 3 Design — 0.5.1
+
+**Status**: Designed 2026-10-15 against `master` @ `635b4e6`, after the 0.5.0 release. Ships as **0.5.1**.
+**Items**:
+- [HP-10](#hp-10-make-the-testexecutionlistener-the-single-core-integration-point) with [HP-1](#hp-1-refactor-singleton-pattern-in-ctrfreportmanager);
+- [CB-2](#cb-2-a-nested-junit-run-ends-the-outer-run-re-scoped-from-race-condition-in-finishtestrun);
+- [MP-6](#mp-6-replace-deprecated-extensioncontextstorecloseableresource);
+- [MP-7](#mp-7-never-let-reporter-errors-fail-or-mask-user-tests);
+- [MP-8](#mp-8-separate-message-from-trace-bound-the-trace-size);
+- [MP-9](#mp-9-dependency-and-configuration-hygiene-owner-env-vars-jackson) with [HP-3](#hp-3-implement-proper-logging-framework).
+
+### Decisions (2026-10-15)
+
+- **0.5.1 is a patch release, so nothing breaks for existing setups.**
+  - `@ExtendWith(CtrfExtension.class)` and explicit `CtrfListener` registration keep working unchanged.
+  - Every configuration key keeps resolving exactly as in 0.5.0.
+  - Nothing new is switched on automatically.
+  - The report keeps its format; only the fixes listed below change its content.
+  - Rejected: a 0.6.0 that allows breaking changes, such as auto-registering the listener or removing the model's Jackson annotations.
+- **One branch, `fix/phase-3-robustness`, with one commit per task and no squash.**
+- **Java 17:**
+  - the main code keeps compiling with `--release 17`;
+  - every commit checks that all library classes are class-file major version 61;
+  - no Java 17 CI job is added.
+- **CB-2: the tests of a nested JUnit run are ignored.** Only the run that started reporting is reported.
+  - Rejected: adding them to the outer report. Nested tests are usually deliberate fixtures, and their failures would show as the outer build's.
+  - Rejected: a separate report for nested runs, which would need new configuration.
+- **MP-8: `ctrf.max.trace.length` defaults to 20,000 characters,** and 0 means no limit.
+  - Rejected: 50,000, which almost never cuts anything.
+  - Rejected: no limit by default, which leaves the problem as it is.
+- **MP-9: our own config loader replaces `owner`.**
+  - **Facts, checked 2026-10-15:**
+    - `org.aeonbits.owner` was last released on Maven Central as 1.0.12, on 2020-06-06.
+    - The project is active again, at `github.com/matteobaccan/owner`, formerly `lviggiano/owner`. `master` is `2.0.0-SNAPSHOT`, with 2026 security fixes and new readers. So MP-9's 2026-10-08 finding "unmaintained" was wrong; what holds is "no release in six years".
+  - **Reasons:**
+    - this library needs about 20 string keys, two numbers and one boolean, and every dependency lands on users' test classpaths;
+    - `CTRF_*` environment variables don't work with `owner`;
+    - invalid values throw inside JUnit callbacks;
+    - `owner` 2.0 shares its package with 1.0.12, so a project using 2.0 could clash with us.
+  - **Rejected alternatives:**
+    - keeping `owner` with workarounds. `owner`'s `imports` map outranks system properties, so `CTRF_*` support would have to rebuild the precedence around it;
+    - JUnit configuration parameters, which don't read `ctrf.properties` or environment variables, and aren't available where the manager is created;
+    - another library, which has the same footprint problem or a worse one.
+- **MP-9: Jackson leaves the runtime classpath in 0.5.1.**
+  - `jackson-databind` is a *runtime*-scoped dependency in the POM (`implementation` in Gradle), so it was never on users' compile classpath. Removing it can't break anyone's compilation.
+  - Our own JSON writer and reader replace it. The model keeps its Jackson annotations, compile-only, so users who read our model with their own Jackson see no change.
+  - Rejected: shading Jackson, which would relocate the annotations and break exactly those users.
+  - Rejected: deferring it to 0.6.0. This was first proposed, then reversed once the runtime scope was confirmed.
+- **HP-10: run ownership plus docs.**
+  - Rejected: a full shared core that both entry points feed. That rewrites code Phases 1 and 2 just fixed and tested, which is risky for a patch.
+  - Rejected: docs only, which would leave the global design that caused CB-2.
+- **`CtrfListener` stays opt-in.** The jar doesn't ship `META-INF/services/org.junit.platform.launcher.TestExecutionListener`.
+  - Shipping it would switch reporting on for every project with the jar on its test classpath.
+  - That includes `CtrfExtension` users, who would then get double reporting.
+
+### Commits
+
+| # | Commit | Item |
+|---|---|---|
+| 1 | Log through `java.util.logging` instead of `System.err` | HP-3 |
+| 2 | Own config loader: `CTRF_*` environment variables, invalid values warn and fall back, `owner` removed | MP-9 |
+| 3 | Own JSON writer and reader: Jackson leaves the runtime classpath | MP-9 |
+| 4 | `message` is the exception summary; `trace` is capped by `ctrf.max.trace.length` | MP-8 |
+| 5 | The extension's end-of-run hook is also `AutoCloseable` | MP-6 |
+| 6 | Reporter errors in extension callbacks are caught and logged | MP-7 |
+| 7 | A `TestRun` remembers its owner; nested runs are ignored | CB-2 |
+| 8 | The manager's collaborators are injected; the README recommends the listener | HP-10, HP-1 |
+
+### `owner` 1.0.12 behaviour the loader keeps (probed 2026-10-15)
+
+| Case | `owner` 1.0.12 | Loader |
+|---|---|---|
+| A key set as a system property and in `ctrf.properties` | system property wins | same |
+| Environment variable with the exact key, e.g. `ctrf.report.path` | used | same |
+| Environment variable `CTRF_REPORT_PATH` | ignored | **used** |
+| `${user.home}` or `${other.key}` in a value | expanded through the same lookup (system property first) | same |
+| Unknown `${no.such.key}` | expands to an empty string | same |
+| Cyclic `${a}` → `${b}` → `${a}` | `StackOverflowError` | **warning; the reference expands to an empty string** |
+| `value  ` with trailing spaces (strings) | kept as is | same |
+| Empty value | `""` | same |
+| Unset key | the default, or null | same |
+| Number `" 300 "` | throws `UnsupportedOperationException` | **300** |
+| Number `abc`, or a negative length | throws | **warning; the default** |
+| Boolean `TRUE` | `true` | same |
+| Boolean `yes` | throws | **warning; the default** |
+
+### Commit 1 — HP-3: log through `java.util.logging`
+
+- **Every `System.err.println` in the library becomes a WARNING on that class's JUL logger.** That covers `CtrfReportFileService`, `ReportMerger` and the `buildId` warning in `CtrfJsonComposer`.
+- **Message texts stay as they are.** Only the format around them changes: JUL's default handler still prints to stderr, but adds a line with the timestamp and the logging class.
+- **Why:** users can silence, filter or redirect the warnings with `logging.properties`, or with the JUL bridges of SLF4J and Log4j. No dependency is added.
+- **Tests:** the tests that capture `System.err` switch to a test handler attached to the logger.
+
+### Commit 2 — MP-9: own config loader
+
+- **`ConfigReader` keeps every public getter.** The `owner` interface `CtrfConfig` is removed, along with `ConfigReader(CtrfConfig)`. A public constructor takes explicit inputs (system properties, environment, `ctrf.properties`), for tests and embedders.
+- **Lookup per key, first value wins:**
+  1. system property `ctrf.x.y`;
+  2. environment variable `ctrf.x.y`, then `CTRF_X_Y` (upper case, dots become underscores);
+  3. `ctrf.properties` on the classpath, through the context class loader first, then the library's own class loader;
+  4. the default.
+
+  The sources are read once, when the reader is created, which is also when `owner` read them.
+- **`owner`'s behaviour is kept, except for the fixes in the table above.**
+- **Typed values are parsed once, when the reader is created,** so a bad value warns once, not on every test.
+- **Build:** `owner` is removed from `build.gradle`, and so from the published POM.
+- **Tests:** `ConfigReaderTest` becomes a compatibility suite with one test per row of the table.
+- **Docs:** the README's configuration section documents the precedence order, the `CTRF_*` names, and what happens to invalid values.
+
+### Commit 3 — MP-9: own JSON writer and reader
+
+- **New internal package `io.github.alexshamrai.json`:**
+  - **`JsonWriter`** writes compact JSON, as Jackson does today, with no whitespace. Escaping follows Jackson: `"` and `\`, the short escapes `\b \t \n \f \r`, and `\u00XX` with uppercase hex for other control characters. Other text, including emoji, is written as-is in UTF-8. A lone surrogate is written as a `\uD8xx` escape; Jackson threw on it, which failed the whole report write.
+  - **`JsonParser`** is a recursive-descent parser. Integers become `Integer`, `Long` or `BigInteger` depending on size, and decimals become `Double`. It accepts any whitespace and a UTF-8 BOM. Malformed input throws, which the file service already treats as "can't be read, replace it".
+  - **`CtrfJsonMapper`** binds the model by reflection over each model class's declared fields. The rules are written explicitly, because the annotation classes aren't present at runtime:
+    - **Fields:** in declaration order, named after the field; static fields are skipped.
+    - **Nulls:** null fields are omitted; empty lists are kept; primitives are always written; nulls inside `Map<String, Object>` values are written as `null`.
+    - **Status:** written lowercase; read ignoring case. An unknown status still fails the read.
+    - **Coercions when reading:** numeric strings become numbers, and numbers and booleans become text in string fields; null in a primitive field becomes 0 or false; `filepath` is read as `filePath`.
+    - **Unknown fields are ignored.** Before, one unknown field discarded the whole report, which was MP-5's remaining case.
+- **`CtrfReportFileService`** reads with `Files.readString(…, UTF_8)` and writes the temp file as UTF-8, through the mapper.
+- **Build:**
+  - `jackson-databind` becomes `testImplementation`;
+  - `jackson-annotations` becomes `compileOnly`;
+  - the published POM has **no dependencies**.
+- **Tests:**
+  - **Differential, against Jackson:** a corpus of model instances must give byte-identical output from our writer and from Jackson. The corpus has every field set, nulls everywhere, Unicode and emoji, every control character, nested `extra` maps, and big and decimal numbers. Our parser must also read Jackson's output and our own back into equal objects.
+  - **Hand-written cases:** pretty-printed input, a BOM, `filepath`, a string `buildNumber`, unknown fields, a lone surrogate, malformed JSON.
+  - **Unchanged:** a 0.4 report whose `buildNumber` isn't a number still can't be read and is replaced.
+  - **Schema:** `CtrfSchemaConformanceTest` validates the real writer's output.
+  - **Compat:** the compat consumers run the published jar with no Jackson on the classpath.
+- **Docs:** the README says the reporter has no runtime dependencies.
+
+### Commit 4 — MP-8: `message` and `trace`
+
+- **`message` = `throwable.toString()`**, the class plus its message. Over `ctrf.max.message.length` it's cut with `...`, as today.
+  - It applies to every failure, including class-level entries and earlier attempts in `retryAttempts`.
+  - Aborted tests keep the assumption's message (HP-7), and skipped tests keep their reason.
+- **`trace`** is the full printed stack trace, unless it's longer than `ctrf.max.trace.length`.
+  - The default is 20,000 and 0 means no limit. A negative value warns and uses the default.
+  - When it's longer, the trace is: the head up to the limit, cut back to the last full line; a line `... N characters truncated (ctrf.max.trace.length=L)`; then every `Caused by:` line from the cut part, in order.
+  - A single line longer than the limit is cut at the limit.
+- **`ConfigReader.getMaxTraceLength()`** is new.
+- **Tests:**
+  - `message`: an exception with a message, one without, one with a cause, and the cut;
+  - `trace`: under the limit, over it, one long line, and 0;
+  - existing tests that expected stack frames in `message` are updated.
+- **Docs:** a README configuration row, and a note on what `message` and `trace` contain.
+
+### Commit 5 — MP-6: `AutoCloseable`
+
+- **`TestRunExtension` stores a named class** that implements both `ExtensionContext.Store.CloseableResource` and `AutoCloseable`, with one `close()`.
+  - JUnit before 5.13, down to the supported 5.10.5, closes it as a `CloseableResource`.
+  - JUnit 5.13 and later closes it as an `AutoCloseable`, without the warning.
+  - Finishing a run is already one-shot, so a second `close()` would do nothing.
+- **Tests:** a forked-JVM scenario with the extension on JUnit 6.1.3 checks that the report is written, and that the output has no "implements CloseableResource but not AutoCloseable" warning. The compat matrix covers JUnit 5.10.5 and 5.14.4.
+
+### Commit 6 — MP-7: reporter errors never change a test's outcome
+
+- **Guarded:** all reporter work in the extension:
+  - `beforeAll`: starting the run, and the class's bookkeeping;
+  - `beforeEach`;
+  - `afterAll`: the class's failure or success;
+  - the end-of-run close, which writes the report;
+  - the `TestWatcher` callbacks too, so every failure is logged the same way, although JUnit already guards them.
+- **An internal guard** catches any `Throwable` except `VirtualMachineError`, which it rethrows. It logs a JUL warning with context (the callback and the unique ID) and the exception.
+- **The listener isn't wrapped:** JUnit's launcher catches and logs exceptions from `TestExecutionListener` callbacks. The plan confirms that in JUnit 5.10's code, and adds the guard if it doesn't hold.
+- **Test seam:** a package-private `CtrfExtension(CtrfReportManager)` constructor.
+- **Tests:** these use `EngineTestKit` (`junit-platform-testkit`, a test dependency) with fixture classes tagged out of the normal run.
+  - The reporter throws when a test starts: the test passes.
+  - It throws while recording a failure: the test fails with its own exception.
+  - It throws while starting the run, or in `afterAll`: the class's tests run.
+  - It throws while writing the report: no engine failure.
+  - It throws an `OutOfMemoryError`: that propagates.
+
+### Commit 7 — CB-2: only the run that started reporting may end it
+
+- **`TestRun`** holds one run's state: its owner, the generator, the start time, the recorded attempts and container successes, and the test details in progress.
+- **The manager** keeps at most one active run, in an `AtomicReference<TestRun>`:
+  - `boolean startTestRun(Object owner, String generator)` returns true if this owner owns the active run, and false when another owner's run is active;
+  - `finishTestRun(Object owner)` does nothing unless `owner` owns the active run. When it does, it detaches the run and writes the report from it;
+  - `startTestRun(String)` and `finishTestRun()` stay, delegating with a fixed owner of their own.
+- **The entry points:**
+  - **Listener:** the owner is its `TestPlan`. An instance whose `testPlanExecutionStarted` didn't win the run ignores all its events, including the finish.
+  - **Extension:** the owner is the root `ExtensionContext`. Whether the root owns the run is stored in its store, and every callback checks it.
+- **Unchanged:**
+  - a second run in the same JVM (CB-6) starts once the first one has finished;
+  - parallel tests in one run record into the same run;
+  - environment health stays JVM-wide.
+- **Tests:**
+  - forked-JVM scenarios, one through the listener and one through the extension. Class A has two tests; class B runs a fixture class through `LauncherFactory.create()`; class C has two tests. The report must contain A's tests, `runsNestedLauncher()` and C's tests, and none of the fixture's;
+  - the same-JVM rerun scenario still passes;
+  - unit tests cover the owner rules.
+
+### Commit 8 — HP-10 and HP-1: the singleton only where it's needed, and the docs
+
+- **The manager's collaborators are passed in** through one package-private constructor: config, test processor, file service, a composer factory per generator, the run id, and the initial health. That replaces "the composer is null, then rebuilt at every finish".
+- **`getInstance()` stays as the default instance,** used by `EnvironmentHealthTracker` and by the entry points' no-argument constructors.
+- **`CtrfListener` gets a package-private test constructor,** like `CtrfExtension`'s.
+- **README, "Choosing a setup":**
+  - recommend the listener, which sees tests of classes skipped as a whole, failed containers of every kind, other engines such as Vintage, and dynamic tests;
+  - the extension stays supported, with its limits listed;
+  - never register both;
+  - why the jar doesn't register the listener automatically;
+  - how to register the listener with Gradle and with Maven.
+- **`CLAUDE.md`:** the architecture section covers who owns a run, and what the singleton is still for.
+- **HP-10's acceptance criteria:**
+  - the CB-5 and HP-8 scenarios already pass through the listener;
+  - the compat matrix's JUnit 4 consumer already runs the listener on Vintage;
+  - the README criterion is this commit.
+
+### Verification
+
+- **Every commit:**
+  - tests written first and watched failing;
+  - `./gradlew :build`, which runs unit tests, scenarios and checkstyle;
+  - `./gradlew :javadoc`;
+  - every class in `build/classes/java/main` is major version 61.
+- **Commits 3, 5, 6, 7 and 8 also run:**
+  - the listener and extension integration with CI's flags, plus the validator;
+  - `compat/run.sh 5.10.5 5.14.4 6.1.3`.
+- **Before the PR:** all of the above on the final branch.
+
+### 0.5.1 release notes (user-visible changes)
+
+- **`message`** holds the exception summary, not the start of the stack trace.
+- **`trace`** is capped by the new `ctrf.max.trace.length`. The default is 20,000, and 0 means no limit.
+- **Configuration:**
+  - `CTRF_*` environment variables now work, e.g. `CTRF_REPORT_PATH`;
+  - an invalid number or boolean logs a warning and uses the default, instead of breaking the report;
+  - numbers may have surrounding spaces.
+- **Nested runs:** a test that runs JUnit itself no longer ends the outer run, and the nested run's tests aren't reported.
+- **Logging:** warnings go through `java.util.logging`, with the same texts.
+- **No runtime dependencies:** `owner` and `jackson-databind` are no longer brought in. The model classes keep their Jackson annotations.
+- **Reading an existing report:** unknown fields are ignored instead of discarding the report.
+- **Extension:** no "CloseableResource" warning on JUnit 5.13 and later, and reporter errors never fail a test.
+
+### Acceptance Criteria
+
+- [ ] Every row of the `owner` behaviour table holds for the new loader
+- [ ] `CTRF_REPORT_PATH` and the other `CTRF_*` variables work, below system properties and above `ctrf.properties`
+- [ ] The published POM has no dependencies, and the compat consumers pass without Jackson on the classpath
+- [ ] Our writer's output is byte-identical to Jackson's for the test corpus; the schema conformance test and the integration validator pass
+- [ ] `message` has no stack frames; `trace` respects `ctrf.max.trace.length` and keeps every `Caused by:` line
+- [ ] No "CloseableResource" warning on JUnit 6; the report is still written on JUnit 5.10.5
+- [ ] No reporter exception changes a test's status or exception; `VirtualMachineError` propagates
+- [ ] A nested JUnit run neither ends the outer run nor adds its tests, through the listener and through the extension; same-JVM reruns still work
+- [ ] README recommends the listener and explains the trade-offs, and why it isn't registered automatically
+- [ ] All library classes are class-file version 61 (Java 17)
 
 ---
 
@@ -130,6 +383,7 @@ Context: `ctrf-io/junit-to-ctrf` already converts the JUnit XML that Gradle and 
 
 ## Table of Contents
 
+1. [Phase 3 Design — 0.5.1](#phase-3-design--051)
 1. [Review Update — 2026-10-08](#review-update--2026-10-08)
 2. [Critical Bugs](#critical-bugs)
 3. [High Priority Design Issues](#high-priority-design-issues)
@@ -202,7 +456,7 @@ public List<Test> getExistingTests() {
 **Priority**: Medium (lowered from Critical on 2026-10-08)
 **Complexity**: Moderate
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java`, `launcher/CtrfListener.java`, `jupiter/TestRunExtension.java`
-**Status**: Re-scoped 2026-10-08 (verified)
+**Status**: Re-scoped 2026-10-08 (verified). Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commit 7: nested runs are ignored.
 
 #### Review Note (2026-10-08)
 The original item assumed that test callbacks can run while `finishTestRun()` executes, so results added between the CAS and `clear()` would be lost. With a single entry point that can't happen. JUnit calls `testPlanExecutionFinished` (listener), and closes the root store (extension), only after every test on every thread has finished. Verified: 10 runs of 1,000 tests on 8–9 parallel threads (5 with only the listener, 5 with only the extension) each reported 1,000 of 1,000 tests.
@@ -707,7 +961,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Complex
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java`, `CtrfExtension.java`, `CtrfListener.java`, test files
-**Status**: Open; simplified by HP-10
+**Status**: Open; simplified by HP-10. Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commit 8: collaborators are injected, and the singleton remains only as `getInstance()`.
 
 #### Review Note (2026-10-08)
 Once the listener owns the run state (HP-10), the singleton is only needed behind `EnvironmentHealthTracker`'s static API. Until each scenario can get a fresh manager, the regression tests in TI-5 have to run scenarios in forked JVMs.
@@ -850,7 +1104,7 @@ Each new class should be:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: `CtrfReportFileService.java`, `build.gradle`, and classes with System.out/err
-**Status**: Open; approach changed 2026-10-08
+**Status**: Open; approach changed 2026-10-08. Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commit 1: `java.util.logging`.
 
 #### Review Note (2026-10-08)
 On `master`, SLF4J and Logback are used only by the `integration-ctrf-validator` module, not by the library. Adding `slf4j-api` to a library that sits on every user's test classpath adds a dependency, and without a provider SLF4J 2 prints a "No SLF4J providers were found" warning. Use `java.util.logging` instead: no dependency, and the JUnit Platform itself logs through JUL. See MP-9. The rest of the prompt (log levels, no `System.out`/`System.err`) still applies.
@@ -1400,7 +1654,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Complex
 **Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `jupiter/TestRunExtension.java`, `CtrfReportManager.java`, `EnvironmentHealthTracker.java`, `README.md`
-**Status**: Open (design item; motivated by the verified defects in CB-5, HP-8 and HP-9)
+**Status**: Open (design item; motivated by the verified defects in CB-5, HP-8 and HP-9). Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commits 7 and 8: run ownership and docs. The listener stays opt-in.
 
 #### Prompt
 ````
@@ -1909,7 +2163,7 @@ What remains needs a downgrade inside one run: an *older* reporter reading a sam
 - Different modules write to their own `ctrf-report.json` by default.
 - A mixed-version merge therefore needs two test tasks or modules on different reporter versions, writing to one report path with a shared run id, or local daemon builds across a downgrade without the per-build `ctrf.run.id`. The README already advises against both.
 
-If that ever matters, the fix is one line: ignore unknown fields when reading (`@JsonIgnoreProperties(ignoreUnknown = true)` on the model, or `FAIL_ON_UNKNOWN_PROPERTIES` off), plus a unit test.
+Phase 3 (0.5.1, commit 3) closes this case anyway: the new JSON reader ignores unknown fields. Before that, the fix would have been one line: ignore unknown fields when reading (`@JsonIgnoreProperties(ignoreUnknown = true)` on the model, or `FAIL_ON_UNKNOWN_PROPERTIES` off), plus a unit test.
 
 #### Prompt (2026-10-08, kept for reference)
 ````
@@ -1949,7 +2203,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `jupiter/TestRunExtension.java`
-**Status**: Open (verified 2026-10-08)
+**Status**: Open (verified 2026-10-08). Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commit 5.
 
 #### Prompt
 ````
@@ -1983,7 +2237,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `jupiter/CtrfExtension.java`, `jupiter/TestRunExtension.java`, `CtrfReportManager.java`
-**Status**: Open (by inspection, 2026-10-08)
+**Status**: Open (by inspection, 2026-10-08). Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commit 6.
 
 #### Prompt
 ````
@@ -2018,7 +2272,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `TestProcessor.java`, `config/CtrfConfig.java`, `config/ConfigReader.java`
-**Status**: Open (observed 2026-10-08)
+**Status**: Open (observed 2026-10-08). Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commit 4: `ctrf.max.trace.length` defaults to 20,000.
 
 #### Prompt
 ````
@@ -2046,7 +2300,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `config/CtrfConfig.java`, `config/ConfigReader.java`, `CtrfReportFileService.java`, `build.gradle`, `README.md`
-**Status**: Open (verified 2026-10-08, except item 3)
+**Status**: Open (verified 2026-10-08, except item 3). Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commits 2 and 3: our own config loader and JSON writer and reader, which leave no runtime dependencies. Finding 2 was wrong: `owner` is developed again (`2.0.0-SNAPSHOT`), but hasn't released since 1.0.12 (2020-06-06).
 
 #### Prompt
 ````
@@ -4380,6 +4634,9 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 12. MP-5: Read previous reports tolerantly. **Superseded by CB-6** (2026-10-15): only an older reporter reading a same-run report from a newer one is left, which needs a setup the README advises against
 
 ### Phase 3: Architecture and robustness
+
+Designed 2026-10-15 for 0.5.1; see [Phase 3 Design — 0.5.1](#phase-3-design--051).
+
 13. HP-10: Listener as the single core integration point, then revisit HP-1
 14. CB-2: Only the run that started reporting may end it (nested JUnit runs)
 15. MP-6: `AutoCloseable` instead of `CloseableResource`
