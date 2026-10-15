@@ -48,6 +48,9 @@ import java.util.stream.Stream;
  * A container that finishes successfully is recorded too, so that its failure in an earlier retry round is
  * reported as recovered: passed and flaky.
  * <p>
+ * Only one run is reported at a time. A listener whose test plan starts while another run is active, such as the
+ * listener of a JUnit run that a test starts itself, reports nothing, and the run around it goes on.
+ * <p>
  * The listener can be configured through a {@code ctrf.properties} file placed in the classpath.
  * See the README for all available configuration options.
  */
@@ -76,22 +79,34 @@ public class CtrfListener implements TestExecutionListener {
      */
     private final Set<String> reportedIds = ConcurrentHashMap.newKeySet();
 
+    /**
+     * Whether this listener's test plan owns the active run. The listener of a JUnit run started from inside a test
+     * doesn't, and reports nothing (CB-2).
+     */
+    private volatile boolean ownsRun;
+
     private volatile TestPlan testPlan;
 
     @Override
     public void testPlanExecutionStarted(TestPlan testPlan) {
         this.testPlan = testPlan;
-        reportManager.startTestRun(GENERATED_BY);
+        ownsRun = reportManager.startTestRun(testPlan, GENERATED_BY);
     }
 
     @Override
     public void testPlanExecutionFinished(TestPlan testPlan) {
-        reportManager.finishTestRun();
+        if (ownsRun) {
+            reportManager.finishTestRun(testPlan);
+        }
+        ownsRun = false;
         reportedIds.clear();
     }
 
     @Override
     public void executionStarted(TestIdentifier testIdentifier) {
+        if (!ownsRun) {
+            return;
+        }
         testIdentifier.getParentId().ifPresent(containersWithStartedChildren::add);
         if (testIdentifier.isTest()) {
             reportedIds.add(testIdentifier.getUniqueId());
@@ -103,6 +118,9 @@ public class CtrfListener implements TestExecutionListener {
 
     @Override
     public void executionFinished(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
+        if (!ownsRun) {
+            return;
+        }
         if (testIdentifier.isTest()) {
             handleTestFinished(testIdentifier, testExecutionResult);
             return;
@@ -186,6 +204,9 @@ public class CtrfListener implements TestExecutionListener {
 
     @Override
     public void executionSkipped(TestIdentifier testIdentifier, String reason) {
+        if (!ownsRun) {
+            return;
+        }
         testIdentifier.getParentId().ifPresent(containersWithStartedChildren::add);
         if (testIdentifier.isTest()) {
             reportSkipped(testIdentifier, reason);

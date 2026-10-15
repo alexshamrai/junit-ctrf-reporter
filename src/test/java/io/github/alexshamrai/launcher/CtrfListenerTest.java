@@ -29,10 +29,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 public class CtrfListenerTest {
@@ -65,6 +67,11 @@ public class CtrfListenerTest {
 
         ctrfListener = new CtrfListener();
 
+        // The listener reports only while its test plan owns the run
+        when(reportManager.startTestRun(any(), anyString())).thenReturn(true);
+        ctrfListener.testPlanExecutionStarted(testPlan);
+        clearInvocations(reportManager);
+
         // Configure the mock TestIdentifier with predictable data
         when(testIdentifier.getDisplayName()).thenReturn(TEST_DISPLAY_NAME);
         when(testIdentifier.getUniqueId()).thenReturn(TEST_UNIQUE_ID);
@@ -81,13 +88,30 @@ public class CtrfListenerTest {
     @Test
     void testPlanExecutionStarted_shouldDelegateToManager() {
         ctrfListener.testPlanExecutionStarted(testPlan);
-        verify(reportManager).startTestRun("io.github.alexshamrai.launcher.CtrfListener");
+        verify(reportManager).startTestRun(testPlan, "io.github.alexshamrai.launcher.CtrfListener");
     }
 
     @Test
     void testPlanExecutionFinished_shouldDelegateToManager() {
         ctrfListener.testPlanExecutionFinished(testPlan);
-        verify(reportManager).finishTestRun();
+        verify(reportManager).finishTestRun(testPlan);
+    }
+
+    @Test
+    void listenerWhoseRunStartIsRefused_reportsNothing() {
+        TestPlan nestedPlan = mock(TestPlan.class);
+        when(reportManager.startTestRun(eq(nestedPlan), anyString())).thenReturn(false);
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.SUCCESSFUL);
+        var nested = new CtrfListener();
+
+        nested.testPlanExecutionStarted(nestedPlan);
+        nested.executionStarted(testIdentifier);
+        nested.executionFinished(testIdentifier, testExecutionResult);
+        nested.executionSkipped(testIdentifier, "disabled");
+        nested.testPlanExecutionFinished(nestedPlan);
+
+        verify(reportManager).startTestRun(nestedPlan, "io.github.alexshamrai.launcher.CtrfListener");
+        verifyNoMoreInteractions(reportManager);
     }
 
     @Test

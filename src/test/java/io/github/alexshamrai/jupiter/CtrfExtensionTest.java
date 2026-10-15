@@ -19,6 +19,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 public class CtrfExtensionTest {
@@ -49,18 +50,40 @@ public class CtrfExtensionTest {
         when(extensionContext.getTags()).thenReturn(Collections.singleton("smoke-test"));
         when(extensionContext.getTestClass()).thenReturn(Optional.of(this.getClass()));
         when(extensionContext.getStore(any())).thenReturn(store);
+
+        when(extensionContext.getRoot()).thenReturn(extensionContext);
+        when(store.get(CtrfExtension.OWNS_RUN, Boolean.class)).thenReturn(true);
     }
 
     @Test
-    void beforeAllTests_shouldDelegateToManager() {
+    void beforeAllTests_startsARunOwnedByTheRootContext() {
+        when(reportManager.startTestRun(extensionContext, "io.github.alexshamrai.jupiter.CtrfExtension")).thenReturn(true);
+
         ctrfExtension.beforeAllTests(extensionContext);
-        verify(reportManager).startTestRun("io.github.alexshamrai.jupiter.CtrfExtension");
+
+        verify(store).put(CtrfExtension.OWNS_RUN, true);
     }
 
     @Test
-    void afterAllTests_shouldDelegateToManager() {
+    void afterAllTests_finishesTheRunOfTheRootContext() {
         ctrfExtension.afterAllTests(extensionContext);
-        verify(reportManager).finishTestRun();
+
+        verify(reportManager).finishTestRun(extensionContext);
+    }
+
+    @Test
+    void callbacksOfARunItDoesNotOwn_reportNothing() {
+        when(store.get(CtrfExtension.OWNS_RUN, Boolean.class)).thenReturn(false);
+
+        ctrfExtension.beforeEach(extensionContext);
+        ctrfExtension.testSuccessful(extensionContext);
+        ctrfExtension.testFailed(extensionContext, new AssertionError("fails"));
+        ctrfExtension.testAborted(extensionContext, new RuntimeException("aborted"));
+        ctrfExtension.testDisabled(extensionContext, Optional.of("disabled"));
+        ctrfExtension.afterAll(extensionContext);
+        ctrfExtension.afterAllTests(extensionContext);
+
+        verifyNoInteractions(reportManager);
     }
 
     @Test

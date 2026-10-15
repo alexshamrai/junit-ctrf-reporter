@@ -84,15 +84,4 @@ final class TestStateTracker {
     TestDetails removeTestDetails(String uniqueId) {
         return testDetailsMap.remove(uniqueId);
     }
-
-    /**
-     * Clears all test state.
-     * <p>
-     * This is called after report generation to prepare for the next test run.
-     */
-    void clear() {
-        attempts.clear();
-        containerSuccesses.clear();
-        testDetailsMap.clear();
-    }
 }

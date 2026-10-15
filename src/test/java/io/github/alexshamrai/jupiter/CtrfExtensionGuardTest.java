@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Reporter errors in the extension's callbacks never change a test's outcome (MP-7). Each fixture registers the
@@ -91,6 +92,7 @@ class CtrfExtensionGuardTest {
 
     private static CtrfReportManager managerThat(Consumer<CtrfReportManager> breaking) {
         CtrfReportManager manager = mock(CtrfReportManager.class);
+        when(manager.startTestRun(any(), anyString())).thenReturn(true);
         breaking.accept(manager);
         return manager;
     }
@@ -126,7 +128,7 @@ class CtrfExtensionGuardTest {
 
         @RegisterExtension
         static final CtrfExtension CTRF = new CtrfExtension(managerThat(manager ->
-            doThrow(new IllegalStateException("reporter broke")).when(manager).startTestRun(anyString())));
+            doThrow(new IllegalStateException("reporter broke")).when(manager).startTestRun(any(), anyString())));
 
         @org.junit.jupiter.api.Test
         void first() {
@@ -162,7 +164,7 @@ class CtrfExtensionGuardTest {
 
         @RegisterExtension
         static final CtrfExtension CTRF = new CtrfExtension(managerThat(manager ->
-            doThrow(new IllegalStateException("reporter broke")).when(manager).finishTestRun()));
+            doThrow(new IllegalStateException("reporter broke")).when(manager).finishTestRun(any())));
 
         @org.junit.jupiter.api.Test
         void passes() {

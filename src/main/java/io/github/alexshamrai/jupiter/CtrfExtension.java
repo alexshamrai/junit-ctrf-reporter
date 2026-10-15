@@ -48,6 +48,9 @@ import java.util.logging.Logger;
  * class-level condition, never reach the extension and are missing from its report. The JUnit Platform
  * listener {@code io.github.alexshamrai.launcher.CtrfListener} reports them as skipped.
  * <p>
+ * Only one run is reported at a time. The run belongs to the root context that started it; the extension reports
+ * nothing for the classes of a JUnit run that a test starts itself, and the run around it goes on.
+ * <p>
  * The reporter never changes the outcome of a test or a class: if its own work fails in any callback, the error is
  * logged as a warning through {@code java.util.logging}, and the test runs on. Only a {@link VirtualMachineError},
  * such as an {@link OutOfMemoryError}, propagates.
@@ -56,6 +59,11 @@ import java.util.logging.Logger;
  * See the README for all available configuration options.
  */
 public class CtrfExtension implements TestRunExtension, AfterAllCallback, BeforeEachCallback, TestWatcher {
+
+    /**
+     * Key, in the root context's store, of whether that root's run is the one being reported.
+     */
+    static final String OWNS_RUN = "ownsRun";
 
     private static final ExtensionContext.Namespace NAMESPACE = ExtensionContext.Namespace.create(CtrfExtension.class);
     private static final Logger LOGGER = Logger.getLogger(CtrfExtension.class.getName());
@@ -86,8 +94,10 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
 
     private void startClass(ExtensionContext context) {
         TestRunExtension.super.beforeAll(context);
-        context.getParent().ifPresent(CtrfExtension::markChildrenStarted);
-        context.getStore(NAMESPACE).put(context.getUniqueId(), new ClassState(System.currentTimeMillis()));
+        if (ownsRun(context)) {
+            context.getParent().ifPresent(CtrfExtension::markChildrenStarted);
+            context.getStore(NAMESPACE).put(context.getUniqueId(), new ClassState(System.currentTimeMillis()));
+        }
     }
 
     /**
@@ -101,24 +111,33 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
      */
     @Override
     public void afterAll(ExtensionContext context) {
-        guarded("afterAll", context, () -> context.getExecutionException().ifPresentOrElse(
+        reportIfOwner("afterAll", context, () -> context.getExecutionException().ifPresentOrElse(
             error -> reportClassFailure(context, error),
             () -> reportClassSuccess(context)));
     }
 
+    /**
+     * Starts the run, owned by the root context, and stores in the root's store whether it got the run. A root whose
+     * run start is refused, because another run is active, belongs to a JUnit run started from inside a test.
+     *
+     * @param context the context of the run's first class
+     */
     @Override
     public void beforeAllTests(ExtensionContext context) {
-        guarded("beforeAllTests", context, () -> reportManager.startTestRun(GENERATED_BY));
+        guarded("beforeAllTests", context, () -> {
+            ExtensionContext root = context.getRoot();
+            root.getStore(NAMESPACE).put(OWNS_RUN, reportManager.startTestRun(root, GENERATED_BY));
+        });
     }
 
     @Override
     public void afterAllTests(ExtensionContext context) {
-        guarded("afterAllTests", context, () -> reportManager.finishTestRun());
+        reportIfOwner("afterAllTests", context, () -> reportManager.finishTestRun(context.getRoot()));
     }
 
     @Override
     public void beforeEach(ExtensionContext context) {
-        guarded("beforeEach", context, () -> {
+        reportIfOwner("beforeEach", context, () -> {
             markChildrenStarted(context);
             reportManager.onTestStart(createTestDetails(context));
         });
@@ -130,7 +149,7 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
     // as having started tests.
     @Override
     public void testSuccessful(ExtensionContext context) {
-        guarded("testSuccessful", context, () -> {
+        reportIfOwner("testSuccessful", context, () -> {
             markChildrenStarted(context);
             reportManager.onTestSuccess(createTestDetails(context));
         });
@@ -138,7 +157,7 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
 
     @Override
     public void testFailed(ExtensionContext context, Throwable cause) {
-        guarded("testFailed", context, () -> {
+        reportIfOwner("testFailed", context, () -> {
             markChildrenStarted(context);
             reportManager.onTestFailure(createTestDetails(context), cause);
         });
@@ -146,7 +165,7 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
 
     @Override
     public void testAborted(ExtensionContext context, Throwable cause) {
-        guarded("testAborted", context, () -> {
+        reportIfOwner("testAborted", context, () -> {
             markChildrenStarted(context);
             reportManager.onTestAborted(createTestDetails(context), cause);
         });
@@ -154,7 +173,7 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
 
     @Override
     public void testDisabled(ExtensionContext context, Optional<String> reason) {
-        guarded("testDisabled", context, () -> {
+        reportIfOwner("testDisabled", context, () -> {
             markChildrenStarted(context);
             reportManager.onTestSkipped(createTestDetails(context), reason);
         });
@@ -176,6 +195,21 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
     private void reportClassSuccess(ExtensionContext context) {
         ClassState state = classStateOf(context);
         reportManager.onContainerSuccess(context.getUniqueId(), state != null ? state.startTime() : null);
+    }
+
+    /**
+     * Runs reporter work, guarded, only for a context whose root owns the run.
+     */
+    private static void reportIfOwner(String callback, ExtensionContext context, Runnable work) {
+        guarded(callback, context, () -> {
+            if (ownsRun(context)) {
+                work.run();
+            }
+        });
+    }
+
+    private static boolean ownsRun(ExtensionContext context) {
+        return Boolean.TRUE.equals(context.getRoot().getStore(NAMESPACE).get(OWNS_RUN, Boolean.class));
     }
 
     /**
