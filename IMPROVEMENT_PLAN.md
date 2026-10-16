@@ -67,7 +67,7 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 - **`suite` is the display names of the test's ancestors, outermost first, without the engine.**
 - If that leaves nothing, the engine's display name is used instead, so every entry with a known engine has a `suite`.
 - If not even an engine is known, there's no `suite`. That only happens for a test the manager knows by its ID alone, which it records as "Unknown Test".
-- **A class's `initializationError` or `teardownError` entry** adds the class's own display name at the end, so it's grouped with the tests it affected. Other container entries keep their own name and get their ancestors, like a test: a failed `@MethodSource` or `@TestFactory`, a failed engine, or the one skipped entry for a parameterized method.
+- **A class's `initializationError` or `teardownError` entry** gets the suite of the class's own tests: the class's ancestors without the engine, then the class's display name, so it's grouped with the tests it affected. That's never empty, so the engine's name is never used for it: a top-level class's error gets just the class's name. Other container entries keep their own name and get their ancestors, like a test: a failed `@MethodSource` or `@TestFactory`, a failed engine, or the one skipped entry for a parameterized method.
 
 Examples:
 
@@ -77,6 +77,7 @@ Examples:
 | the same class → `@ParameterizedTest refundsTheFee(int)`, invocation 1 | `[1] 1` | `["Payments", "Refunds", "refundsTheFee(int)"]` |
 | `@TestFactory factory()` → `DynamicContainer("group")` → a dynamic test (listener only) | its display name | `["PaymentTest", "factory()", "group"]` |
 | `@BeforeAll` of `Refunds` fails | `initializationError` | `["Payments", "Refunds"]` |
+| `@BeforeAll` of a top-level `class SetupTest` fails | `initializationError` | `["SetupTest"]` |
 | JUnit 4 test, through Vintage | `test()` | `["com.example.LegacyTest"]` |
 | a test directly under a custom engine | its display name | `["My Engine"]` |
 
@@ -93,7 +94,7 @@ Examples:
   - Rejected: deriving it from the `testId`, whose segments hold class and method names, not display names.
   - Rejected: recording a container tree in the manager and building suites at the end. That's more state for no gain, since both entry points know a test's ancestors when it starts.
 - **Public API is only added to:**
-  - `TestContextAdapter.getSuite()` is a default method;
+  - `TestContextAdapter`'s new methods are default methods;
   - `TestDetails` keeps its 5-argument constructor;
   - `TestIdentifierAdapter` keeps its 1-argument constructor.
 - **Dynamic tests through the extension:** not reported, as today, because JUnit runs no extension callbacks for them.
@@ -102,7 +103,11 @@ Examples:
 
 ### Data model
 
-- **`TestContextAdapter`** gets `default List<String> getSuite()`, returning an empty list. The two adapters override it.
+- **`TestContextAdapter`** gets four default methods. The rule lives in the last two, so both adapters apply it the same way:
+  - `getContainerNames()`: the display names of the containers above, outermost first, without the engine. It's empty by default, and the adapters override it;
+  - `getEngineName()`: the topmost container's display name, or this one's if it has nothing above it. It's empty by default, and the adapters override it;
+  - `getSuite()`: the container names, or the engine's name when there are none, or nothing when neither is known;
+  - `getSuiteOfChildren()`: the container names followed by this container's own display name, which is what the tests directly inside it get. A class error uses it.
 - **`TestDetails`** gets a sixth component, `List<String> suite`.
   - It's stored as an unmodifiable copy, never null; an empty list means no `suite`.
   - The 5-argument constructor stays and passes an empty list.
@@ -113,16 +118,16 @@ Examples:
 
 ### The listener
 
-- **New constructor `TestIdentifierAdapter(TestIdentifier, TestPlan)`.** Its `getSuite()` walks `plan.getParent(…)` upwards, collecting each parent's display name. The topmost one is the engine; it's dropped, and the names are reversed. An identifier without a parent is the engine itself.
+- **New constructor `TestIdentifierAdapter(TestIdentifier, TestPlan)`.** Its `getContainerNames()` walks `plan.getParent(…)` upwards, collecting each parent's display name. The topmost one is the engine; it's dropped, and the names are reversed. `getEngineName()` is the topmost one's name; an identifier without a parent is the engine itself.
 - **`createTestDetails`** passes the listener's `TestPlan`. Finished tests, tests skipped one by one, and the tests HP-8 reports inside a skipped or aborted container all get their `suite` this way.
 - **`handleContainerFailure`:**
-  - a class error gets the class's suite plus the class's display name;
-  - any other container gets its ancestors.
+  - a class error gets `getSuiteOfChildren()` of the class;
+  - any other container gets `getSuite()`, like a test.
 
 ### The extension
 
-- **`ExtensionContextAdapter.getSuite()`** walks `context.getParent()` up to the root context, which is the engine ("JUnit Jupiter"). The root is dropped, and the names are reversed.
-- **`reportClassFailure`** adds the class context's display name.
+- **`ExtensionContextAdapter.getContainerNames()`** walks `context.getParent()` up to the root context, which is the engine ("JUnit Jupiter"). The root is dropped, and the names are reversed. `getEngineName()` is the root's display name.
+- **`reportClassFailure`** uses `getSuiteOfChildren()` of the class context.
 - **Why they agree:** an `ExtensionContext`'s and a `TestIdentifier`'s display names both come from the same `TestDescriptor`. A parameterized or repeated invocation's parent context is its method's, as in the plan.
 
 ### Retries, forks and merging
