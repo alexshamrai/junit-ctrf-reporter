@@ -1,10 +1,12 @@
 package io.github.alexshamrai.jupiter;
 
 import io.github.alexshamrai.CtrfReportManager;
+import io.github.alexshamrai.LogCapture;
 import io.github.alexshamrai.model.TestDetails;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -24,6 +26,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 public class CtrfExtensionTest {
+
+    @RegisterExtension
+    final LogCapture logs = new LogCapture(CtrfExtension.class);
 
     private static final String TEST_DISPLAY_NAME = "Test Display Name";
     private static final String TEST_UNIQUE_ID = "[unique-id-123]";
@@ -63,6 +68,15 @@ public class CtrfExtensionTest {
         ctrfExtension.beforeAllTests(extensionContext);
 
         verify(store).put(CtrfExtension.OWNS_RUN, true);
+    }
+
+    @Test
+    void beforeAllTests_warnsThatTheExtensionIsDeprecated() {
+        ctrfExtension.beforeAllTests(extensionContext);
+
+        assertEquals(1, logs.messages().size(), logs.text());
+        assertTrue(logs.text().contains("CtrfExtension is deprecated and will be removed in 0.6.0"), logs.text());
+        assertTrue(logs.text().contains("register CtrfListener instead"), logs.text());
     }
 
     @Test

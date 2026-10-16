@@ -3,7 +3,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.alexshamrai/junit-ctrf-reporter.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:%22io.github.alexshamrai%22%20AND%20a:%22junit-ctrf-reporter%22)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-A JUnit 5 library that generates test reports following the standardized [CTRF (Common Test Report Format)](https://ctrf.io/) specification, providing both a JUnit Jupiter Extension and a JUnit Platform TestExecutionListener.
+A JUnit 5 library that generates test reports following the standardized [CTRF (Common Test Report Format)](https://ctrf.io/) specification, through a JUnit Platform `TestExecutionListener`.
 
 Requires Java 17 or higher.
 
@@ -74,7 +74,7 @@ dependencies {
 
 ## Choosing a setup
 
-The reporter has two entry points: a JUnit Platform listener and a JUnit Jupiter extension. Use one of them. **Never register both**: only the listener would report, and the extension's registration would silently do nothing.
+Register `CtrfListener`, the JUnit Platform listener. The JUnit Jupiter extension, `CtrfExtension`, is deprecated and will be removed in 0.6.0; [Deprecated: CtrfExtension](#deprecated-ctrfextension) shows how to move from it. **Never register both**: only the listener would report, and the extension's registration would silently do nothing.
 
 ### Recommended: CtrfListener
 
@@ -107,22 +107,14 @@ launcher.execute(request);
 
 **Why the jar doesn't register the listener itself.** It could, with the same `META-INF/services` file inside the jar. Then every project with the reporter on its test classpath would get a report whether it wanted one or not, and in projects that use `CtrfExtension` the listener would silently take over the reporting. So the listener stays opt-in.
 
-### Supported: CtrfExtension
+### Deprecated: CtrfExtension
 
-`CtrfExtension` is a JUnit Jupiter extension. Register it on each test class, or on a base class they share:
+`CtrfExtension`, the JUnit Jupiter extension, is deprecated since 0.5.2 and will be removed in 0.6.0. It logs a warning when a run starts. To move to the listener:
 
-```java
-@ExtendWith(CtrfExtension.class)
-public class MyTest {
+1. Add the file `src/test/resources/META-INF/services/org.junit.platform.launcher.TestExecutionListener`, containing the line `io.github.alexshamrai.launcher.CtrfListener`.
+2. Remove `@ExtendWith(CtrfExtension.class)` from your test classes.
 
-    @Test
-    void testExample() {
-        // Your test code
-    }
-}
-```
-
-It reports only the classes it is registered on, and it can't see:
+The report can gain entries after the move. The extension reports only the classes it is registered on, and it can't see:
 
 - the tests of a class that JUnit skips as a whole, such as a `@Disabled` class: they are missing from the report;
 - the tests of a class whose `@BeforeAll` aborts with a failed assumption: the class appears as one skipped `initializationError` entry instead;
@@ -130,8 +122,6 @@ It reports only the classes it is registered on, and it can't see:
 - failures of containers below class level, such as a `@MethodSource` that throws;
 - teardown failures of extensions registered before it;
 - tests that don't run on JUnit Jupiter, such as JUnit 4 tests.
-
-For more on extensions, see the [JUnit 5 User Guide](https://junit.org/junit5/docs/current/user-guide/#extensions).
 
 ### Tests that run JUnit themselves
 

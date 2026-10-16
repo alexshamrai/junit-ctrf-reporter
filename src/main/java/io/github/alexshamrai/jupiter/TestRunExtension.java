@@ -14,7 +14,10 @@ import org.junit.jupiter.api.extension.ExtensionContext;
  * <p>
  * The end of the run is a {@link RunEndResource} in the root context's store, which every supported JUnit version
  * closes once, after the last test.
+ *
+ * @deprecated since 0.5.2, to be removed in 0.6.0 together with {@link CtrfExtension}, which it serves.
  */
+@Deprecated(since = "0.5.2")
 public interface TestRunExtension extends BeforeAllCallback {
 
     @Override
