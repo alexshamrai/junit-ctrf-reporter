@@ -132,6 +132,37 @@ public final class CtrfJsonMapper {
         return type.cast(model);
     }
 
+    /**
+     * Reads a report's {@code runId} without reading the rest of it: the root object's members are read in order,
+     * each skipped without being built, until the first {@code runId}.
+     *
+     * @param in the report's JSON text, not closed
+     * @return the run id as text, converted as {@link #read(Reader, Class)} converts it, or {@code null} if the report
+     *         has none, or is the literal {@code null}, which the full read reads as no report
+     * @throws IOException   if {@code in} fails
+     * @throws JsonException if the text isn't a JSON object or {@code null}, or isn't valid JSON before the
+     *                       {@code runId}
+     */
+    public static String readRunId(Reader in) throws IOException {
+        var reader = new JsonReader(in);
+        JsonReader.Kind kind = reader.peek();
+        if (kind == JsonReader.Kind.NULL) {
+            return null;
+        }
+        if (kind != JsonReader.Kind.OBJECT) {
+            throw new JsonException("$: expected an object");
+        }
+        if (reader.beginObject()) {
+            do {
+                if ("runId".equals(reader.nextName())) {
+                    return (String) readValue(reader, String.class, "$.runId");
+                }
+                reader.skipValue();
+            } while (reader.nextMember());
+        }
+        return null;
+    }
+
     private static void writeValue(Object value, JsonWriter out) throws IOException {
         if (value == null || value instanceof String || value instanceof Boolean || value instanceof Number) {
             out.value(value);

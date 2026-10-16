@@ -22,14 +22,16 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.logging.Logger;
 
 /**
  * Reads and writes the CTRF report file at {@code ctrf.report.path}.
  * <p>
- * Several JVMs can write the same report, for example parallel forks and retry rounds. {@link #update} lets
+ * Several JVMs can write the same report, for example parallel forks and retry rounds. {@code update} lets
  * them take turns: it holds an exclusive lock on {@code <report>.lock} while it reads the report, merges, and
  * replaces the report by moving a complete temp file over it. A JVM killed while writing therefore never
  * leaves a truncated report.
@@ -74,6 +76,25 @@ public class CtrfReportFileService {
      *              returns the report to write
      */
     public void update(UnaryOperator<CtrfJson> merge) {
+        replace(this::readExisting, merge);
+    }
+
+    /**
+     * Like {@link #update(UnaryOperator)}, but reads the current report only if it belongs to the run {@code runId}.
+     * A report of another run, or one without a run id, is replaced after reading only its {@code runId}, however
+     * large it is.
+     *
+     * @param runId the run being reported, not {@code null}
+     * @param merge receives the current report if it belongs to {@code runId}; {@code null} if it doesn't, if there
+     *              is none, or if it can't be parsed. Returns the report to write
+     * @throws NullPointerException if {@code runId} is {@code null}; the report is left as it was
+     */
+    public void update(String runId, UnaryOperator<CtrfJson> merge) {
+        Objects.requireNonNull(runId, "runId");
+        replace(report -> readExistingOfRun(report, runId), merge);
+    }
+
+    private void replace(Function<Path, CtrfJson> readCurrent, UnaryOperator<CtrfJson> merge) {
         Path report = Paths.get(configReader.getReportPath()).toAbsolutePath();
         synchronized (JVM_LOCK) {
             try {
@@ -84,7 +105,7 @@ public class CtrfReportFileService {
             }
             FileLock lock = lockAcrossJvms(report);
             try {
-                writeAtomically(report, merge.apply(readExisting(report)));
+                writeAtomically(report, merge.apply(readCurrent.apply(report)));
             } catch (RuntimeException e) {
                 LOGGER.warning("Failed to write results to file: " + configReader.getReportPath() + " - " + e);
             } finally {
@@ -152,9 +173,28 @@ public class CtrfReportFileService {
         try (Reader in = Files.newBufferedReader(report, StandardCharsets.UTF_8)) {
             return CtrfJsonMapper.read(in, CtrfJson.class);
         } catch (IOException | RuntimeException e) {
-            LOGGER.warning("Ignoring the existing report, which can't be read: " + report + " - " + e.getMessage());
+            return ignoreUnreadable(report, e);
+        }
+    }
+
+    // A report whose runId isn't runId, or that has none, is replaced without reading its tests
+    private CtrfJson readExistingOfRun(Path report, String runId) {
+        if (!Files.exists(report)) {
             return null;
         }
+        try (Reader in = Files.newBufferedReader(report, StandardCharsets.UTF_8)) {
+            if (!runId.equals(CtrfJsonMapper.readRunId(in))) {
+                return null;
+            }
+        } catch (IOException | RuntimeException e) {
+            return ignoreUnreadable(report, e);
+        }
+        return readExisting(report);
+    }
+
+    private static CtrfJson ignoreUnreadable(Path report, Exception e) {
+        LOGGER.warning("Ignoring the existing report, which can't be read: " + report + " - " + e.getMessage());
+        return null;
     }
 
     /**
