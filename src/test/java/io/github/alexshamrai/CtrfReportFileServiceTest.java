@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
@@ -28,6 +29,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.abort;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 class CtrfReportFileServiceTest {
@@ -474,8 +476,136 @@ class CtrfReportFileServiceTest {
         }
     }
 
+    @Test
+    @DisplayName("When the report's own directory can't be written, the earlier report stays as it was and nothing is thrown")
+    void reportInADirectoryThatBecameReadOnlyStaysAsItWas() throws IOException {
+        Path directory = Files.createDirectory(tempDir.resolve("read-only"));
+        Path report = directory.resolve("ctrf.json");
+        var service = serviceFor(report);
+        service.update(existing -> marker("first"));
+        assumeFalse(!directory.toFile().setWritable(false) || directory.toFile().canWrite(), "the file system ignores permissions");
+        try {
+            assertThatCode(() -> service.update(existing -> marker("second"))).doesNotThrowAnyException();
+
+            assertThat(readMarker(report)).isEqualTo("first");
+            assertThat(tempFilesNextTo(report)).isEmpty();
+            assertThat(logs.text()).contains("Access denied");
+        } finally {
+            directory.toFile().setWritable(true);
+        }
+    }
+
+    @Test
+    @DisplayName("A report that the JVM isn't allowed to read is replaced, with a warning naming it")
+    void reportWithoutReadPermissionIsReplacedWithAWarning() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        var service = serviceFor(report);
+        service.update(existing -> marker("first"));
+        assumeFalse(!report.toFile().setReadable(false) || Files.isReadable(report), "the file system ignores permissions");
+        List<CtrfJson> seen = new ArrayList<>();
+        try {
+            service.update(existing -> {
+                seen.add(existing);
+                return marker("second");
+            });
+        } finally {
+            report.toFile().setReadable(true);
+        }
+
+        assertThat(seen).containsExactly((CtrfJson) null);
+        assertThat(readMarker(report)).isEqualTo("second");
+        assertThat(logs.text()).contains("can't be read: " + report);
+    }
+
+    @Test
+    @DisplayName("An empty report is replaced with a warning, through either update")
+    void emptyReportIsReplacedWithAWarning() throws IOException {
+        Path report = Files.createFile(tempDir.resolve("ctrf.json"));
+        Path reportOfRun = Files.createFile(tempDir.resolve("ctrf-of-run.json"));
+        List<CtrfJson> seen = new ArrayList<>();
+        UnaryOperator<CtrfJson> merge = existing -> {
+            seen.add(existing);
+            return marker("fresh");
+        };
+
+        serviceFor(report).update(merge);
+        serviceFor(reportOfRun).update("this-run", merge);
+
+        assertThat(seen).containsExactly((CtrfJson) null, (CtrfJson) null);
+        assertThat(readMarker(report)).isEqualTo("fresh");
+        assertThat(readMarker(reportOfRun)).isEqualTo("fresh");
+        assertThat(logs.text()).contains("can't be read: " + report).contains("can't be read: " + reportOfRun);
+    }
+
+    @Test
+    @DisplayName("A path with spaces and non-ASCII characters is written, with its lock file next to it, and merged into")
+    void reportOnAPathWithSpacesAndNonAsciiCharacters() throws IOException {
+        Path report = pathOrAbort("test results ü/звіт ctrf 报告.json");
+        var service = serviceFor(report);
+        service.update(existing -> marker("first"));
+        List<String> seen = new ArrayList<>();
+
+        service.update(existing -> {
+            seen.add(existing.getGeneratedBy());
+            return marker("second");
+        });
+
+        assertThat(seen).containsExactly("first");
+        assertThat(readMarker(report)).isEqualTo("second");
+        assertThat(report.resolveSibling(report.getFileName() + ".lock")).exists();
+        assertThat(tempFilesNextTo(report)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("A report path that names a directory is reported, not thrown, and the directory is left as it was")
+    void reportPathThatIsADirectoryIsReportedNotThrown() throws IOException {
+        Path directory = Files.createDirectory(tempDir.resolve("reports"));
+        Path inside = Files.writeString(directory.resolve("other.txt"), "kept");
+
+        assertThatCode(() -> serviceFor(directory).update(existing -> marker("never"))).doesNotThrowAnyException();
+
+        assertThat(directory).isDirectory();
+        assertThat(inside).hasContent("kept");
+        assertThat(tempFilesNextTo(directory)).isEmpty();
+        assertThat(logs.text()).contains("Failed to write results to file: " + directory);
+    }
+
+    @Test
+    @DisplayName("An update on a thread whose interrupt flag is set still locks, reads and writes the report, and keeps the flag")
+    void updateOnAnInterruptedThreadWritesTheReportAndKeepsTheFlag() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        var service = serviceFor(report);
+        service.update(existing -> marker("first"));
+        List<String> seen = new ArrayList<>();
+        boolean flagKept;
+
+        Thread.currentThread().interrupt();
+        try {
+            service.update(existing -> {
+                seen.add(existing.getGeneratedBy());
+                return marker("second");
+            });
+        } finally {
+            flagKept = Thread.interrupted();
+        }
+
+        assertThat(flagKept).isTrue();
+        assertThat(seen).containsExactly("first");
+        assertThat(readMarker(report)).isEqualTo("second");
+        assertThat(logs.text()).isEmpty();
+    }
+
     private CtrfReportFileService serviceFor(Path report) {
         return new CtrfReportFileService(configReaderWithPath(report.toString()));
+    }
+
+    // A platform whose file name encoding can't represent the name can't run the test
+    private Path pathOrAbort(String relative) {
+        try {
+            return tempDir.resolve(relative);
+        } catch (InvalidPathException e) {
+            return abort("the file system can't name files " + relative);
+        }
     }
 
     private static ConfigReader configReaderWithPath(String path) {
