@@ -66,10 +66,10 @@ class CtrfReportManagerTest {
         reportManager = new CtrfReportManager(testProcessor, ctrfReportFileService,
             generator -> new CtrfJsonComposer(configReader, new StartupDurationProcessor(), generator), RUN_ID, true);
         doAnswer(invocation -> {
-            UnaryOperator<CtrfJson> merge = invocation.getArgument(0);
+            UnaryOperator<CtrfJson> merge = invocation.getArgument(1);
             reportOnDisk = merge.apply(reportOnDisk);
             return null;
-        }).when(ctrfReportFileService).update(any());
+        }).when(ctrfReportFileService).update(eq(RUN_ID), any());
     }
 
     @org.junit.jupiter.api.Test
@@ -201,7 +201,7 @@ class CtrfReportManagerTest {
 
         reportManager.finishTestRun();
 
-        verify(ctrfReportFileService).update(any());
+        verify(ctrfReportFileService).update(eq(RUN_ID), any());
         assertEquals(RUN_ID, reportOnDisk.getRunId());
         assertEquals(List.of("id-1"), testIdsOnDisk());
         assertEquals(1, reportOnDisk.getResults().getSummary().getPassed());
@@ -402,7 +402,7 @@ class CtrfReportManagerTest {
         assertTrue(reportManager.startTestRun(outer, "Listener"));
         reportManager.finishTestRun(outer);
 
-        verify(ctrfReportFileService).update(any());
+        verify(ctrfReportFileService).update(eq(RUN_ID), any());
         assertEquals(List.of("id-1"), testIdsOnDisk());
     }
 

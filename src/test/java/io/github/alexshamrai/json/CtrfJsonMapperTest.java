@@ -240,4 +240,62 @@ class CtrfJsonMapperTest {
 
         assertThat(out).hasToString("{\"duration\":0,\"trace\":\"" + trace + "\"}");
     }
+
+    @org.junit.jupiter.api.Test
+    void runIdIsReadWithoutReadingTheRest() throws IOException {
+        assertThat(runIdOf("{\"reportFormat\":\"CTRF\",\"runId\":\"run-1\",\"results\": this is never read")).isEqualTo("run-1");
+    }
+
+    @org.junit.jupiter.api.Test
+    void runIdAfterTheResultsIsFound() throws IOException {
+        assertThat(runIdOf("{\"results\":{\"tests\":[{\"name\":\"t()\",\"extra\":{\"a\":[1,{}]}}]},\"runId\":\"run-1\"}"))
+            .isEqualTo("run-1");
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Review Focus 4: the runId of a pretty-printed report with Windows line endings is found after its results")
+    void runIdOfAPrettyPrintedReportWithWindowsLineEndingsIsFound() throws IOException {
+        String json = "{\r\n  \"results\" : {\r\n    \"tests\" : [ ]\r\n  },\r\n  \"runId\" : \"run-1\"\r\n}\r\n";
+
+        assertThat(runIdOf(json)).isEqualTo("run-1");
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Review Focus 3: the runId of a report starting with a byte order mark is found")
+    void runIdOfAReportStartingWithAByteOrderMarkIsFound() throws IOException {
+        assertThat(runIdOf((char) 0xFEFF + "{\"runId\":\"run-1\"}")).isEqualTo("run-1");
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A report of 0.4, or with a null runId, has no run id")
+    void reportWithoutARunIdHasNone() throws IOException {
+        assertThat(runIdOf("{\"reportFormat\":\"CTRF\",\"specVersion\":\"0.0.0\",\"results\":{\"tests\":[]}}")).isNull();
+        assertThat(runIdOf("{}")).isNull();
+        assertThat(runIdOf("{\"runId\":null}")).isNull();
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A report that is the literal null has no run id, as the full read reads it as no report")
+    void reportThatIsTheLiteralNullHasNoRunId() throws IOException {
+        assertThat(runIdOf("null")).isNull();
+        assertThat(runIdOf(" null \n")).isNull();
+    }
+
+    @org.junit.jupiter.api.Test
+    void numericRunIdIsReadAsText() throws IOException {
+        assertThat(runIdOf("{\"runId\":123}")).isEqualTo("123");
+    }
+
+    @org.junit.jupiter.api.Test
+    void runIdCantBeReadFromTextThatIsNotAReport() {
+        assertThatThrownBy(() -> runIdOf("[]")).isInstanceOf(JsonException.class).hasMessage("$: expected an object");
+        assertThatThrownBy(() -> runIdOf("{\"results\":[1,]}"))
+            .isInstanceOf(JsonException.class)
+            .hasMessage("Unexpected character ']' at character 14");
+        assertThatThrownBy(() -> runIdOf("{\"runId\":{}}")).isInstanceOf(JsonException.class).hasMessage("$.runId: expected a string");
+    }
+
+    private static String runIdOf(String json) throws IOException {
+        return CtrfJsonMapper.readRunId(new StringReader(json));
+    }
 }

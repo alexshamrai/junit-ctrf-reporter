@@ -27,6 +27,7 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 class CtrfReportFileServiceTest {
@@ -207,6 +208,138 @@ class CtrfReportFileServiceTest {
 
         assertThat(seen).containsExactly("first");
         assertThat(logs.text()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("A report of another run is replaced after reading only its runId, without a warning")
+    void reportOfAnotherRunIsReplacedAfterReadingOnlyItsRunId() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.writeString(report, "{\"reportFormat\":\"CTRF\",\"runId\":\"earlier-run\",\"results\":{ the rest is never read");
+        List<CtrfJson> seen = new ArrayList<>();
+
+        serviceFor(report).update("this-run", existing -> {
+            seen.add(existing);
+            return marker("fresh");
+        });
+
+        assertThat(seen).containsExactly((CtrfJson) null);
+        assertThat(readMarker(report)).isEqualTo("fresh");
+        assertThat(logs.text()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("A report without a runId, as 0.4 wrote them, is replaced without a warning")
+    void reportWithoutARunIdIsReplaced() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.writeString(report, "{\"reportFormat\":\"CTRF\",\"specVersion\":\"0.0.0\",\"results\":{\"tests\":[]}}");
+        List<CtrfJson> seen = new ArrayList<>();
+
+        serviceFor(report).update("this-run", existing -> {
+            seen.add(existing);
+            return marker("fresh");
+        });
+
+        assertThat(seen).containsExactly((CtrfJson) null);
+        assertThat(logs.text()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("A report of the same run reaches the merge function")
+    void reportOfTheSameRunReachesTheMerge() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.writeString(report, "{\"runId\":\"this-run\",\"generatedBy\":\"first\"}");
+        List<String> seen = new ArrayList<>();
+
+        serviceFor(report).update("this-run", existing -> {
+            seen.add(existing.getGeneratedBy());
+            return marker("second");
+        });
+
+        assertThat(seen).containsExactly("first");
+        assertThat(readMarker(report)).isEqualTo("second");
+    }
+
+    @Test
+    @DisplayName("Review Focus 3: a report of the same run that another tool saved with a byte order mark is merged")
+    void reportOfTheSameRunWithAByteOrderMarkReachesTheMerge() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.writeString(report, (char) 0xFEFF + "{\"runId\":\"this-run\",\"generatedBy\":\"first\"}", StandardCharsets.UTF_8);
+        List<String> seen = new ArrayList<>();
+
+        serviceFor(report).update("this-run", existing -> {
+            seen.add(existing.getGeneratedBy());
+            return marker("second");
+        });
+
+        assertThat(seen).containsExactly("first");
+        assertThat(logs.text()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("A report that is the literal null is replaced without a warning, through either update")
+    void reportThatIsTheLiteralNullIsReplacedWithoutAWarning() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.writeString(report, "null");
+        List<CtrfJson> seen = new ArrayList<>();
+
+        serviceFor(report).update("this-run", existing -> {
+            seen.add(existing);
+            return marker("fresh");
+        });
+
+        assertThat(seen).containsExactly((CtrfJson) null);
+        assertThat(readMarker(report)).isEqualTo("fresh");
+        assertThat(logs.text()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("A damaged report of the same run reaches the merge function as null, with a warning")
+    void damagedReportOfTheSameRunIsReplacedWithAWarning() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.writeString(report, "{\"runId\":\"this-run\",\"results\":{ not json");
+        List<CtrfJson> seen = new ArrayList<>();
+
+        serviceFor(report).update("this-run", existing -> {
+            seen.add(existing);
+            return marker("fresh");
+        });
+
+        assertThat(seen).containsExactly((CtrfJson) null);
+        assertThat(readMarker(report)).isEqualTo("fresh");
+        assertThat(logs.text()).contains("can't be read");
+    }
+
+    @Test
+    @DisplayName("update with a null runId throws, and leaves the report as it was")
+    void updateWithANullRunIdThrowsAndLeavesTheReport() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        var service = serviceFor(report);
+        service.update(existing -> marker("first"));
+        List<CtrfJson> seen = new ArrayList<>();
+
+        assertThatThrownBy(() -> service.update(null, existing -> {
+            seen.add(existing);
+            return marker("second");
+        })).isInstanceOf(NullPointerException.class).hasMessage("runId");
+
+        assertThat(seen).isEmpty();
+        assertThat(readMarker(report)).isEqualTo("first");
+        assertThat(logs.text()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Review Focus 5: update without a runId still passes a report of any run to the merge function")
+    void updateWithoutARunIdReadsAReportOfAnyRun() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.writeString(report, "{\"runId\":\"earlier-run\",\"generatedBy\":\"first\"}");
+        List<String> seen = new ArrayList<>();
+
+        serviceFor(report).update(existing -> {
+            seen.add(existing.getGeneratedBy());
+            return marker("second");
+        });
+
+        assertThat(seen).containsExactly("first");
     }
 
     @Test

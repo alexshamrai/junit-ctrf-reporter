@@ -288,7 +288,7 @@ public final class CtrfReportManager {
         boolean healthy = isEnvironmentHealthy.get();
         CtrfJsonComposer composer = composerFactory.apply(run.generator());
 
-        fileService.update(existing -> {
+        fileService.update(runId, existing -> {
             var merged = ReportMerger.merge(existing, runId, attempts, successes, startTime, testRunStopTime, healthy);
             var summary = SummaryUtil.createSummary(merged.tests(), merged.start(), merged.stop());
             return composer.generateCtrfJson(summary, merged.tests(), merged.healthy(), runId);
