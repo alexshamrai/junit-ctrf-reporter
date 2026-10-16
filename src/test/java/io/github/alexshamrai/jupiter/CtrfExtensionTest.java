@@ -8,6 +8,7 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opentest4j.TestAbortedException;
 
 import java.util.Collections;
 import java.util.Optional;
@@ -239,6 +240,37 @@ public class CtrfExtensionTest {
         assertEquals("teardownError", detailsCaptor.getValue().displayName());
         assertEquals(TEST_UNIQUE_ID, detailsCaptor.getValue().uniqueId(), "a class failure is identified by the class itself");
         verify(reportManager).onTestFailure(TEST_UNIQUE_ID, cause);
+        verify(reportManager, never()).onContainerSuccess(anyString(), any());
+    }
+
+    @Test
+    void afterAll_whenClassSetupAborted_shouldReportOneSkippedInitializationError() {
+        var cause = new TestAbortedException("Assumption failed: no database on this agent");
+        when(extensionContext.getExecutionException()).thenReturn(Optional.of(cause));
+        when(store.get(TEST_UNIQUE_ID, ClassState.class)).thenReturn(new ClassState(1_000L));
+
+        ctrfExtension.afterAll(extensionContext);
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestStart(detailsCaptor.capture());
+        assertEquals("initializationError", detailsCaptor.getValue().displayName());
+        verify(reportManager).onTestAborted(TEST_UNIQUE_ID, cause);
+        verify(reportManager, never()).onTestFailure(anyString(), any());
+        verify(reportManager, never()).onContainerSuccess(anyString(), any());
+    }
+
+    @Test
+    void afterAll_whenClassAbortedAfterItsTestsStarted_shouldReportNothing() {
+        var classState = new ClassState(1_000L);
+        classState.markChildrenStarted();
+        when(extensionContext.getExecutionException()).thenReturn(Optional.of(new TestAbortedException("Assumption failed")));
+        when(store.get(TEST_UNIQUE_ID, ClassState.class)).thenReturn(classState);
+
+        ctrfExtension.afterAll(extensionContext);
+
+        verify(reportManager, never()).onTestStart(any());
+        verify(reportManager, never()).onTestFailure(anyString(), any());
+        verify(reportManager, never()).onTestAborted(anyString(), any());
         verify(reportManager, never()).onContainerSuccess(anyString(), any());
     }
 

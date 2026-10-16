@@ -125,6 +125,7 @@ public class MyTest {
 It reports only the classes it is registered on, and it can't see:
 
 - the tests of a class that JUnit skips as a whole, such as a `@Disabled` class: they are missing from the report;
+- the tests of a class whose `@BeforeAll` aborts with a failed assumption: the class appears as one skipped `initializationError` entry instead;
 - a class that can't be created, for example when its Spring context fails to load under `@TestInstance(Lifecycle.PER_CLASS)`;
 - failures of containers below class level, such as a `@MethodSource` that throws;
 - teardown failures of extensions registered before it;
