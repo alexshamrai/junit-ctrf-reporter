@@ -11,7 +11,7 @@ The library provides two ways to enable CTRF reporting. A project uses one of th
    - The jar doesn't register it itself: that would switch reporting on for every project with the jar on its test classpath, and take over the reporting of `CtrfExtension` users (the listener's test plan owns the run, so the extension's run start is refused)
    - Sees classes skipped as a whole, failed containers of every kind, other engines (Vintage) and dynamic tests
    - JUnit's launcher catches and logs exceptions from listener callbacks, so the listener needs no guard of its own
-2. **CtrfExtension** (`jupiter/CtrfExtension.java`)
+2. **CtrfExtension** (`jupiter/CtrfExtension.java`), deprecated since 0.5.2 and to be removed in 0.6.0, with `TestRunExtension`; it logs a warning once per run
    - JUnit Jupiter extension, `@ExtendWith(CtrfExtension.class)`; implements `TestRunExtension`, `AfterAllCallback`, `BeforeEachCallback` and `TestWatcher`
    - The end of the run is a `RunEndResource` in the root store, which is both `CloseableResource` and `AutoCloseable`
    - Every reporter call goes through a guard: an error is logged and never becomes a test failure; a `VirtualMachineError` propagates

@@ -61,7 +61,13 @@ import java.util.logging.Logger;
  * <p>
  * The extension can be configured through a {@code ctrf.properties} file placed in the classpath.
  * See the README for all available configuration options.
+ *
+ * @deprecated since 0.5.2, to be removed in 0.6.0. Register {@code io.github.alexshamrai.launcher.CtrfListener}
+ *     instead, which also reports what this extension can't see: add
+ *     {@code src/test/resources/META-INF/services/org.junit.platform.launcher.TestExecutionListener} containing the
+ *     line {@code io.github.alexshamrai.launcher.CtrfListener}, and remove {@code @ExtendWith(CtrfExtension.class)}.
  */
+@Deprecated(since = "0.5.2")
 public class CtrfExtension implements TestRunExtension, AfterAllCallback, BeforeEachCallback, TestWatcher {
 
     /**
@@ -74,6 +80,8 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
     private static final String GENERATED_BY = "io.github.alexshamrai.jupiter.CtrfExtension";
     private static final String INITIALIZATION_ERROR = "initializationError";
     private static final String TEARDOWN_ERROR = "teardownError";
+    private static final String DEPRECATION_WARNING = "CtrfExtension is deprecated and will be removed in 0.6.0: register"
+        + " CtrfListener instead, as https://github.com/alexshamrai/junit-ctrf-reporter#recommended-ctrflistener shows";
 
     private final CtrfReportManager reportManager;
 
@@ -122,13 +130,15 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
 
     /**
      * Starts the run, owned by the root context, and stores in the root's store whether it got the run. A root whose
-     * run start is refused, because another run is active, belongs to a JUnit run started from inside a test.
+     * run start is refused, because another run is active, belongs to a JUnit run started from inside a test. Logs,
+     * once per run, that the extension is deprecated.
      *
      * @param context the context of the run's first class
      */
     @Override
     public void beforeAllTests(ExtensionContext context) {
         guarded("beforeAllTests", context, () -> {
+            LOGGER.warning(DEPRECATION_WARNING);
             ExtensionContext root = context.getRoot();
             root.getStore(NAMESPACE).put(OWNS_RUN, reportManager.startTestRun(root, GENERATED_BY));
         });

@@ -83,7 +83,7 @@ class CtrfExtensionGuardTest {
     @DisplayName("An OutOfMemoryError from the reporter propagates: the guard never swallows a VirtualMachineError")
     void outOfMemoryErrorPropagates() {
         assertThatThrownBy(() -> run(RunsOutOfMemoryAsTheTestStarts.class)).isInstanceOf(OutOfMemoryError.class);
-        assertThat(logs.text()).isEmpty();
+        assertThat(logs.text()).doesNotContain("The CTRF reporter failed");
     }
 
     private static EngineExecutionResults run(Class<?> fixture) {
