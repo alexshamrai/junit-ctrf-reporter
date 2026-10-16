@@ -11,6 +11,7 @@ import org.junit.platform.launcher.TestExecutionListener;
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.TestPlan;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -193,6 +194,9 @@ public class CtrfListener implements TestExecutionListener {
             name = childrenStarted ? TEARDOWN_ERROR : INITIALIZATION_ERROR;
         }
         String uniqueId = container.getUniqueId();
+        // A class error is grouped under its class, with the class's tests; any other container like a test
+        var adapter = new TestIdentifierAdapter(container, testPlan);
+        List<String> suite = isClass ? adapter.getSuiteOfChildren() : adapter.getSuite();
 
         String className = container.getSource()
             .map(CtrfListener::classNameOf)
@@ -203,7 +207,7 @@ public class CtrfListener implements TestExecutionListener {
             .collect(Collectors.toSet());
 
         long start = startTime != null ? startTime : System.currentTimeMillis();
-        TestDetails details = new TestDetails(start, tags, className, uniqueId, name);
+        TestDetails details = new TestDetails(start, tags, className, uniqueId, name, suite);
 
         reportManager.onTestStart(details);
         reportManager.onTestFailure(uniqueId, testExecutionResult.getThrowable().orElse(null));
@@ -260,6 +264,6 @@ public class CtrfListener implements TestExecutionListener {
     }
 
     private TestDetails createTestDetails(TestIdentifier testIdentifier) {
-        return TestDetails.fromAdapter(new TestIdentifierAdapter(testIdentifier));
+        return TestDetails.fromAdapter(new TestIdentifierAdapter(testIdentifier, testPlan));
     }
 }

@@ -57,6 +57,8 @@ dependencies {
     testImplementation "org.junit.platform:junit-platform-launcher"
     testImplementation "org.junit.jupiter:junit-jupiter-params"
     testImplementation "org.junit.platform:junit-platform-testkit"
+    // A @Suite fixture, to show that suite skips the engines of a suite too
+    testImplementation "org.junit.platform:junit-platform-suite"
     testImplementation "org.mockito:mockito-core:${mockitoVersion}"
     testImplementation "org.assertj:assertj-core:${assertjVersion}"
     testImplementation platform("tools.jackson:jackson-bom:${jacksonVersion}")
@@ -80,6 +82,8 @@ tasks.withType(Test).configureEach {
     useJUnitPlatform {
         // Scenario fixtures fail on purpose; ScenarioRunner runs them in a separate JVM
         excludeTags 'scenario-fixture'
+        // The suite engine is here only for a @Suite fixture that a test discovers itself
+        excludeEngines 'junit-platform-suite'
     }
 }
 
