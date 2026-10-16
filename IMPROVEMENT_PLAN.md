@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-14:** Phase 1 and HP-6 are merged to `master` @ `58e36f0`, not yet released (v0.4.5 is the latest release). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0. Phase 3 is merged to `master` @ `61df632` (#138), not yet released; it ships as 0.5.1. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -20,7 +20,7 @@ Each improvement item includes:
 
 ## Status on `master` — 2026-10-14
 
-`master` @ `aee31fc` (updated 2026-10-15). Phases 1 and 2 are released as [0.5.0](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.0) (2026-10-15, Maven Central `io.github.alexshamrai:junit-ctrf-reporter:0.5.0`, release PR #136).
+`master` @ `61df632` (updated 2026-10-16). Phase 3 is merged (#138) and ships as 0.5.1. Phases 1 and 2 are released as [0.5.0](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.0) (2026-10-15, Maven Central `io.github.alexshamrai:junit-ctrf-reporter:0.5.0`, release PR #136).
 
 | Item | Status | PR | Commits |
 |---|---|---|---|
@@ -37,9 +37,17 @@ Each improvement item includes:
 | [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) Class failure that recovers on retry | Done, with CB-6 | #132 | `9084a83` |
 | [HP-5](#hp-5-conform-to-the-official-ctrf-schema) Conform to the official CTRF schema | Done | #134 | `291f21d` |
 | [TI-4](#ti-4-validate-integration-output-against-the-official-schema-and-junits-own-counts) Official schema and JUnit counts in the validator | Done: the JUnit event-log cross-check and expectations from the run (#135); the official schema (HP-5, #134); CI with 2 forks (CB-6, #132) | #132, #134, #135 | `9084a83`, `291f21d`, `059992b` |
-| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests; CB-2 doesn't yet, and scenario outputs aren't validated against the official schema yet | | |
-| [MP-5](#mp-5-read-previous-reports-tolerantly) Read previous reports tolerantly | Superseded by CB-6; not planned for 0.5.0 | #132 | `9084a83` |
-| [Phase 3](#phase-3-design--051) HP-10, HP-1, CB-2, MP-6, MP-7, MP-8, MP-9, HP-3 | Designed 2026-10-15 for 0.5.1 | | |
+| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-2, CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests; scenario outputs aren't validated against the official schema yet | #138 (CB-2) | `ecb4fd1` |
+| [MP-5](#mp-5-read-previous-reports-tolerantly) Read previous reports tolerantly | Superseded by CB-6; unknown fields are ignored since MP-9 (#138) | #132, #138 | `9084a83`, `037e253` |
+| [HP-3](#hp-3-implement-proper-logging-framework) Logging through `java.util.logging` | Done | #138 | `47cd66b` |
+| [MP-9](#mp-9-dependency-and-configuration-hygiene-owner-env-vars-jackson) Own config loader and JSON code; no runtime dependencies | Done | #138 | `d888754`, `037e253` |
+| [MP-8](#mp-8-separate-message-from-trace-bound-the-trace-size) `message` and capped `trace` | Done | #138 | `8f91c54` |
+| [MP-6](#mp-6-replace-deprecated-extensioncontextstorecloseableresource) `AutoCloseable` end-of-run hook | Done | #138 | `b52b060` |
+| [MP-7](#mp-7-never-let-reporter-errors-fail-or-mask-user-tests) Reporter errors never change a test's outcome | Done | #138 | `639fd06` |
+| [CB-2](#cb-2-a-nested-junit-run-ends-the-outer-run-re-scoped-from-race-condition-in-finishtestrun) Nested runs are ignored | Done | #138 | `ecb4fd1` |
+| [HP-10](#hp-10-make-the-testexecutionlistener-the-single-core-integration-point) Listener as the recommended setup; run ownership | Done | #138 | `ecb4fd1`, `61df632` |
+| [HP-1](#hp-1-refactor-singleton-pattern-in-ctrfreportmanager) Collaborators injected; singleton only as the default instance | Done | #138 | `61df632` |
+| [Phase 3](#phase-3-design--051) HP-10, HP-1, CB-2, MP-6, MP-7, MP-8, MP-9, HP-3 | Done; merged 2026-10-15 (rebase, eight commits); release 0.5.1 pending | #138 | `47cd66b`..`61df632` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -47,7 +55,7 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 
 ## Phase 3 Design — 0.5.1
 
-**Status**: Designed 2026-10-15 against `master` @ `635b4e6`, after the 0.5.0 release. Ships as **0.5.1**.
+**Status**: Done. Designed 2026-10-15 against `master` @ `635b4e6`, after the 0.5.0 release; merged 2026-10-15 as #138 (`47cd66b`..`61df632`, eight commits, rebase-merged). Ships as **0.5.1**, not yet released.
 **Implementation plan**: [`docs/plans/2026-10-15-phase-3-0.5.1.md`](docs/plans/2026-10-15-phase-3-0.5.1.md)
 **Items**:
 - [HP-10](#hp-10-make-the-testexecutionlistener-the-single-core-integration-point) with [HP-1](#hp-1-refactor-singleton-pattern-in-ctrfreportmanager);
@@ -56,6 +64,38 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 - [MP-7](#mp-7-never-let-reporter-errors-fail-or-mask-user-tests);
 - [MP-8](#mp-8-separate-message-from-trace-bound-the-trace-size);
 - [MP-9](#mp-9-dependency-and-configuration-hygiene-owner-env-vars-jackson) with [HP-3](#hp-3-implement-proper-logging-framework).
+
+### Changes during implementation (2026-10-15)
+
+The text below is corrected where implementation proved it wrong.
+
+- **Surrogates (commit 3):** Jackson 2's byte output, which 0.5.0 used, escapes every surrogate. An emoji is written as the `\uXXXX` escapes of its two surrogates, and a lone surrogate is escaped too: Jackson never threw on it. The writer does the same, so 0.5.1 reports are byte-identical to 0.5.0's.
+- **Nesting (commit 3):** the parser caps nesting at 100 levels, not 1,000. The reader and the writer are recursive, and 1,000 levels overflowed the test thread's stack on the Linux CI runner. A test now reads and writes a document nested to the cap inside a 256 KB stack.
+- **`CTRF_*` variables (commit 2):** the integration workflows defined `CTRF_REPORT_PATH` for their publish and validator steps, and the reporter started reading it; they now call it `REPORT_FILE`. The README warns users whose CI defines `CTRF_*` variables for other steps.
+- **Manager (commit 8):** the constructor doesn't take the configuration; nothing in the manager uses it once its collaborators are built.
+- **README:**
+  - it notes that Jackson and `owner` no longer reach users' test runtime classpath;
+  - it explains the extension's ordering gap with nested runs: a nested run started before the first class with the extension becomes the reported run;
+  - it says to register one listener instance per launcher;
+  - it no longer claims that registering both entry points reports every test twice. Since CB-2, only the listener reports.
+- **Also:**
+  - `ctrf.properties` is read as UTF-8, as `owner` did, or as ISO-8859-1 if it isn't valid UTF-8;
+  - booleans may have surrounding spaces;
+  - `TestStatus` lower-cases with `Locale.ROOT`: under a Turkish default locale, `failed` was written `faıled`.
+
+### Follow-ups after 0.5.1
+
+- **Streaming JSON (0.5.2):** the writer and the reader build the whole report in memory. A 56 MB report (about 100,000 tests) needs about 340 MB of heap, against 200 MB with Jackson. Write and read through a `Writer` and a `Reader` instead.
+- **Tests on Jackson 3:**
+  - compare `JacksonDifferentialTest`'s output with golden files of the 0.5.0 output, instead of with Jackson 2;
+  - move `ScenarioRunner`, `CtrfModelJsonTest` and the integration validator to Jackson 3;
+  - drop `jackson-databind` 2.x from the build. The schema validator's Jackson 3 then remains the only Jackson, in test scope only.
+- **Deferred review minors,** all triaged "can wait" by the final review:
+  - an `Error` thrown from a failure's `toString()` still loses the entry;
+  - a capped trace can keep a stray `\r` when the cut falls inside `\r\n`;
+  - `ConfigReader(Map, Map, Map)` doesn't document that it rejects nulls;
+  - mapper error messages include whole offending values;
+  - a `ctrf.properties` saved with a UTF-8 BOM loses its first key, as with `owner`.
 
 ### Decisions (2026-10-15)
 
@@ -158,8 +198,8 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 ### Commit 3 — MP-9: own JSON writer and reader
 
 - **New internal package `io.github.alexshamrai.json`:**
-  - **`JsonWriter`** writes compact JSON, as Jackson does today, with no whitespace. Escaping follows Jackson: `"` and `\`, the short escapes `\b \t \n \f \r`, and `\u00XX` with uppercase hex for other control characters. Other text, including emoji, is written as-is in UTF-8. A lone surrogate is written as a `\uD8xx` escape; Jackson threw on it, which failed the whole report write.
-  - **`JsonParser`** is a recursive-descent parser. Integers become `Integer`, `Long` or `BigInteger` depending on size, and decimals become `Double`. It accepts any whitespace and a UTF-8 BOM. Malformed input throws, which the file service already treats as "can't be read, replace it".
+  - **`JsonWriter`** writes compact JSON, as Jackson does today, with no whitespace. Escaping follows Jackson: `"` and `\`, the short escapes `\b \t \n \f \r`, and `\u00XX` with uppercase hex for other control characters. Other text is written as-is in UTF-8, except surrogates. As in Jackson's byte output, a character outside the Basic Multilingual Plane, such as an emoji, is written as the `\uXXXX` escapes of its two surrogates, and so is a lone surrogate.
+  - **`JsonParser`** is a recursive-descent parser. Integers become `Integer`, `Long` or `BigInteger` depending on size, and decimals become `Double`. It accepts any whitespace and a UTF-8 BOM. Malformed input throws, which the file service already treats as "can't be read, replace it". So does nesting deeper than 100 levels, so a corrupt report can't overflow the stack.
   - **`CtrfJsonMapper`** binds the model by reflection over each model class's declared fields. The rules are written explicitly, because the annotation classes aren't present at runtime:
     - **Fields:** in declaration order, named after the field; static fields are skipped.
     - **Nulls:** null fields are omitted; empty lists are kept; primitives are always written; nulls inside `Map<String, Object>` values are written as `null`.
@@ -242,7 +282,7 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 
 ### Commit 8 — HP-10 and HP-1: the singleton only where it's needed, and the docs
 
-- **The manager's collaborators are passed in** through one package-private constructor: config, test processor, file service, a composer factory per generator, the run id, and the initial health. That replaces "the composer is null, then rebuilt at every finish".
+- **The manager's collaborators are passed in** through one package-private constructor: test processor, file service, a composer factory per generator, the run id, and the initial health. The configuration isn't one of them, because nothing in the manager uses it once those are built. That replaces "the composer is null, then rebuilt at every finish".
 - **`getInstance()` stays as the default instance,** used by `EnvironmentHealthTracker` and by the entry points' no-argument constructors.
 - **`CtrfListener` gets a package-private test constructor,** like `CtrfExtension`'s.
 - **README, "Choosing a setup":**
@@ -274,27 +314,29 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 - **`message`** holds the exception summary, not the start of the stack trace.
 - **`trace`** is capped by the new `ctrf.max.trace.length`. The default is 20,000, and 0 means no limit.
 - **Configuration:**
-  - `CTRF_*` environment variables now work, e.g. `CTRF_REPORT_PATH`;
+  - `CTRF_*` environment variables now work, e.g. `CTRF_REPORT_PATH`. A `CTRF_*` variable that your CI defines for another step, such as a publishing action, now configures the reporter too, so rename it if it isn't meant for the reporter;
   - an invalid number or boolean logs a warning and uses the default, instead of breaking the report;
-  - numbers may have surrounding spaces.
+  - numbers and booleans may have surrounding spaces;
+  - `ctrf.properties` is read as UTF-8, or as ISO-8859-1 if it isn't valid UTF-8.
 - **Nested runs:** a test that runs JUnit itself no longer ends the outer run, and the nested run's tests aren't reported.
 - **Logging:** warnings go through `java.util.logging`, with the same texts.
-- **No runtime dependencies:** `owner` and `jackson-databind` are no longer brought in. The model classes keep their Jackson annotations.
+- **No runtime dependencies:** `owner` and `jackson-databind` are no longer brought in. The model classes keep their Jackson annotations. If your tests used Jackson or `owner` through this library, for example with REST Assured or WireMock, declare it as your own test dependency.
+- **Statuses** are written in English lower case under any default locale; under a Turkish locale, `failed` was written `faıled`.
 - **Reading an existing report:** unknown fields are ignored instead of discarding the report.
 - **Extension:** no "CloseableResource" warning on JUnit 5.13 and later, and reporter errors never fail a test.
 
 ### Acceptance Criteria
 
-- [ ] Every row of the `owner` behaviour table holds for the new loader
-- [ ] `CTRF_REPORT_PATH` and the other `CTRF_*` variables work, below system properties and above `ctrf.properties`
-- [ ] The published POM has no dependencies, and the compat consumers pass without Jackson on the classpath
-- [ ] Our writer's output is byte-identical to Jackson's for the test corpus; the schema conformance test and the integration validator pass
-- [ ] `message` has no stack frames; `trace` respects `ctrf.max.trace.length` and keeps every `Caused by:` line
-- [ ] No "CloseableResource" warning on JUnit 6; the report is still written on JUnit 5.10.5
-- [ ] No reporter exception changes a test's status or exception; `VirtualMachineError` propagates
-- [ ] A nested JUnit run neither ends the outer run nor adds its tests, through the listener and through the extension; same-JVM reruns still work
-- [ ] README recommends the listener and explains the trade-offs, and why it isn't registered automatically
-- [ ] All library classes are class-file version 61 (Java 17)
+- [x] Every row of the `owner` behaviour table holds for the new loader
+- [x] `CTRF_REPORT_PATH` and the other `CTRF_*` variables work, below system properties and above `ctrf.properties`
+- [x] The published POM has no dependencies, and the compat consumers pass without Jackson on the classpath
+- [x] Our writer's output is byte-identical to Jackson's for the test corpus; the schema conformance test and the integration validator pass
+- [x] `message` has no stack frames; `trace` respects `ctrf.max.trace.length` and keeps every `Caused by:` line
+- [x] No "CloseableResource" warning on JUnit 6; the report is still written on JUnit 5.10.5
+- [x] No reporter exception changes a test's status or exception; `VirtualMachineError` propagates
+- [x] A nested JUnit run neither ends the outer run nor adds its tests, through the listener and through the extension; same-JVM reruns still work
+- [x] README recommends the listener and explains the trade-offs, and why it isn't registered automatically
+- [x] All library classes are class-file version 61 (Java 17)
 
 ---
 
@@ -457,7 +499,7 @@ public List<Test> getExistingTests() {
 **Priority**: Medium (lowered from Critical on 2026-10-08)
 **Complexity**: Moderate
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java`, `launcher/CtrfListener.java`, `jupiter/TestRunExtension.java`
-**Status**: Re-scoped 2026-10-08 (verified). Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commit 7: nested runs are ignored.
+**Status**: Done (#138, `ecb4fd1`), 2026-10-15; ships in 0.5.1. Re-scoped 2026-10-08. Nested runs are ignored: a `TestRun` remembers its owner, and only the owner can end it. Covered by `NestedRunScenarioTest`.
 
 #### Review Note (2026-10-08)
 The original item assumed that test callbacks can run while `finishTestRun()` executes, so results added between the CAS and `clear()` would be lost. With a single entry point that can't happen. JUnit calls `testPlanExecutionFinished` (listener), and closes the root store (extension), only after every test on every thread has finished. Verified: 10 runs of 1,000 tests on 8–9 parallel threads (5 with only the listener, 5 with only the extension) each reported 1,000 of 1,000 tests.
@@ -497,10 +539,10 @@ Requirements:
 ````
 
 #### Acceptance Criteria
-- [ ] A nested JUnit run in the same JVM does not end the outer run
-- [ ] Every outer test appears in the report (`runsNestedLauncher()`, `outerC1()`, `outerC2()` in the scenario above)
-- [ ] Tests from nested runs are handled as documented
-- [ ] Sequential runs in one JVM still produce correct reports (CB-6)
+- [x] A nested JUnit run in the same JVM does not end the outer run
+- [x] Every outer test appears in the report (`runsNestedLauncher()`, `outerC1()`, `outerC2()` in the scenario above; `third()` and `fourth()` in `NestedRunScenarioTest`)
+- [x] Tests from nested runs are handled as documented
+- [x] Sequential runs in one JVM still produce correct reports (CB-6)
 
 ---
 
@@ -962,7 +1004,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Complex
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java`, `CtrfExtension.java`, `CtrfListener.java`, test files
-**Status**: Open; simplified by HP-10. Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commit 8: collaborators are injected, and the singleton remains only as `getInstance()`.
+**Status**: Done (#138, `61df632`), 2026-10-15; ships in 0.5.1. The manager's collaborators are injected through one package-private constructor. The singleton remains only as `getInstance()`, the default instance that the JUnit-created entry points and `EnvironmentHealthTracker` use.
 
 #### Review Note (2026-10-08)
 Once the listener owns the run state (HP-10), the singleton is only needed behind `EnvironmentHealthTracker`'s static API. Until each scenario can get a fresh manager, the regression tests in TI-5 have to run scenarios in forked JVMs.
@@ -1012,11 +1054,11 @@ Implement proper singleton with:
 ```
 
 #### Acceptance Criteria
-- [ ] Singleton pattern removed or properly implemented
-- [ ] All dependencies injected through constructor
-- [ ] Tests use dependency injection
-- [ ] No global mutable state accessed from constructors
-- [ ] CtrfExtension and CtrfListener both work correctly
+- [x] Singleton pattern removed or properly implemented
+- [x] All dependencies injected through constructor
+- [x] Tests use dependency injection
+- [x] No global mutable state accessed from constructors
+- [x] CtrfExtension and CtrfListener both work correctly
 - [ ] All existing tests pass
 - [ ] New unit tests verify isolation between instances
 - [ ] Documentation updated
@@ -1105,7 +1147,7 @@ Each new class should be:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: `CtrfReportFileService.java`, `build.gradle`, and classes with System.out/err
-**Status**: Open; approach changed 2026-10-08. Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commit 1: `java.util.logging`.
+**Status**: Done (#138, `47cd66b`), 2026-10-15; ships in 0.5.1. Built with `java.util.logging`, not SLF4J (approach changed 2026-10-08), so the SLF4J-specific criteria below don't apply.
 
 #### Review Note (2026-10-08)
 On `master`, SLF4J and Logback are used only by the `integration-ctrf-validator` module, not by the library. Adding `slf4j-api` to a library that sits on every user's test classpath adds a dependency, and without a provider SLF4J 2 prints a "No SLF4J providers were found" warning. Use `java.util.logging` instead: no dependency, and the JUnit Platform itself logs through JUL. See MP-9. The rest of the prompt (log levels, no `System.out`/`System.err`) still applies.
@@ -1157,14 +1199,14 @@ Files to update:
 ```
 
 #### Acceptance Criteria
-- [ ] No System.out.println() or System.err.println() in production code
-- [ ] SLF4J Logger added to relevant classes
-- [ ] Appropriate log levels used
+- [x] No System.out.println() or System.err.println() in production code
+- [ ] SLF4J Logger added to relevant classes (not applicable: `java.util.logging`)
+- [x] Appropriate log levels used
 - [ ] Exceptions logged with full stack traces
-- [ ] Parameterized logging used for performance
-- [ ] logback-test.xml provides reasonable defaults for tests
-- [ ] Documentation explains logging configuration
-- [ ] Library users can provide their own SLF4J implementation
+- [ ] Parameterized logging used for performance (not applicable: `java.util.logging`)
+- [ ] logback-test.xml provides reasonable defaults for tests (not applicable: `java.util.logging`)
+- [x] Documentation explains logging configuration
+- [ ] Library users can provide their own SLF4J implementation (not applicable: `java.util.logging`)
 - [ ] All tests pass with logging enabled
 
 ---
@@ -1655,7 +1697,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Complex
 **Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `jupiter/TestRunExtension.java`, `CtrfReportManager.java`, `EnvironmentHealthTracker.java`, `README.md`
-**Status**: Open (design item; motivated by the verified defects in CB-5, HP-8 and HP-9). Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commits 7 and 8: run ownership and docs. The listener stays opt-in.
+**Status**: Done (#138, `ecb4fd1`, `61df632`), 2026-10-15; ships in 0.5.1. Motivated by the verified defects in CB-5, HP-8 and HP-9. Built as designed in [Phase 3 Design — 0.5.1](#phase-3-design--051): run ownership (CB-2), and the README's "Choosing a setup". The listener stays opt-in.
 
 #### Prompt
 ````
@@ -1685,9 +1727,9 @@ Requirements:
 ````
 
 #### Acceptance Criteria
-- [ ] All CB-5 and HP-8 scenarios pass with the listener
-- [ ] The listener reports non-Jupiter engines (e.g. Vintage)
-- [ ] README recommends one setup and explains the trade-offs
+- [x] All CB-5 and HP-8 scenarios pass with the listener
+- [x] The listener reports non-Jupiter engines (e.g. Vintage)
+- [x] README recommends one setup and explains the trade-offs
 
 ---
 
@@ -2149,7 +2191,7 @@ Files to update:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `CtrfReportFileService.java`, `ctrf/model/Environment.java`, `ctrf/model/*.java`, `CtrfReportManager.java`
-**Status**: Superseded by CB-6 (#132), decided 2026-10-15. Not planned for 0.5.0.
+**Status**: Superseded by CB-6 (#132), decided 2026-10-15. Not planned for 0.5.0. Since MP-9 (#138), unknown fields no longer discard the report; they are ignored, so they aren't kept either.
 
 #### Why it is superseded
 
@@ -2204,7 +2246,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `jupiter/TestRunExtension.java`
-**Status**: Open (verified 2026-10-08). Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commit 5.
+**Status**: Done (#138, `b52b060`), 2026-10-15; ships in 0.5.1.
 
 #### Prompt
 ````
@@ -2228,8 +2270,8 @@ Requirements:
 ````
 
 #### Acceptance Criteria
-- [ ] No `CloseableResource` warning on JUnit 6
-- [ ] The report is still written on the oldest supported JUnit 5.x
+- [x] No `CloseableResource` warning on JUnit 6
+- [x] The report is still written on the oldest supported JUnit 5.x
 
 ---
 
@@ -2238,7 +2280,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `jupiter/CtrfExtension.java`, `jupiter/TestRunExtension.java`, `CtrfReportManager.java`
-**Status**: Open (by inspection, 2026-10-08). Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commit 6.
+**Status**: Done (#138, `639fd06`), 2026-10-15; ships in 0.5.1. The extension guards every callback; the listener needs no guard, because JUnit's launcher already catches listener exceptions.
 
 #### Prompt
 ````
@@ -2263,8 +2305,8 @@ Requirements:
 ````
 
 #### Acceptance Criteria
-- [ ] No reporter exception can change a test's status or exception
-- [ ] Reporter failures are logged with context
+- [x] No reporter exception can change a test's status or exception
+- [x] Reporter failures are logged with context
 
 ---
 
@@ -2273,7 +2315,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `TestProcessor.java`, `config/CtrfConfig.java`, `config/ConfigReader.java`
-**Status**: Open (observed 2026-10-08). Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commit 4: `ctrf.max.trace.length` defaults to 20,000.
+**Status**: Done (#138, `8f91c54`), 2026-10-15; ships in 0.5.1. `ctrf.max.trace.length` defaults to 20,000.
 
 #### Prompt
 ````
@@ -2291,8 +2333,8 @@ Requirements:
 ````
 
 #### Acceptance Criteria
-- [ ] `message` contains the exception summary, not stack frames
-- [ ] `trace` respects the configured maximum
+- [x] `message` contains the exception summary, not stack frames
+- [x] `trace` respects the configured maximum
 
 ---
 
@@ -2301,7 +2343,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `config/CtrfConfig.java`, `config/ConfigReader.java`, `CtrfReportFileService.java`, `build.gradle`, `README.md`
-**Status**: Open (verified 2026-10-08, except item 3). Designed 2026-10-15 for 0.5.1 in [Phase 3 Design — 0.5.1](#phase-3-design--051), commits 2 and 3: our own config loader and JSON writer and reader, which leave no runtime dependencies. Finding 2 was wrong: `owner` is developed again (`2.0.0-SNAPSHOT`), but hasn't released since 1.0.12 (2020-06-06).
+**Status**: Done (#138, `d888754`, `037e253`), 2026-10-15; ships in 0.5.1. Our own config loader, JSON writer and JSON reader leave no runtime dependencies. Finding 2 was wrong: `owner` is developed again (`2.0.0-SNAPSHOT`), but hasn't released since 1.0.12 (2020-06-06).
 
 #### Prompt
 ````
@@ -2331,9 +2373,9 @@ Requirements:
 ````
 
 #### Acceptance Criteria
-- [ ] `CTRF_REPORT_PATH` and the other `CTRF_*` variables work
-- [ ] No owner dependency; Jackson is removed or shaded
-- [ ] Published runtime dependencies are listed and justified in README or DEVELOPMENT.md
+- [x] `CTRF_REPORT_PATH` and the other `CTRF_*` variables work
+- [x] No owner dependency; Jackson is removed or shaded
+- [x] Published runtime dependencies are listed and justified in README or DEVELOPMENT.md
 
 ---
 
@@ -3642,7 +3684,7 @@ The per-task and whole-branch reviews of #135 left these open.
 **Priority**: High
 **Complexity**: Moderate
 **Files**: new tests under `src/test/java/io/github/alexshamrai/scenario/` (or a new integration module), fake test classes
-**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. Still open: CB-2 (nested run) and validating each scenario's output against the official schema and, since TI-4 (#135), against JUnit's event log. HP-5 (#134) pinned that schema at `schema/ctrf.schema.json`; `CtrfSchemaConformanceTest` shows how to load it in tests.
+**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. CB-2 is covered since #138 (`NestedRunScenarioTest`). Still open: validating each scenario's output against the official schema and, since TI-4 (#135), against JUnit's event log. HP-5 (#134) pinned that schema at `schema/ctrf.schema.json`; `CtrfSchemaConformanceTest` shows how to load it in tests.
 
 #### Prompt
 ````
