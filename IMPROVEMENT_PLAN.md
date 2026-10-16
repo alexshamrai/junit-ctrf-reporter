@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), every scenario's report is checked against the official schema (TI-5, #146), and the file service's behaviour on permission errors, odd paths and interrupts is pinned (TI-2, #147). MP-4 (#148) does change the jar: a blank, invalid or directory `ctrf.report.path` no longer loses the report. So does #149: through the extension, a class whose setup or teardown aborts is no longer reported as failed; TI-1 (#150), the concurrency tests, found it. DI-1 and DI-2 (#151) document the public API and move the architecture into `ARCHITECTURE.md`. The next release's notes are the 0.5.2 ones, HP-12's, MP-4's line in its status, and #149's line in TI-1's status. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 is done: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), every scenario's report is checked against the official schema (TI-5, #146), and the file service's behaviour on permission errors, odd paths and interrupts is pinned (TI-2, #147). MP-4 (#148) does change the jar: a blank, invalid or directory `ctrf.report.path` no longer loses the report. So does #149: through the extension, a class whose setup or teardown aborts is no longer reported as failed; TI-1 (#150), the concurrency tests, found it. DI-1 and DI-2 (#151) document the public API and move the architecture into `ARCHITECTURE.md`. The next release's notes are the 0.5.2 ones, HP-12's, MP-4's line in its status, and #149's line in TI-1's status. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -37,7 +37,7 @@ Each improvement item includes:
 | [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) Class failure that recovers on retry | Done, with CB-6 | #132 | `9084a83` |
 | [HP-5](#hp-5-conform-to-the-official-ctrf-schema) Conform to the official CTRF schema | Done | #134 | `291f21d` |
 | [TI-4](#ti-4-validate-integration-output-against-the-official-schema-and-junits-own-counts) Official schema and JUnit counts in the validator | Done: the JUnit event-log cross-check and expectations from the run (#135); the official schema (HP-5, #134); CI with 2 forks (CB-6, #132) | #132, #134, #135 | `9084a83`, `291f21d`, `059992b` |
-| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-2, CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests, and every scenario's report is checked against the official schema (#146); checking them against JUnit's event log is open | #138 (CB-2), #146 | `ecb4fd1`, `77dce2e` |
+| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Done as planned: CB-2, CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests, and every scenario's report is checked against the official schema (#146); checking them against JUnit's event log is not planned | #138 (CB-2), #146 | `ecb4fd1`, `77dce2e` |
 | [MP-5](#mp-5-read-previous-reports-tolerantly) Read previous reports tolerantly | Superseded by CB-6; unknown fields are ignored since MP-9 (#138) | #132, #138 | `9084a83`, `037e253` |
 | [HP-3](#hp-3-implement-proper-logging-framework) Logging through `java.util.logging` | Done | #138 | `47cd66b` |
 | [MP-9](#mp-9-dependency-and-configuration-hygiene-owner-env-vars-jackson) Own config loader and JSON code; no runtime dependencies | Done | #138 | `d888754`, `037e253` |
@@ -708,16 +708,16 @@ Snapshot of 2026-10-08. For the current state, see [Status on `master` — 2026-
 | MP-3 `CopyOnWriteArrayList` | Open, raised to High | Measured: 80k tests take 48 s; HP-6 resolves it |
 | MP-4 Input validation | Done (#148), re-scoped to the report path | Must never throw into JUnit callbacks (MP-7) |
 | CQ-1 Feature envy | Superseded | Extracted as `FlakyTestDetector`; the name-based design shown there is the CB-7 bug |
-| CQ-2 Value objects | Open (Low) | Don't call the value object `TestIdentifier` (clashes with JUnit's class) |
+| CQ-2 Value objects | Not planned | Don't call the value object `TestIdentifier` (clashes with JUnit's class) |
 | CQ-3 Long parameter lists | Stale | The referenced path and method don't exist on `master` |
-| CQ-4 Magic constants | Open | `"initializationError"` is defined in four places |
+| CQ-4 Magic constants | Not planned, mostly done | `"initializationError"` is defined in four places |
 | TI-1 Concurrency tests | Done (#150) | Sample code uses removed APIs; real data loss is across JVMs (TI-5). It found the extension's aborted-class bug, fixed in #149 |
 | TI-2 File-system error tests | Done (#147) | The MP-5 cases are superseded with MP-5; CB-6 added the atomic-write and unparsable-report cases, #147 the rest |
 | TI-3 Health-test isolation | Partially done | Reset hook in `@BeforeEach`/`@AfterEach`; still a shared singleton |
 | DI-1 Javadoc | Done (#151) | Sample Javadoc repeats the wrong flaky rule |
 | DI-2 Architecture doc | Done (#151) | Should describe the target architecture below |
 | SP-1 Path validation | Re-evaluated: not recommended | Not a trust boundary; rejecting `..` breaks multi-module setups |
-| SP-2 Benchmarks | Open | Baseline numbers are in MP-3 |
+| SP-2 Benchmarks | Not planned | Baseline numbers are in MP-3 |
 
 ### New items (verified unless marked otherwise)
 
@@ -2862,7 +2862,7 @@ Requirements:
 **Priority**: Low
 **Complexity**: Moderate
 **Files**: Multiple (model package, CtrfReportManager, TestDetails)
-**Status**: Open (Low)
+**Status**: Not planned (2026-10-16). Wrapping test IDs, durations and health in value objects would rework internal code for no change a user sees, and a test's identity is already one thing: its `testId`, the JUnit unique ID (CB-7).
 
 #### Review Note (2026-10-08)
 Don't name the value object `TestIdentifier`: it clashes with `org.junit.platform.launcher.TestIdentifier`, which `CtrfListener` and `TestIdentifierAdapter` already use. The identity concept itself is defined in CB-7 (`testId` = JUnit `uniqueId`). A name like `TestId` fits.
@@ -3179,7 +3179,7 @@ Benefits:
 **Priority**: Low
 **Complexity**: Simple
 **Files**: `TestProcessor.java`, configuration files, multiple classes
-**Status**: Open
+**Status**: Not planned (2026-10-16); mostly done already. The defaults are in `ConfigReader`, the CTRF status strings in `Test.TestStatus`, and `ENV_HEALTHY` is read in one place. Left: `"initializationError"` and `"teardownError"`, a constant in each entry point, and `"ctrf-report.json"` in `ConfigReader` and `CtrfReportFileService`; sharing them would take a public constant in an internal class.
 
 #### Review Note (2026-10-08)
 On `master`, `"initializationError"` is defined as a constant in `CtrfExtension`, `CtrfListener` and `SuiteExecutionErrorHandler`, and used as a literal in `CtrfReportManager`. The CTRF status strings are already centralised by the `Test.TestStatus` enum and its `@JsonValue`, so no separate status constants are needed.
@@ -4052,7 +4052,7 @@ The per-task and whole-branch reviews of #135 left these open.
 **Priority**: High
 **Complexity**: Moderate
 **Files**: new tests under `src/test/java/io/github/alexshamrai/scenario/` (or a new integration module), fake test classes
-**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. CB-2 is covered since #138 (`NestedRunScenarioTest`). Since #146 (`77dce2e`, 2026-10-16), `ScenarioRunner` checks every scenario's report against the official schema, through the test helper `CtrfSchema`; all of them pass. `HeapGuardScenarioTest`, which reads its own 100,000-test report, is left out. Still open: checking each scenario's report against JUnit's event log, as TI-4 (#135) does for the integration modules. That needs the root tests to use `JunitEvents` from the validator module, `ScenarioMain` to write JUnit's event log, and rules for the scenarios that differ from JUnit on purpose (HP-8 entries, HP-11 recoveries, accumulation, same-JVM reruns, the extension's missing dynamic tests); it is a separate design. The suite isn't under a minute: its 56 tests took 67 to 72 seconds, summed, on 2026-10-16.
+**Status**: Done as planned, 2026-10-16. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. CB-2 is covered since #138 (`NestedRunScenarioTest`). Since #146 (`77dce2e`, 2026-10-16), `ScenarioRunner` checks every scenario's report against the official schema, through the test helper `CtrfSchema`; all of them pass. `HeapGuardScenarioTest`, which reads its own 100,000-test report, is left out. Not planned (2026-10-16): checking each scenario's report against JUnit's event log, as TI-4 (#135) does for the integration modules. Each scenario already pins its exact results, JUnit's counts and the schema, and the check would need the root tests to use `JunitEvents` from the validator module, `ScenarioMain` to write JUnit's event log, and rules for the scenarios that differ from JUnit on purpose (HP-8 entries, HP-11 recoveries, accumulation, same-JVM reruns, the extension's missing dynamic tests). The suite isn't under a minute: its 56 tests took 67 to 72 seconds, summed, on 2026-10-16.
 
 #### Prompt
 ````
@@ -4749,7 +4749,7 @@ Requirements:
 **Priority**: Low
 **Complexity**: Moderate
 **Files**: New file `src/test/java/io/github/alexshamrai/benchmark/PerformanceBenchmarks.java`
-**Status**: Open
+**Status**: Not planned (2026-10-16). HP-6 made event processing linear in the number of tests, `HeapGuardScenarioTest` guards the heap in CI, and the 0.5.2 heap measurements are in [0.5.2 Design](#052-design--streaming-json). Revisit before performance work.
 
 #### Review Note (2026-10-08)
 Baseline numbers measured on `master` are in MP-3 (10k tests 0.4 s, 80k tests 47.9 s for event processing). The sample code uses outdated APIs (see the TI-1 note). The most useful benchmark is event processing against test count, which should be linear after HP-6.
@@ -5056,19 +5056,26 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 18. MP-9: Dependency and configuration hygiene (includes HP-3, using JUL). **Done** (#138)
 
 ### Phase 4: Polish
+
+**Done** on 2026-10-16. What it changes for users ships with 0.5.2's changes as the next release, 0.6.0 by semver.
+
 19. HP-12: Fill `suite` with each test's container hierarchy. **Done** (#144), 2026-10-16; not released
 20. DI-3: Fix incorrect documentation. **Done** (#145), 2026-10-16
-21. TI-5: Check every scenario's report against the official schema. **Done** (#146), 2026-10-16; checking them against JUnit's event log stays open
+21. TI-5: Check every scenario's report against the official schema. **Done** (#146), 2026-10-16; checking them against JUnit's event log is not planned
 22. DI-1, DI-2: Documentation. **Done** (#151), 2026-10-16
 23. TI-2: File system error tests. **Done** (#147), 2026-10-16
 24. MP-4: Input validation, re-scoped to the report path. **Done** (#148), 2026-10-16; not released
 25. TI-1: Concurrency tests. **Done** (#150), 2026-10-16; it found the extension's aborted-class bug, fixed in #149, not released
-26. CQ-2, CQ-4, SP-2
+26. CQ-2, CQ-4, SP-2: **Not planned** (2026-10-16); see below
 
 ### Not planned
 - CQ-1: superseded by CB-7 and HP-6
 - CQ-3: stale; revisit after CB-5 and HP-10
 - SP-1: not recommended as specified
+- CQ-2: value objects would rework internal code for no change a user sees
+- CQ-4: mostly done; the three literals left would need a public constant in an internal class
+- SP-2: event processing is linear and the heap is guarded in CI; revisit before performance work
+- TI-5's check of scenario reports against JUnit's event log: each scenario already pins its results, JUnit's counts and the schema
 
 ---
 
