@@ -82,7 +82,7 @@ class JsonGoldenTest {
         assertThat(CtrfJsonMapper.read(golden, model.getClass())).isEqualTo(JACKSON.readValue(golden, model.getClass()));
     }
 
-    private static String goldenReport() {
+    static String goldenReport() {
         try (InputStream in = JsonGoldenTest.class.getResourceAsStream("/json/golden-report.json")) {
             if (in == null) {
                 throw new IllegalStateException("No src/test/resources/json/golden-report.json");
