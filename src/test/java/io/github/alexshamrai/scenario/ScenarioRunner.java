@@ -1,8 +1,8 @@
 package io.github.alexshamrai.scenario;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
 import io.github.alexshamrai.ctrf.model.Test;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -192,7 +192,7 @@ final class ScenarioRunner {
             if (!Files.exists(report)) {
                 throw new IllegalStateException("The scenario JVMs wrote no report:\n" + log);
             }
-            return new Result(new ObjectMapper().readValue(report.toFile(), CtrfJson.class), junitCounts, log);
+            return new Result(JsonMapper.builder().build().readValue(report.toFile(), CtrfJson.class), junitCounts, log);
         }
 
         private Path output(int index) {
