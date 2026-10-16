@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestWatcher;
+import org.opentest4j.TestAbortedException;
 
 import java.util.List;
 import java.util.Optional;
@@ -32,7 +33,9 @@ import java.util.logging.Logger;
  * A failure of a whole test class is reported as one failed entry for that class, identified by the class's
  * unique ID: "initializationError" when the class failed before any of its tests started or were skipped
  * (for example in {@code @BeforeAll} or in another extension's {@code BeforeAllCallback}), "teardownError"
- * when it failed afterwards (for example in {@code @AfterAll}).
+ * when it failed afterwards (for example in {@code @AfterAll}). A class that aborts, with a failed assumption, isn't a
+ * failure: aborted before its tests started, it is one skipped "initializationError" entry, as an aborted test is a
+ * skipped one; aborted afterwards, its tests keep their results and it adds no entry, as JUnit reports it.
  * <p>
  * The extension learns about a class failure only when JUnit runs the class's {@code AfterAllCallback}s,
  * so it cannot see:
@@ -102,11 +105,11 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
     }
 
     /**
-     * Reports the class as failed if it failed outside its tests, and otherwise records that it succeeded, so
-     * that its failure in an earlier retry round is reported as recovered: passed and flaky. Runs after the
-     * class's {@code @AfterAll} methods, and also when a {@code @BeforeAll} method or a
-     * {@code BeforeAllCallback} failed, but not when the class could not be created (see the class
-     * documentation).
+     * Reports the class as failed if it failed outside its tests, or as skipped if it aborted before they started,
+     * and otherwise records that it succeeded, so that its failure in an earlier retry round is reported as
+     * recovered: passed and flaky. Runs after the class's {@code @AfterAll} methods, and also when a
+     * {@code @BeforeAll} method or a {@code BeforeAllCallback} failed, but not when the class could not be created
+     * (see the class documentation).
      *
      * @param context the context of the finished test class
      */
@@ -182,7 +185,12 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
 
     private void reportClassFailure(ExtensionContext context, Throwable error) {
         ClassState state = classStateOf(context);
-        String name = state != null && state.childrenStarted() ? TEARDOWN_ERROR : INITIALIZATION_ERROR;
+        boolean childrenStarted = state != null && state.childrenStarted();
+        boolean aborted = error instanceof TestAbortedException;
+        if (aborted && childrenStarted) {
+            return;
+        }
+        String name = childrenStarted ? TEARDOWN_ERROR : INITIALIZATION_ERROR;
         long startTime = state != null ? state.startTime() : System.currentTimeMillis();
         String uniqueId = context.getUniqueId();
         String className = context.getTestClass()
@@ -191,7 +199,11 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
 
         List<String> suite = new ExtensionContextAdapter(context).getSuiteOfChildren();
         reportManager.onTestStart(new TestDetails(startTime, context.getTags(), className, uniqueId, name, suite));
-        reportManager.onTestFailure(uniqueId, error);
+        if (aborted) {
+            reportManager.onTestAborted(uniqueId, error);
+        } else {
+            reportManager.onTestFailure(uniqueId, error);
+        }
     }
 
     private void reportClassSuccess(ExtensionContext context) {
