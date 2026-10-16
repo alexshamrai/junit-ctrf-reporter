@@ -64,8 +64,8 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 
 ### The rule
 
-- **`suite` is the display names of the test's ancestors, outermost first, without the engine.**
-- If that leaves nothing, the engine's display name is used instead, so every entry with a known engine has a `suite`.
+- **`suite` is the display names of the test's ancestors, outermost first, without the engine.** Every engine is left out, also under a `@Suite` class: the suite engine and the engine it runs.
+- If that leaves nothing, the nearest engine's display name is used instead, so every entry with a known engine has a `suite`.
 - If not even an engine is known, there's no `suite`. That only happens for a test the manager knows by its ID alone, which it records as "Unknown Test".
 - **A class's `initializationError` or `teardownError` entry** gets the suite of the class's own tests: the class's ancestors without the engine, then the class's display name, so it's grouped with the tests it affected. That's never empty, so the engine's name is never used for it: a top-level class's error gets just the class's name. Other container entries keep their own name and get their ancestors, like a test: a failed `@MethodSource` or `@TestFactory`, a failed engine, or the one skipped entry for a parameterized method.
 
@@ -80,6 +80,8 @@ Examples:
 | `@BeforeAll` of a top-level `class SetupTest` fails | `initializationError` | `["SetupTest"]` |
 | JUnit 4 test `com.example.LegacyTest.test()`, through Vintage, which shows a class by its simple name | `test()` | `["LegacyTest"]` |
 | a test directly under a custom engine | its display name | `["My Engine"]` |
+| `@Suite class PaymentsSuite` selecting `PaymentTest` → `Refunds` → `refundsTheFee()`, through the listener | `refundsTheFee()` | `["PaymentsSuite", "Payments", "Refunds"]` |
+| the same, through the extension, which sees only what Jupiter runs | `refundsTheFee()` | `["Payments", "Refunds"]` |
 
 ### Decisions (2026-10-16)
 
@@ -100,12 +102,16 @@ Examples:
 - **Dynamic tests through the extension:** not reported, as today, because JUnit runs no extension callbacks for them.
 - **One branch, `feat/hp-12-suite`, with four commits, each green, rebase-merged, no squash.**
 - **Java 17** and the JUnit 5.10 compile floor stay; `TestPlan.getParent` exists in 5.10.
+- **Added after the final review:**
+  - **Under `@Suite`, every engine is left out,** recognised by its unique ID's last segment, whose type is `engine`. Before, the listener dropped only the topmost ancestor, so the engine a `@Suite` class runs, "JUnit Jupiter", stood in the middle of every suite. The `@Suite` class stays, as the outermost group. The extension can't see above Jupiter's engine, so its suites start at the class; the two entry points agree except for that first item.
+  - **A failing walk gives no suite.** `TestPlan.getParent` can throw for an identifier the plan doesn't hold. The listener's walks catch a `RuntimeException` and return nothing, because the alternative is the HP-9 fallback, which loses the test's name and file.
+  - **The root module's tests depend on `junit-platform-suite`,** for a `@Suite` fixture that its test discovers itself. The Gradle test tasks exclude the suite engine, so that Gradle doesn't run the fixture.
 
 ### Data model
 
 - **`TestContextAdapter`** gets four default methods. The rule lives in the last two, so both adapters apply it the same way:
   - `getContainerNames()`: the display names of the containers above, outermost first, without the engine. It's empty by default, and the adapters override it;
-  - `getEngineName()`: the topmost container's display name, or this one's if it has nothing above it. It's empty by default, and the adapters override it;
+  - `getEngineName()`: the nearest engine's display name, this one's if it is an engine. It's empty by default, and the adapters override it;
   - `getSuite()`: the container names, or the engine's name when there are none, or nothing when neither is known;
   - `getSuiteOfChildren()`: the container names followed by this container's own display name, which is what the tests directly inside it get. A class error uses it.
 - **`TestDetails`** gets a sixth component, `List<String> suite`.
@@ -118,7 +124,7 @@ Examples:
 
 ### The listener
 
-- **New constructor `TestIdentifierAdapter(TestIdentifier, TestPlan)`.** Its `getContainerNames()` walks `plan.getParent(…)` upwards, collecting each parent's display name. The topmost one is the engine; it's dropped, and the names are reversed. `getEngineName()` is the topmost one's name; an identifier without a parent is the engine itself.
+- **New constructor `TestIdentifierAdapter(TestIdentifier, TestPlan)`.** Its `getContainerNames()` walks `plan.getParent(…)` upwards, collecting each parent's display name except the engines', whose unique ID ends with an `engine` segment, and reverses the names. `getEngineName()` is the nearest engine's name, the identifier's own if it is one. Both walks return nothing if the plan throws.
 - **`createTestDetails`** passes the listener's `TestPlan`. Finished tests, tests skipped one by one, and the tests HP-8 reports inside a skipped or aborted container all get their `suite` this way.
 - **`handleContainerFailure`:**
   - a class error gets `getSuiteOfChildren()` of the class;
@@ -142,7 +148,7 @@ Examples:
 - **Unit:**
   - `TestDetails`: the old constructor gives an empty suite, `fromAdapter` takes the adapter's, and the suite is a copy;
   - the default `getSuite()` is empty;
-  - `TestIdentifierAdapter` on a `TestPlan` discovered from fixture classes: nested display names, the engine fallback, and an empty suite from the 1-argument constructor;
+  - `TestIdentifierAdapter` on a `TestPlan` discovered from fixture classes: nested display names, the engine fallback, an empty suite from the 1-argument constructor, a `@Suite` class, which keeps its name and drops both engines, and a plan that throws, which gives no suite;
   - `ExtensionContextAdapter` on a mocked chain of contexts: root, class, nested class, method, invocation; and the root alone;
   - `TestProcessor`: an empty suite is left out, a non-empty one is copied;
   - `AttemptFolder` keeps `suite` through unfold and fold;
@@ -153,7 +159,7 @@ Examples:
   - **Assertions:** each entry's exact `suite`, and the same `suite` from both entry points for every test both report.
   - **Recovery:** the existing HP-11 recovery scenario also checks the recovered class's `suite`.
 - **Integration validator:**
-  - `JunitEvents` records each `started` event's `name` and `parentId`, and works out each started node's expected suite by the rule above;
+  - `JunitEvents` records each `started` event's `name` and `parentId`, and works out each started node's expected suite by the rule above, leaving out every node whose unique ID ends with an `[engine:…]` segment;
   - `JunitCrossCheckTest` checks every report entry that JUnit started against it, in both integration modules;
   - `CtrfLogicTest` checks that every entry has a non-empty `suite`, including HP-8 entries, which JUnit's log doesn't list;
   - both integration modules get `PaymentsTest`: `@DisplayName("Payments")`, with a `@Nested` class `Refunds` holding one `@Test` and a `@ParameterizedTest` of two values, all passing;
