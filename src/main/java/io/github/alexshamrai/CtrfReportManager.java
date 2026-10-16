@@ -109,6 +109,11 @@ public final class CtrfReportManager {
         isEnvironmentHealthy.set(true);
     }
 
+    /**
+     * Records that a test started, keeping its identity until it finishes. Ignored when no run is active.
+     *
+     * @param testDetails the test's identity and start time
+     */
     public void onTestStart(TestDetails testDetails) {
         TestRun run = activeRun.get();
         if (run != null) {
@@ -116,6 +121,12 @@ public final class CtrfReportManager {
         }
     }
 
+    /**
+     * Records a test that didn't run, such as a disabled one. Ignored when no run is active.
+     *
+     * @param testDetails the test's identity
+     * @param reason      why it was skipped, written as the test's {@code message}
+     */
     public void onTestSkipped(TestDetails testDetails, Optional<String> reason) {
         TestRun run = activeRun.get();
         if (run == null) {
@@ -151,6 +162,12 @@ public final class CtrfReportManager {
         run.state().addAttempt(newTest);
     }
 
+    /**
+     * Records a passed test known only by its unique ID. Its recorded start gives its identity; without one, it is
+     * reported as "Unknown Test".
+     *
+     * @param uniqueId the test's JUnit unique ID
+     */
     public void onTestSuccess(String uniqueId) {
         onTestSuccess(unknownTest(uniqueId));
     }
@@ -164,6 +181,12 @@ public final class CtrfReportManager {
         processTestResult(testDetails, PASSED, test -> { });
     }
 
+    /**
+     * Records a failed test known only by its unique ID, as {@link #onTestSuccess(String)} does.
+     *
+     * @param uniqueId the test's JUnit unique ID
+     * @param cause    the failure, or {@code null}
+     */
     public void onTestFailure(String uniqueId, Throwable cause) {
         onTestFailure(unknownTest(uniqueId), cause);
     }
@@ -182,6 +205,13 @@ public final class CtrfReportManager {
         });
     }
 
+    /**
+     * Records an aborted test known only by its unique ID, as {@link #onTestSuccess(String)} does; see
+     * {@link #onTestAborted(TestDetails, Throwable)}.
+     *
+     * @param uniqueId the test's JUnit unique ID
+     * @param cause    the exception that aborted the test, or {@code null}
+     */
     public void onTestAborted(String uniqueId, Throwable cause) {
         onTestAborted(unknownTest(uniqueId), cause);
     }

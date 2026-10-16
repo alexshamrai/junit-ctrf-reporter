@@ -9,6 +9,10 @@ import lombok.NoArgsConstructor;
 
 import java.util.Map;
 
+/**
+ * Extra fields that CTRF leaves to the producer. The reporter writes {@code startupDuration} into
+ * {@code results.summary.extra} when asked to; {@code customData} is free for other producers.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

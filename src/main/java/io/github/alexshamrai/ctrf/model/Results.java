@@ -8,6 +8,10 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
+/**
+ * The {@code results} object of a CTRF report: the tool that ran the tests, the summary, the tests themselves, and the
+ * environment.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

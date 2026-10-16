@@ -12,6 +12,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * One test in {@code results.tests}, as its final attempt. Earlier attempts of the same test are in
+ * {@code retryAttempts}, and {@code testId} is the JUnit unique ID that groups them.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -65,9 +69,26 @@ public class Test {
     private List<Step> steps;
     private Extra extra;
 
+    /**
+     * A test's status, written in lower case, as CTRF spells it.
+     */
     public enum TestStatus {
-        PASSED, FAILED, SKIPPED, PENDING, OTHER;
+        /** The test passed. */
+        PASSED,
+        /** The test failed. */
+        FAILED,
+        /** The test was skipped: disabled, inside a skipped container, or aborted by a failed assumption. */
+        SKIPPED,
+        /** The test is pending; the reporter doesn't write it. */
+        PENDING,
+        /** Any other outcome; the reporter doesn't write it. */
+        OTHER;
 
+        /**
+         * Returns the status as CTRF writes it.
+         *
+         * @return the name in lower case, such as {@code "passed"}
+         */
         @JsonValue
         public String toLowerCase() {
             // Locale.ROOT: under a Turkish locale, the I of "FAILED" would become a dotless i, which no CTRF consumer reads

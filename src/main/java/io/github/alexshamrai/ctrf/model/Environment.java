@@ -6,6 +6,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * The {@code results.environment} object: the build, repository and operating system the tests ran in, from the
+ * reporter's configuration, and whether the environment was healthy.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

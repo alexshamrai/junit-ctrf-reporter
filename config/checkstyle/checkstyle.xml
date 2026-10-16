@@ -32,6 +32,11 @@
     <property name="file" value="${config_loc}/suppressions.xml"/>
     <property name="optional" value="true"/>
   </module>
+  <!-- Javadoc is required of the library's public API, not of its tests -->
+  <module name="SuppressionSingleFilter">
+    <property name="checks" value="MissingJavadoc(Type|Method)"/>
+    <property name="files" value="[\\/]src[\\/]test[\\/]"/>
+  </module>
 
   <!-- Checks for whitespace                               -->
   <!-- See http://checkstyle.org/config_whitespace.html -->
@@ -308,20 +313,16 @@
       <property name="allowedAnnotations" value="Override, Test"/>
       <property name="tokens" value="METHOD_DEF, CTOR_DEF, ANNOTATION_FIELD_DEF, COMPACT_CTOR_DEF"/>
     </module>
-<!--    <module name="MissingJavadocMethod">-->
-<!--      <property name="scope" value="public"/>-->
-<!--      <property name="minLineCount" value="2"/>-->
-<!--      <property name="allowedAnnotations" value="Override, Test"/>-->
-<!--      <property name="tokens" value="METHOD_DEF, CTOR_DEF, ANNOTATION_FIELD_DEF,-->
-<!--                                   COMPACT_CTOR_DEF"/>-->
-<!--    </module>-->
-<!--    <module name="MissingJavadocType">-->
-<!--      <property name="scope" value="protected"/>-->
-<!--      <property name="tokens"-->
-<!--                value="CLASS_DEF, INTERFACE_DEF, ENUM_DEF,-->
-<!--                      RECORD_DEF, ANNOTATION_DEF"/>-->
-<!--      <property name="excludeScope" value="nothing"/>-->
-<!--    </module>-->
+    <!-- Every public type, constructor and method of the library has Javadoc (DI-1); the tests are exempt, see below -->
+    <module name="MissingJavadocMethod">
+      <property name="scope" value="public"/>
+      <property name="allowedAnnotations" value="Override"/>
+      <property name="tokens" value="METHOD_DEF, CTOR_DEF, ANNOTATION_FIELD_DEF, COMPACT_CTOR_DEF"/>
+    </module>
+    <module name="MissingJavadocType">
+      <property name="scope" value="public"/>
+      <property name="tokens" value="CLASS_DEF, INTERFACE_DEF, ENUM_DEF, RECORD_DEF, ANNOTATION_DEF"/>
+    </module>
     <module name="MethodName">
       <property name="format" value="^[a-z][a-z0-9][a-zA-Z0-9_]*$"/>
       <message key="name.invalidPattern"

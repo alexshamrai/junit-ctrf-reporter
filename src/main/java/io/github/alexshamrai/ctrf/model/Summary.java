@@ -6,6 +6,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * The {@code results.summary} object: how many tests ended in each status, how many were flaky, and when the run
+ * started and stopped, in milliseconds since the epoch.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

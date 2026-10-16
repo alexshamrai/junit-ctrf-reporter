@@ -9,6 +9,10 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
 
+/**
+ * Turns a finished test into a CTRF test object: its name, status, timing, tags, suite and, for a failure, its
+ * {@code message} and {@code trace}, cut to the configured lengths.
+ */
 @RequiredArgsConstructor
 public class TestProcessor {
 

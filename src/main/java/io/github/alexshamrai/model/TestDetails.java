@@ -12,6 +12,13 @@ import java.util.Set;
  * or JUnit Platform TestIdentifier) and is used internally for tracking tests during execution.
  * <p>
  * As a record, this class is immutable - all fields are set during construction.
+ *
+ * @param startTime   when the test started, in milliseconds since the epoch
+ * @param tags        the test's tags
+ * @param filePath    the test's class, or {@code null}
+ * @param uniqueId    the JUnit unique ID, which becomes the report's {@code testId}
+ * @param displayName the test's display name, which becomes the report's {@code name}
+ * @param suite       the display names of the test's containers, outermost first; empty if there are none
  */
 public record TestDetails(
     long startTime,
