@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 JUnit CTRF Reporter is a Java library that generates test reports following the CTRF (Common Test Report Format) specification. It provides both a JUnit Jupiter Extension and a JUnit Platform TestExecutionListener for JUnit 5 tests.
 
 **Key Facts:**
-- Requires Java 17+ (development requires Java 21+)
+- Requires Java 17+ at run time. The build compiles with JDK 25 and `--release 17` (main and test code), and tests on Java 25, 17 and 21
 - Published to Maven Central as `io.github.alexshamrai:junit-ctrf-reporter`
 - Uses Gradle for build management
 - Current version: `releaseVersion` (the last release) and `projectVersion` (development) in `build.gradle`
@@ -20,8 +20,11 @@ JUnit CTRF Reporter is a Java library that generates test reports following the 
 # Build the project
 ./gradlew build
 
-# Run unit tests only
+# Run unit tests only (on JDK 25)
 ./gradlew :test
+
+# The same tests on Java 17 and 21 (part of :build)
+./gradlew :testOnJava17 :testOnJava21
 
 # Run checkstyle
 ./gradlew checkstyleMain checkstyleTest
@@ -332,7 +335,7 @@ void testWithUnhealthyEnvironment() {
 
 ## Important Notes
 
-- **Java Version**: Requires Java 17+ runtime, Java 21+ for development (toolchain configured in build.gradle)
+- **Java Version**: Requires Java 17+ at run time. The toolchain in build.gradle is JDK 25; every compile task uses `--release 17`, so main and test code can't use an API newer than Java 17 and class files are version 61. `testOnJava17` and `testOnJava21` run the unit tests and scenarios on those versions, and the compat workflow runs the consumers on Java 17, 21 and 25
 - **Lombok**: All model classes use Lombok annotations; ensure annotation processing is enabled in your IDE
 - **Thread Safety**: The library is designed for parallel test execution; avoid modifying shared state
 - **Integration Test Order**: Always run report generation before validation in integration tests

@@ -4,8 +4,8 @@ This document provides instructions for setting up the JUnit CTRF Extension proj
 
 ## Prerequisites
 
-- Java 21 or higher
-- Gradle 8.13 or higher for build management
+- A JDK, 17 or later, to run Gradle. The build uses JDK 25 to compile and test, and JDKs 17 and 21 to test on older Java. Gradle uses them if they are installed, and downloads them otherwise (foojay toolchain resolver)
+- The Gradle wrapper (`./gradlew`); no separate Gradle installation is needed
 - Git for version control
 
 ## Local Project Setup
