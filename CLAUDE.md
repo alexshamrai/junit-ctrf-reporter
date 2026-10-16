@@ -116,10 +116,10 @@ TestProcessor (converts test data)
     └─ Creates CTRF Test objects from JUnit execution data
     ↓
 CtrfReportFileService.update (under a JVM lock and a lock on <report>.lock)
-    ├─ Reads the report fresh
+    ├─ Reads the report's runId; reads the whole report, streaming, only if it's the same run
     ├─ ReportMerger: same runId → unfold its tests, append this execution's attempts and recoveries, fold;
     │                otherwise this execution alone
-    └─ Writes a temp file and moves it over the report (default: ctrf-report.json)
+    └─ Streams a temp file and moves it over the report (default: ctrf-report.json)
 ```
 
 ### Key Components
@@ -135,8 +135,8 @@ CtrfReportFileService.update (under a JVM lock and a lock on <report>.lock)
 | **EnvironmentHealthTracker**    | Public API for tracking test environment health status                                                |
 | **TestProcessor**               | Converts JUnit test execution data (status, duration, failures) into CTRF Test objects                |
 | **CtrfJsonComposer**            | Assembles final CTRF JSON structure with metadata (tool, environment, summary)                        |
-| **CtrfReportFileService**       | `update`: locked fresh read, merge function, atomic write                                             |
-| **CtrfJsonMapper**              | Writes and reads the model as JSON without a library (`JsonWriter`, `JsonParser`); ignores unknown fields |
+| **CtrfReportFileService**       | `update`: locked read of the same run's report, merge function, atomic streaming write                |
+| **CtrfJsonMapper**              | Streams the model to and from JSON without a library (`JsonWriter`, `JsonReader`); ignores unknown fields |
 | **ConfigReader**                | Reads the configuration once: system property → env var (exact name, then `CTRF_X_Y` for `ctrf.*` keys) → `ctrf.properties` (UTF-8) → default; `${...}` references; an invalid number or boolean warns and uses the default |
 | **SuiteExecutionErrorHandler**  | Captures suite-level initialization/execution failures                                                |
 | **StartupDurationProcessor**    | Optionally calculates test suite startup duration                                                     |
@@ -145,7 +145,7 @@ CtrfReportFileService.update (under a JVM lock and a lock on <report>.lock)
 
 All model classes in `io.github.alexshamrai.ctrf.model` use:
 - **Lombok**: `@Data`, `@Builder` for boilerplate reduction
-- **Jackson annotations** (`@JsonInclude(NON_NULL)`, `@JsonAlias`, `@JsonValue`), compile-only: they serve users who read the model with their own Jackson. The library writes and reads JSON itself, with `io.github.alexshamrai.json.CtrfJsonMapper`, which applies the same rules. `JsonGoldenTest` pins its output to the JSON 0.5.0 wrote with Jackson 2 (`src/test/resources/json/golden-report.json` and a few short cases inline), and checks its reader against Jackson 3. The tests use only Jackson 3 (`tools.jackson`), which the schema validator needs too; the 2.x annotations, shared by Jackson 2 and 3, come from the Jackson 3 BOM. To change the JSON output on purpose, update the golden JSON and say why in the commit
+- **Jackson annotations** (`@JsonInclude(NON_NULL)`, `@JsonAlias`, `@JsonValue`), compile-only: they serve users who read the model with their own Jackson. The library writes and reads JSON itself, with `io.github.alexshamrai.json.CtrfJsonMapper`, which applies the same rules. It streams: it reads from a `Reader` and writes to a `Writer`, so it never holds a whole report as text or as a tree. `JsonGoldenTest` pins its output to the JSON 0.5.0 wrote with Jackson 2 (`src/test/resources/json/golden-report.json` and a few short cases inline), and checks its reader against Jackson 3. The tests use only Jackson 3 (`tools.jackson`), which the schema validator needs too; the 2.x annotations, shared by Jackson 2 and 3, come from the Jackson 3 BOM. To change the JSON output on purpose, update the golden JSON and say why in the commit
 
 **Schema:** reports must validate against the official CTRF schema, pinned at `schema/ctrf.schema.json`. It is version 0.2.0, and `schema/README.md` has its source tag and commit. `CtrfSchemaConformanceTest` and the integration validator load it as a test resource; it is not in the published jar. To move to a new CTRF version, replace the file and change `CtrfJson.SPEC_VERSION` in the same commit. Field names follow the spec exactly, for example `filePath`; `buildNumber` is an integer, and a non-numeric `ctrf.build.number` goes to `buildId`.
 
@@ -286,7 +286,7 @@ Each test appears once in the report, as its final attempt. Earlier attempts wit
 
 ### Rerun Support
 
-Nothing is read when a run starts. At the end of each execution, `CtrfReportFileService.update` reads the report under a lock. If its root `runId` matches, `ReportMerger` unfolds its tests and appends this execution's attempts, so forks, retry rounds in new JVMs and reruns in the same JVM all end up in one report. A report of another run is replaced.
+Nothing is read when a run starts. At the end of each execution, `CtrfReportFileService.update` reads the report's root `runId` under a lock. Only if it matches is the whole report read, and `ReportMerger` unfolds its tests and appends this execution's attempts, so forks, retry rounds in new JVMs and reruns in the same JVM all end up in one report. A report of another run is replaced without being read further, and `HeapGuardScenarioTest` keeps the heap a report of 100,000 tests needs under a fixed limit.
 
 ### Thread Identification
 
