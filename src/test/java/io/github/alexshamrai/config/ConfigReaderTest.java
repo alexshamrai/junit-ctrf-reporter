@@ -21,6 +21,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -337,6 +338,17 @@ class ConfigReaderTest {
         } finally {
             System.clearProperty("ctrf.report.name");
         }
+    }
+
+    @Test
+    @DisplayName("A null map, key or value is rejected, as the constructor documents")
+    void nullSourcesAreRejected() {
+        Map<String, String> withNullValue = new HashMap<>();
+        withNullValue.put("ctrf.app.name", null);
+
+        assertThrows(NullPointerException.class, () -> new ConfigReader(null, Map.of(), Map.of()));
+        assertThrows(NullPointerException.class, () -> new ConfigReader(Map.of(), null, Map.of()));
+        assertThrows(NullPointerException.class, () -> new ConfigReader(Map.of(), Map.of(), withNullValue));
     }
 
     @Test
