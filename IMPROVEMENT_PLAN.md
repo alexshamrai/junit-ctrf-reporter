@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). The 0.5.2 fix for 0.5.1's heap use is designed: [0.5.2 Design — streaming JSON](#052-design--streaming-json). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -55,6 +55,136 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 
 ---
 
+## 0.5.2 Design — streaming JSON
+
+**Status**: Designed 2026-10-16 against `master` @ `6ff69d5`; not implemented yet. Ships as **0.5.2**.
+**Fixes**: the streaming follow-up in [Follow-ups after 0.5.1](#follow-ups-after-051). 0.5.1's JSON code holds whole-text copies and trees in memory, so it needs about twice the heap of 0.5.0 to write a large report.
+
+### Measurements (2026-10-16)
+
+The smallest `-Xmx`, in 8 MB steps, at which a JVM records 100,000 tests through the manager's public API and ends the run with a complete report. One test in ten fails with a 1.7 KB trace, and the report is about 56 MB. JDK 21, default GC (G1).
+
+| Scenario | 0.5.1 | 0.5.0 (Jackson 2) | Streaming | Streaming + `runId` check |
+|---|---|---|---|---|
+| Record the tests only, no write | 80 MB | 88 MB | | |
+| First write, no report yet | 280 MB | 128 MB | 128 MB | 128 MB |
+| Replace another run's report (a local rerun) | 328 MB | 224 MB | 216 MB | 128 MB |
+| Merge two forks of one run | 280 MB | 144 MB | 144 MB | 144 MB |
+
+- **The last two columns are a stand-in for this design:** 0.5.1's code with the file service's read and write switched to Jackson 3's streaming `readValue(File)` and `writeValue(File)`. The last column also reads only the `runId` of another run's report.
+- **0.5.1's write path** turns the model into a tree of maps, the tree into a `StringBuilder` that grows by doubling, that into a `String`, and the `String` into a `byte[]`: about 200 MB for this report. Its read path holds the whole text, a tree and the model at once.
+- **The floor is 80 MB:** the recorded tests themselves. The about 48 MB above it, the same in every version, is `AttemptFolder`'s copies while folding and composing. That isn't JSON code, and stays out of scope.
+- The benchmark isn't kept in the repository; the heap guard below keeps the result.
+
+### Decisions (2026-10-16)
+
+- **Stream both ways, with our own code.**
+  - Rejected: bringing Jackson back. Streaming gives the same numbers without it. As a dependency, Jackson brings back the version conflicts 0.5.1 removed: Jackson 2 with users' Jackson 2, Jackson 3 with Spring Boot 4's. Shading it adds about 2 MB to the jar, hides it from dependency scanners, and makes every Jackson CVE a release of ours.
+  - Rejected: streaming the text but keeping the trees. Estimated at about 160 MB for a first write and over 200 MB for the others.
+  - Rejected: streaming only the writer. Replace and merge would stay above 0.5.0.
+- **A report of another run is replaced after reading only its `runId`.**
+  - Rejected: one pass that stops at a foreign `runId`. It ties the binding to a stop condition, and a report with `results` before `runId` would still be built.
+- **0.5.2 is a patch release:** nothing in the public API, the configuration or the report changes or goes away. `CtrfReportFileService` is public, so its `update(UnaryOperator)` stays as it is, and the new `update(String, UnaryOperator)` is added next to it.
+- **Heap only.** The five deferred minors and `AttemptFolder`'s copies are separate.
+- **One branch, `fix/streaming-json`, with five commits, each green, rebase-merged, no squash.**
+- **Java 17:** `--release 17` already enforces it.
+
+### Reader
+
+- **New `JsonReader`:** a tokenizer that pulls tokens from a `java.io.Reader` through its own 8 KB character buffer. It never holds the whole text.
+  - It's as strict as `JsonParser` is today: nesting deeper than 100 levels and numbers longer than 1,000 characters throw, a BOM may start the text, numbers become `Integer`, `Long`, `BigInteger` or `Double` by the same rules, and error messages end in "at character N".
+- **`JsonParser.parse(String)` stays,** as a thin wrapper over `JsonReader`. Its tests then run, unchanged, against the tokenizer.
+- **`CtrfJsonMapper.read(Reader, Class)` binds tokens straight into the model's fields, by each field's declared type.**
+  - Unknown members are skipped token by token, without building them.
+  - A tree of `LinkedHashMap` and `ArrayList`, as today, is built only for fields declared `Object` or `Map<String, Object>`: `extra`, `parameters`, `attachments`.
+  - Every reading rule of today stays: the `filepath` alias; a whole-number string fills a number field, and a number or a boolean a text field; `null` fills a primitive field with 0 or false; status is read ignoring case; a repeated name keeps its last value; error paths like `$.results.tests[3].status`; only whitespace may follow the root value.
+- **`CtrfJsonMapper.read(String, Class)` stays,** as a wrapper over a `StringReader`.
+- **The file service reads through `Files.newBufferedReader(path, UTF_8)`.** Like `Files.readString` today, it rejects invalid UTF-8, so such a report is still logged as "Ignoring the existing report" and replaced.
+- **Memory:** the model it produces, an 8 KB buffer and short-lived strings.
+
+### Writer
+
+- **`CtrfJsonMapper.write(Object, Writer)` writes the model in one pass, straight to the `Writer`.** Today's two steps, a tree of maps and then its text, become one, with the same rules: fields in declaration order; a null field left out, an empty list kept, a primitive always written; a `null` inside a map or a list written as `null`; status in lower case under `Locale.ROOT`, any other enum as its name, any other object without a JSON form as its `toString()`; map keys through `String.valueOf`.
+- **`JsonWriter` becomes an object that wraps a `Writer`,** with today's escaping: `"` and `\`, the short escapes, `\u00XX` with upper-case hex for other control characters, every surrogate escaped, and a `NaN` or an infinity written as a string.
+- **`JsonWriter.write(Object)` and `CtrfJsonMapper.write(Object)` stay,** as wrappers over a `StringWriter`, returning the text.
+- **The file service writes the temp file through `Files.newBufferedWriter(temp, UTF_8)`** and moves it over the report, as today. A write that fails part-way, on an I/O error, a value without a JSON form or an OOM, deletes the temp file and leaves the report as it was. Today a value without a JSON form throws before the first byte is written; now it can throw in the middle, with the same result.
+- **Output:** byte-identical, pinned by `JsonGoldenTest`.
+- **Changed edge case:** two keys of one map that turn into the same string are both written, where today the later one replaced the earlier. Only a raw-typed map, with keys such as `1` and `"1"`, can have them. Reading the output back gives the same result as before, since a repeated name keeps its last value.
+- **Memory:** an 8 KB buffer.
+
+### File service: the `runId` check
+
+- **New `CtrfJsonMapper.readRunId(Reader)`:** reads the root object's members in order, skipping each value without building it, until `runId`.
+  - It returns the `runId` as text, converted as the full read converts it, or `null` when the report has none, as 0.4.x reports don't.
+  - It throws, as the full read does, when the root isn't an object or the text before the `runId` isn't valid JSON.
+  - Our writer puts `runId` fourth, before `results`, so it reads a few hundred characters. If another tool put it after `results`, it streams through the rest without building it: time, not memory.
+- **New `CtrfReportFileService.update(String runId, UnaryOperator<CtrfJson> merge)`.** Under the same two locks as today:
+  1. no report: `merge(null)`;
+  2. the report's `runId` isn't `runId`, or it has none: `merge(null)`; the report is replaced without being read any further;
+  3. the same run: the report is read with the streaming reader, then `merge(existing)`.
+  - An error in step 2 or 3 logs "Ignoring the existing report, which can't be read" and calls `merge(null)`, as today.
+- **`update(UnaryOperator)` stays,** unchanged: it reads the whole report, whatever its run.
+- **The manager calls the new `update` with its `runId`.** `ReportMerger` keeps its own `runId` comparison as a safety net; the file service only skips what is certainly another run.
+- **Cost:** for the same run, the file is opened twice; the first read stops after a few hundred characters.
+- **Changed log:** another run's report that is damaged after its `runId` is now replaced without the "Ignoring" warning, because it's no longer read that far.
+
+### Tests
+
+- **Unchanged, must pass:** `JsonGoldenTest`, `JsonParserTest`, `JsonWriterTest`, `CtrfJsonMapperTest`, `CtrfModelJsonTest`, `CtrfSchemaConformanceTest`, `CtrfReportFileServiceTest`, the scenario tests, the integration tests with the validator, and compat.
+- **New:**
+  1. **Buffer boundaries:** the golden report and tricky inputs, read through a `Reader` that hands out 1, 2, 3 or 7 characters at a time, read exactly as from a `String`: escapes, `\u` escapes and surrogate pairs cut across refills, numbers, literals, the BOM. Errors report the same character positions.
+  2. **Reader against Jackson 3** on a generated report of about 2,000 tests, with retries, failures and `extra`.
+  3. **Writer:** to a `Writer`, the same text as the `String` version, for the whole golden corpus; an `IOException` from the `Writer` propagates; in the file service, a failing write leaves the report as it was and no temp file.
+  4. **`readRunId`:** `runId` first and after `results`; missing, as in 0.4.x, and `null`; a number; a root that isn't an object; invalid JSON before the `runId`; a BOM.
+  5. **File service:** another run's report that is damaged after its `runId` is replaced without a warning; a report of the same run is merged; a damaged report of the same run is logged as "Ignoring" and replaced, as today.
+  6. **Heap guard:** a forked JVM, started as `ScenarioRunner` starts its JVMs, runs a small main class that records 100,000 tests through the manager's public API, as the benchmark did, and ends the run under a fixed `-Xmx`. Three cases: first write, replace, merge.
+     - The limit is the most this design needs on Java 17, 21 and 25, measured when the guard is written, plus about 25%. From the stand-in, that is about 176 MB, against 0.5.1's 280 to 328 MB.
+     - The guard must fail on 0.5.1's code before the fix.
+     - It costs a few seconds per JVM, on each of the three JDKs.
+
+### Commits
+
+| # | Commit |
+|---|---|
+| 1 | `JsonReader`, a streaming tokenizer; `JsonParser.parse` becomes a wrapper over it |
+| 2 | `CtrfJsonMapper` binds a `Reader` straight into the model; the file service reads through a `BufferedReader` |
+| 3 | `JsonWriter` and `CtrfJsonMapper` write straight to a `Writer`; the file service writes through a `BufferedWriter` |
+| 4 | A report of another run is replaced after reading only its `runId` |
+| 5 | Heap guard; docs: `CLAUDE.md`'s data flow, the release notes, the follow-up marked done |
+
+### Verification
+
+- **Every commit:**
+  - tests written first and watched failing;
+  - `./gradlew :build`: unit tests and scenarios on Java 25, 17 and 21, and checkstyle;
+  - `./gradlew :javadoc`;
+  - every class in `build/classes/java/main` is major version 61.
+- **Commits 2 to 5 also run:**
+  - the listener and extension integration with CI's flags, plus the validator;
+  - `compat/run.sh 5.10.5 5.14.4 6.1.3`.
+- **Before the PR:** all of the above on the final branch, and the benchmark on JDK 21 for the PR description.
+
+### 0.5.2 release notes (user-visible changes)
+
+The numbers are re-measured on the final branch before the release.
+
+- **Less heap for large reports:** writing 100,000 tests needs about 128 MB again, as in 0.5.0, instead of 0.5.1's 280 MB; merging forks needs about 144 MB instead of 280 MB.
+- **A rerun no longer loads the previous run's report:** it's replaced after reading its `runId`. At 100,000 tests, about 128 MB instead of 328 MB in 0.5.1 and 224 MB in 0.5.0.
+- **Logs:** a damaged report of another run is replaced without the "Ignoring the existing report" warning.
+
+### Acceptance Criteria
+
+- [ ] The output is byte-identical: `JsonGoldenTest` passes unchanged
+- [ ] Every existing JSON, file service, scenario, integration and compat test passes; `JsonParserTest` runs unchanged on `JsonReader`
+- [ ] Reading in chunks of 1, 2, 3 and 7 characters gives the same results and error positions as reading a `String`
+- [ ] The reader matches Jackson 3 on a generated 2,000-test report
+- [ ] A report of another run isn't read past its `runId`
+- [ ] The heap guard passes for first write, replace and merge on Java 17, 21 and 25, and fails on 0.5.1's code
+- [ ] On the benchmark (JDK 21), no scenario needs more heap than 0.5.0 (128, 224 and 144 MB), and replace needs no more than first write
+- [ ] All library classes are class-file version 61 (Java 17)
+
+---
+
 ## Phase 3 Design — 0.5.1
 
 **Status**: Done. Designed 2026-10-15 against `master` @ `635b4e6`, after the 0.5.0 release; merged 2026-10-15 as #138 (`47cd66b`..`61df632`, eight commits, rebase-merged). Released as **0.5.1** on 2026-10-16 (release PR #139, `de63c00`).
@@ -87,7 +217,7 @@ The text below is corrected where implementation proved it wrong.
 
 ### Follow-ups after 0.5.1
 
-- **Streaming JSON (0.5.2):** the writer and the reader build the whole report in memory. A 56 MB report (about 100,000 tests) needs about 340 MB of heap, against 200 MB with Jackson. Write and read through a `Writer` and a `Reader` instead.
+- **Streaming JSON (0.5.2):** the writer and the reader build the whole report in memory. A 56 MB report (about 100,000 tests) needs about 340 MB of heap, against 200 MB with Jackson. Write and read through a `Writer` and a `Reader` instead. Designed in [0.5.2 Design — streaming JSON](#052-design--streaming-json), with new measurements.
 - **Tests on Jackson 3: done** (#141, `6ff69d5`, 2026-10-16). Jackson 2 is gone from the build: no module uses `jackson-databind` or `jackson-core` 2.x. The tests and the integration validator read JSON with Jackson 3 only.
   - **Golden JSON:** `JsonGoldenTest` replaces `JacksonDifferentialTest`. It pins the writer's output to the JSON that 0.5.0 wrote with Jackson 2. Before Jackson 2 was removed, this JSON was checked to be byte-identical to Jackson 2's output. It also checks that the reader reads that JSON as Jackson 3 does.
     - The full report is in `src/test/resources/json/golden-report.json`. It holds every field, all kinds of numbers, nested values and tricky text.
@@ -431,6 +561,7 @@ Context: `ctrf-io/junit-to-ctrf` already converts the JUnit XML that Gradle and 
 
 ## Table of Contents
 
+1. [0.5.2 Design — streaming JSON](#052-design--streaming-json)
 1. [Phase 3 Design — 0.5.1](#phase-3-design--051)
 1. [Review Update — 2026-10-08](#review-update--2026-10-08)
 2. [Critical Bugs](#critical-bugs)
