@@ -270,6 +270,20 @@ public class TestProcessorTest {
         assertEquals(first + second + "... " + cut + " characters truncated (ctrf.max.trace.length=" + limit + ")\r\n" + cause, capped);
     }
 
+    @org.junit.jupiter.api.Test
+    @DisplayName("A cut that falls inside the first line's \\r\\n doesn't leave a stray \\r")
+    void capTraceNeverSplitsAWindowsLineEnding() {
+        String first = "java.lang.RuntimeException: " + "x".repeat(20) + "\r\n";
+        String trace = first + "\tat com.example.A.a(A.java:1)\r\n";
+        int limit = first.length() - 1;
+
+        String capped = TestProcessor.capTrace(trace, limit);
+
+        String line = first.substring(0, first.length() - 2);
+        assertEquals(line + "\r\n... " + (trace.length() - line.length()) + " characters truncated (ctrf.max.trace.length=" + limit
+            + ")\r\n", capped);
+    }
+
     private static Throwable chainOfCauses(int causes) {
         Throwable failure = new IllegalArgumentException("root cause");
         for (int i = 1; i <= causes; i++) {

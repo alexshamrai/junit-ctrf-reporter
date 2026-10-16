@@ -60,7 +60,8 @@ public class TestProcessor {
      * Caps a printed stack trace at {@code maxLength} characters, 0 meaning no limit. A longer trace keeps the whole
      * lines that fit, then a line saying how many characters were cut, then every "Caused by:" line of the cut part,
      * so that the root cause stays visible. A line longer than the limit, whether the first line or a "Caused by:"
-     * line, is cut at the limit. The added lines end like the trace's own, with "\r\n" or "\n".
+     * line, is cut at the limit, but never between the "\r" and the "\n" of a line ending. The added lines end like
+     * the trace's own, with "\r\n" or "\n".
      *
      * @param trace     the printed stack trace
      * @param maxLength the limit, or 0
@@ -72,8 +73,10 @@ public class TestProcessor {
         }
         String newline = trace.contains("\r\n") ? "\r\n" : "\n";
         int headEnd = trace.lastIndexOf('\n', maxLength - 1) + 1;
-        String head = headEnd > 0 ? trace.substring(0, headEnd) : trace.substring(0, maxLength) + newline;
-        String cut = trace.substring(headEnd > 0 ? headEnd : maxLength);
+        // A first line cut at the limit doesn't keep the "\r" of its line ending
+        int lineCut = trace.charAt(maxLength - 1) == '\r' ? maxLength - 1 : maxLength;
+        String head = headEnd > 0 ? trace.substring(0, headEnd) : trace.substring(0, lineCut) + newline;
+        String cut = trace.substring(headEnd > 0 ? headEnd : lineCut);
         var capped = new StringBuilder(head)
             .append("... ").append(cut.length()).append(" characters truncated (ctrf.max.trace.length=")
             .append(maxLength).append(')').append(newline);
