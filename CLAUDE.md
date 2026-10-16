@@ -184,7 +184,7 @@ Configuration priority (highest to lowest):
 4. Defaults
 
 **Key Properties:**
-- `ctrf.report.path` - Output file location (default: `ctrf-report.json`)
+- `ctrf.report.path` - Output file location (default: `ctrf-report.json`; a blank or invalid value warns and uses it, and a directory gets `ctrf-report.json` inside it)
 - `ctrf.max.message.length` - Max error message length (default: 500)
 - `ctrf.max.trace.length` - Max stack trace length; keeps whole lines and every `Caused by:` line (default: 20000, 0 = no limit)
 - `ctrf.calculate.startup.duration` - Enable startup duration calculation (default: false)

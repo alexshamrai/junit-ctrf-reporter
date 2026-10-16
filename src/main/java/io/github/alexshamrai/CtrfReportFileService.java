@@ -16,6 +16,7 @@ import java.nio.file.AccessDeniedException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileSystemException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -42,6 +43,8 @@ public class CtrfReportFileService {
     private static final Duration LOCK_POLL_INTERVAL = Duration.ofMillis(50);
     private static final int MOVE_ATTEMPTS = 10;
     private static final Duration MOVE_RETRY_INTERVAL = Duration.ofMillis(100);
+    // The default of ctrf.report.path, used inside a directory that it names
+    private static final String REPORT_FILE_IN_DIRECTORY = "ctrf-report.json";
 
     /**
      * Threads of this JVM take turns here before touching the file lock. Besides keeping them from colliding on it,
@@ -69,7 +72,8 @@ public class CtrfReportFileService {
      * <p>
      * Threads of this JVM take turns, and other JVMs are kept out by an exclusive lock on {@code <report>.lock}.
      * The report is read fresh while the lock is held. After the lock timeout, or on a file system that can't
-     * lock files, the report is written without the lock. Errors, including one thrown by {@code merge}, are
+     * lock files, the report is written without the lock. A {@code ctrf.report.path} that names a directory gets
+     * {@code ctrf-report.json} inside it, with a warning. Errors, including one thrown by {@code merge}, are
      * logged as warnings and leave the report as it was.
      *
      * @param merge receives the current report, or {@code null} if there is none or it can't be parsed, and
@@ -95,10 +99,15 @@ public class CtrfReportFileService {
     }
 
     private void replace(Function<Path, CtrfJson> readCurrent, UnaryOperator<CtrfJson> merge) {
-        Path report = Paths.get(configReader.getReportPath()).toAbsolutePath();
         synchronized (JVM_LOCK) {
+            Path report;
             try {
+                report = reportFile();
                 Files.createDirectories(report.getParent());
+            } catch (InvalidPathException e) {
+                LOGGER.warning("Failed to write results to file: " + configReader.getReportPath() + " - it isn't a valid path, "
+                    + e.getReason());
+                return;
             } catch (IOException e) {
                 printWriteFailure(e);
                 return;
@@ -112,6 +121,20 @@ public class CtrfReportFileService {
                 release(lock);
             }
         }
+    }
+
+    /**
+     * The file {@code ctrf.report.path} names, or {@code ctrf-report.json} inside it if it names a directory.
+     */
+    private Path reportFile() {
+        Path configured = Paths.get(configReader.getReportPath()).toAbsolutePath();
+        if (!Files.isDirectory(configured)) {
+            return configured;
+        }
+        Path inside = configured.resolve(REPORT_FILE_IN_DIRECTORY);
+        LOGGER.warning("ctrf.report.path names a directory, " + configured + ", so the report is written to " + inside
+            + "; set ctrf.report.path to a file to name the report");
+        return inside;
     }
 
     /**
@@ -193,7 +216,7 @@ public class CtrfReportFileService {
     }
 
     private static CtrfJson ignoreUnreadable(Path report, Exception e) {
-        LOGGER.warning("Ignoring the existing report, which can't be read: " + report + " - " + e.getMessage());
+        LOGGER.warning("Ignoring the existing report, which can't be read: " + report + " - " + describe(e));
         return null;
     }
 
@@ -253,8 +276,16 @@ public class CtrfReportFileService {
         if (e instanceof AccessDeniedException) {
             LOGGER.warning("Access denied: " + configReader.getReportPath() + " - " + e.getMessage());
         } else {
-            LOGGER.warning("Failed to write results to file: " + configReader.getReportPath() + " - " + e.getMessage());
+            LOGGER.warning("Failed to write results to file: " + configReader.getReportPath() + " - " + describe(e));
         }
+    }
+
+    // The message of a file system exception can be just a path; its type then says what went wrong
+    private static String describe(Exception e) {
+        if (e instanceof FileSystemException fileSystemException && fileSystemException.getReason() == null) {
+            return e.getMessage() + " (" + e.getClass().getSimpleName() + ")";
+        }
+        return e.getMessage();
     }
 
     private static void deleteQuietly(Path path) {

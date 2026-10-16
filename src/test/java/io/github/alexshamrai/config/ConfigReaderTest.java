@@ -288,6 +288,27 @@ class ConfigReaderTest {
         assertTrue(logs.text().contains("\"" + value + "\""), logs.text());
     }
 
+    @ParameterizedTest(name = "\"{0}\"")
+    @ValueSource(strings = {"", "   ", "${no.such.key}"})
+    @DisplayName("A blank ctrf.report.path, also one that expands to nothing, warns once, and the default is used")
+    void blankReportPathWarnsAndUsesTheDefault(String value) {
+        var reader = new ConfigReader(Map.of(), Map.of(), Map.of("ctrf.report.path", value));
+
+        assertEquals("ctrf-report.json", reader.getReportPath());
+        assertEquals(1, logs.messages().size(), logs.text());
+        assertTrue(logs.text().contains("ctrf.report.path is blank"), logs.text());
+    }
+
+    @Test
+    @DisplayName("A ctrf.report.path that the file system can't take as a path warns once, and the default is used")
+    void invalidReportPathWarnsAndUsesTheDefault() {
+        var reader = new ConfigReader(Map.of(), Map.of(), Map.of("ctrf.report.path", "build/bad" + (char) 0 + "name.json"));
+
+        assertEquals("ctrf-report.json", reader.getReportPath());
+        assertEquals(1, logs.messages().size(), logs.text());
+        assertTrue(logs.text().contains("ctrf.report.path isn't a valid path"), logs.text());
+    }
+
     @Test
     @DisplayName("row 12: a boolean ignores case")
     void booleanIgnoresCase() {

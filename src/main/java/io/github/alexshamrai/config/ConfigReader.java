@@ -7,6 +7,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
@@ -30,8 +32,8 @@ import java.util.regex.Pattern;
  *   <li>the key's default.</li>
  * </ol>
  * A value can use any name these sources set as {@code ${name}}, which is looked up the same way; a name that nothing
- * sets expands to an empty string. A number or a boolean that can't be read, or a negative length, logs a warning and
- * the default is used.
+ * sets expands to an empty string. A number or a boolean that can't be read, a negative length, or a report path that is
+ * blank or isn't a valid path logs a warning and the default is used.
  */
 public class ConfigReader {
 
@@ -97,7 +99,7 @@ public class ConfigReader {
         this.environment = Map.copyOf(environment);
         this.fileProperties = Map.copyOf(fileProperties);
 
-        this.reportPath = string(REPORT_PATH);
+        this.reportPath = reportPath();
         this.maxMessageLength = length(MAX_MESSAGE_LENGTH);
         this.maxTraceLength = length(MAX_TRACE_LENGTH);
         this.junitVersion = string("junit.version");
@@ -238,6 +240,26 @@ public class ConfigReader {
         boolean fallback = Boolean.parseBoolean(DEFAULTS.get(key));
         LOGGER.warning(key + " must be true or false, but is \"" + value + "\"; using the default, " + fallback);
         return fallback;
+    }
+
+    /**
+     * The report path: one that is blank, also after expanding references, or that the file system can't take as a
+     * path warns and gives the default. Spaces around a valid path are kept.
+     */
+    private String reportPath() {
+        String value = string(REPORT_PATH);
+        String fallback = DEFAULTS.get(REPORT_PATH);
+        if (value.isBlank()) {
+            LOGGER.warning(REPORT_PATH + " is blank, \"" + value + "\"; using the default, " + fallback);
+            return fallback;
+        }
+        try {
+            Paths.get(value);
+            return value;
+        } catch (InvalidPathException e) {
+            LOGGER.warning(REPORT_PATH + " isn't a valid path, \"" + value + "\" - " + e.getReason() + "; using the default, " + fallback);
+            return fallback;
+        }
     }
 
     /**
