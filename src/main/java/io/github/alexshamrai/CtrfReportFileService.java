@@ -7,6 +7,7 @@ import io.github.alexshamrai.json.CtrfJsonMapper;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.Reader;
+import java.io.Writer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -157,13 +158,16 @@ public class CtrfReportFileService {
     }
 
     /**
-     * Writes to a hidden temp file next to the report, then moves it over the report. Not
-     * {@code Files.createTempFile}, which would make the report readable by its owner only.
+     * Streams the report into a hidden temp file next to it, then moves the temp file over the report. Not
+     * {@code Files.createTempFile}, which would make the report readable by its owner only. A write that fails
+     * part-way deletes the temp file and leaves the report as it was.
      */
     private void writeAtomically(Path report, CtrfJson ctrfJson) {
         Path temp = report.resolveSibling("." + report.getFileName() + "." + UUID.randomUUID() + ".tmp");
         try {
-            Files.writeString(temp, CtrfJsonMapper.write(ctrfJson), StandardCharsets.UTF_8);
+            try (Writer out = Files.newBufferedWriter(temp, StandardCharsets.UTF_8)) {
+                CtrfJsonMapper.write(ctrfJson, out);
+            }
             moveOver(temp, report);
         } catch (IOException e) {
             printWriteFailure(e);

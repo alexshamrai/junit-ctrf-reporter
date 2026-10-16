@@ -13,6 +13,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.io.StringWriter;
+import java.io.Writer;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
@@ -202,5 +204,40 @@ class CtrfJsonMapperTest {
         assertThatThrownBy(() -> CtrfJsonMapper.read(new StringReader("{\"runId\":\"run-1\"} {}"), CtrfJson.class))
             .isInstanceOf(JsonException.class)
             .hasMessage("Unexpected text after the JSON value at character 18");
+    }
+
+    @org.junit.jupiter.api.Test
+    void ioExceptionFromTheWriterPropagates() {
+        Writer failing = new Writer() {
+            @Override
+            public void write(char[] chars, int offset, int length) throws IOException {
+                throw new IOException("disk full");
+            }
+
+            @Override
+            public void flush() {
+                // Nothing buffered
+            }
+
+            @Override
+            public void close() {
+                // Nothing to release
+            }
+        };
+
+        assertThatThrownBy(() -> CtrfJsonMapper.write(Test.builder().name("t()").build(), failing))
+            .isInstanceOf(IOException.class)
+            .hasMessage("disk full");
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Review Focus 1: a report larger than the writer's buffer is written whole")
+    void reportLargerThanTheBufferIsWrittenWhole() throws IOException {
+        String trace = "x".repeat(20_000);
+        var out = new StringWriter();
+
+        CtrfJsonMapper.write(Test.builder().trace(trace).build(), out);
+
+        assertThat(out).hasToString("{\"duration\":0,\"trace\":\"" + trace + "\"}");
     }
 }

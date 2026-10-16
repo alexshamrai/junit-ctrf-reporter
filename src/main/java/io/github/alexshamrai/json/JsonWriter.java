@@ -1,9 +1,13 @@
 package io.github.alexshamrai.json;
 
+import java.io.IOException;
+import java.io.StringWriter;
+import java.io.UncheckedIOException;
+import java.io.Writer;
 import java.util.Map;
 
 /**
- * Writes JSON values as compact text, with no whitespace between tokens.
+ * Writes JSON as compact text, with no whitespace between tokens, to a {@link Writer}.
  * <p>
  * It writes {@code null}, {@link String}, {@link Boolean}, {@link Number}, {@link Map} with {@code String} keys and
  * {@link Iterable}. Strings are escaped as Jackson escapes them: the quotation mark and the backslash, the short
@@ -12,130 +16,196 @@ import java.util.Map;
  * outside the Basic Multilingual Plane, such as an emoji, is written as the escapes of its two surrogates, as Jackson
  * writes it to bytes, and a surrogate without its pair, which UTF-8 can't encode, is escaped the same way.
  * A double or a float that isn't finite is written as a string, such as {@code "NaN"}, as Jackson writes it.
+ * <p>
+ * It collects text in its own buffer, passes it on whenever the buffer fills, and on {@code flush()}. It puts the
+ * commas between members and elements itself.
  */
 public final class JsonWriter {
 
     private static final char[] HEX_DIGITS = "0123456789ABCDEF".toCharArray();
+    private static final int BUFFER_SIZE = 8192;
 
-    private JsonWriter() {
-        // Utility class - prevent instantiation
+    private final Writer out;
+    private final char[] buffer = new char[BUFFER_SIZE];
+    private int count;
+    private boolean afterValue;
+
+    JsonWriter(Writer out) {
+        this.out = out;
     }
 
     /**
-     * Writes a JSON value.
+     * Writes a JSON value as text.
      *
      * @param value the value
      * @return its JSON text
      * @throws JsonException if the value, or a value inside it, has no JSON form
      */
     public static String write(Object value) {
-        var out = new StringBuilder();
-        writeValue(value, out);
-        return out.toString();
+        var text = new StringWriter();
+        try {
+            var writer = new JsonWriter(text);
+            writer.value(value);
+            writer.flush();
+        } catch (IOException e) {
+            throw new UncheckedIOException("A StringWriter doesn't fail", e);
+        }
+        return text.toString();
     }
 
-    private static void writeValue(Object value, StringBuilder out) {
-        if (value == null) {
-            out.append("null");
-        } else if (value instanceof String text) {
-            writeString(text, out);
-        } else if (value instanceof Boolean) {
-            out.append(value);
-        } else if (value instanceof Number number) {
-            writeNumber(number, out);
-        } else if (value instanceof Map<?, ?> object) {
-            writeObject(object, out);
+    /**
+     * Writes a value: {@code null}, a string, a boolean, a number, a map with string keys, or an iterable of values.
+     */
+    void value(Object value) throws IOException {
+        if (value instanceof Map<?, ?> object) {
+            beginObject();
+            for (Map.Entry<?, ?> member : object.entrySet()) {
+                if (!(member.getKey() instanceof String name)) {
+                    throw new JsonException("A JSON member name must be a string, not " + member.getKey());
+                }
+                name(name);
+                value(member.getValue());
+            }
+            endObject();
         } else if (value instanceof Iterable<?> array) {
-            writeArray(array, out);
+            beginArray();
+            for (Object element : array) {
+                value(element);
+            }
+            endArray();
+        } else {
+            separate();
+            scalar(value);
+            afterValue = true;
+        }
+    }
+
+    void beginObject() throws IOException {
+        separate();
+        append('{');
+        afterValue = false;
+    }
+
+    void endObject() throws IOException {
+        append('}');
+        afterValue = true;
+    }
+
+    void beginArray() throws IOException {
+        separate();
+        append('[');
+        afterValue = false;
+    }
+
+    void endArray() throws IOException {
+        append(']');
+        afterValue = true;
+    }
+
+    /**
+     * Writes a member's name and the colon after it.
+     */
+    void name(String name) throws IOException {
+        separate();
+        quote(name);
+        append(':');
+        afterValue = false;
+    }
+
+    /**
+     * Passes the buffered text on to the {@code Writer}, and flushes it.
+     */
+    void flush() throws IOException {
+        out.write(buffer, 0, count);
+        count = 0;
+        out.flush();
+    }
+
+    private void separate() throws IOException {
+        if (afterValue) {
+            append(',');
+        }
+    }
+
+    private void scalar(Object value) throws IOException {
+        if (value == null) {
+            append("null");
+        } else if (value instanceof String text) {
+            quote(text);
+        } else if (value instanceof Boolean) {
+            append(value.toString());
+        } else if (value instanceof Number number) {
+            boolean floatingPoint = number instanceof Double || number instanceof Float;
+            if (floatingPoint && !Double.isFinite(number.doubleValue())) {
+                quote(number.toString());
+            } else {
+                append(number.toString());
+            }
         } else {
             throw new JsonException("No JSON form for a " + value.getClass().getName());
         }
     }
 
-    private static void writeNumber(Number number, StringBuilder out) {
-        boolean floatingPoint = number instanceof Double || number instanceof Float;
-        if (floatingPoint && !Double.isFinite(number.doubleValue())) {
-            writeString(number.toString(), out);
-        } else {
-            out.append(number);
-        }
-    }
-
-    private static void writeObject(Map<?, ?> object, StringBuilder out) {
-        out.append('{');
-        boolean first = true;
-        for (Map.Entry<?, ?> member : object.entrySet()) {
-            if (!(member.getKey() instanceof String name)) {
-                throw new JsonException("A JSON member name must be a string, not " + member.getKey());
-            }
-            if (!first) {
-                out.append(',');
-            }
-            first = false;
-            writeString(name, out);
-            out.append(':');
-            writeValue(member.getValue(), out);
-        }
-        out.append('}');
-    }
-
-    private static void writeArray(Iterable<?> array, StringBuilder out) {
-        out.append('[');
-        boolean first = true;
-        for (Object element : array) {
-            if (!first) {
-                out.append(',');
-            }
-            first = false;
-            writeValue(element, out);
-        }
-        out.append(']');
-    }
-
-    private static void writeString(String text, StringBuilder out) {
-        out.append('"');
+    private void quote(String text) throws IOException {
+        append('"');
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
             if (c == '"' || c == '\\') {
-                out.append('\\').append(c);
+                append('\\');
+                append(c);
             } else if (c < 0x20) {
-                writeControlCharacter(c, out);
+                controlCharacter(c);
             } else if (Character.isSurrogate(c)) {
-                writeUnicodeEscape(c, out);
+                unicodeEscape(c);
             } else {
-                out.append(c);
+                append(c);
             }
         }
-        out.append('"');
+        append('"');
     }
 
-    private static void writeControlCharacter(char c, StringBuilder out) {
+    private void controlCharacter(char c) throws IOException {
         switch (c) {
             case '\b':
-                out.append("\\b");
+                append("\\b");
                 break;
             case '\t':
-                out.append("\\t");
+                append("\\t");
                 break;
             case '\n':
-                out.append("\\n");
+                append("\\n");
                 break;
             case '\f':
-                out.append("\\f");
+                append("\\f");
                 break;
             case '\r':
-                out.append("\\r");
+                append("\\r");
                 break;
             default:
-                writeUnicodeEscape(c, out);
+                unicodeEscape(c);
         }
     }
 
-    private static void writeUnicodeEscape(char c, StringBuilder out) {
-        out.append("\\u")
-            .append(HEX_DIGITS[(c >> 12) & 0xF])
-            .append(HEX_DIGITS[(c >> 8) & 0xF])
-            .append(HEX_DIGITS[(c >> 4) & 0xF])
-            .append(HEX_DIGITS[c & 0xF]);
+    private void unicodeEscape(char c) throws IOException {
+        append('\\');
+        append('u');
+        append(HEX_DIGITS[(c >> 12) & 0xF]);
+        append(HEX_DIGITS[(c >> 8) & 0xF]);
+        append(HEX_DIGITS[(c >> 4) & 0xF]);
+        append(HEX_DIGITS[c & 0xF]);
+    }
+
+    private void append(char c) throws IOException {
+        if (count == buffer.length) {
+            out.write(buffer, 0, count);
+            count = 0;
+        }
+        buffer[count++] = c;
+    }
+
+    private void append(String text) throws IOException {
+        for (int i = 0; i < text.length(); i++) {
+            append(text.charAt(i));
+        }
     }
 }
