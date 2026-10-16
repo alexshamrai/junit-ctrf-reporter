@@ -2,6 +2,10 @@ package io.github.alexshamrai.json;
 
 import io.github.alexshamrai.ctrf.model.Test;
 
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
@@ -78,7 +82,29 @@ public final class CtrfJsonMapper {
      * @throws JsonException if the text isn't valid JSON, or doesn't fit the model
      */
     public static <T> T read(String json, Class<T> type) {
-        return type.cast(fromJsonValue(JsonParser.parse(json), type, "$"));
+        try {
+            return read(new StringReader(json), type);
+        } catch (IOException e) {
+            throw new UncheckedIOException("A StringReader doesn't fail", e);
+        }
+    }
+
+    /**
+     * Reads JSON into a model class as it arrives: the text is never held whole, and only the values of
+     * {@code Object} and {@code Map} fields are built as maps and lists.
+     *
+     * @param in   the JSON text, read to its end and not closed
+     * @param type the model class
+     * @param <T>  the model class
+     * @return the model object, or {@code null} if the JSON text is the literal {@code null}
+     * @throws IOException   if {@code in} fails
+     * @throws JsonException if the text isn't valid JSON, or doesn't fit the model
+     */
+    public static <T> T read(Reader in, Class<T> type) throws IOException {
+        var reader = new JsonReader(in);
+        Object model = readValue(reader, type, "$");
+        reader.endOfText();
+        return type.cast(model);
     }
 
     private static Object toJsonValue(Object value) {
@@ -121,11 +147,39 @@ public final class CtrfJsonMapper {
         return object;
     }
 
-    private static Object fromJsonValue(Object json, Type type, String path) {
+    private static Object readValue(JsonReader reader, Type type, String path) throws IOException {
         Class<?> raw = rawClass(type);
-        if (json == null) {
+        JsonReader.Kind kind = reader.peek();
+        if (kind == JsonReader.Kind.NULL) {
+            reader.nextValue();
             return nullValueOf(raw);
         }
+        if (raw == List.class) {
+            if (kind != JsonReader.Kind.ARRAY) {
+                throw new JsonException(path + ": expected an array");
+            }
+            return readList(reader, elementType(type), path);
+        }
+        if (raw == Map.class) {
+            if (kind != JsonReader.Kind.OBJECT) {
+                throw new JsonException(path + ": expected an object");
+            }
+            return reader.nextValue();
+        }
+        if (raw == Object.class) {
+            return reader.nextValue();
+        }
+        if (isModel(raw)) {
+            if (kind != JsonReader.Kind.OBJECT) {
+                throw new JsonException(path + ": expected an object");
+            }
+            return readModel(reader, raw, path);
+        }
+        return fromScalar(reader.nextValue(), raw, path);
+    }
+
+    // A text, number, boolean or status field. An object or an array read into one fails with the value in the message
+    private static Object fromScalar(Object json, Class<?> raw, String path) {
         if (raw == String.class) {
             return toText(json, path);
         }
@@ -140,18 +194,6 @@ public final class CtrfJsonMapper {
         }
         if (raw == Test.TestStatus.class) {
             return toStatus(json, path);
-        }
-        if (raw == List.class) {
-            return toList(json, elementType(type), path);
-        }
-        if (raw == Map.class) {
-            return toMap(json, path);
-        }
-        if (raw == Object.class) {
-            return json;
-        }
-        if (isModel(raw)) {
-            return toModel(json, raw, path);
         }
         throw new JsonException(path + ": the model has a field of a type this mapper can't read, " + raw.getName());
     }
@@ -169,18 +211,19 @@ public final class CtrfJsonMapper {
         return null;
     }
 
-    private static Object toModel(Object json, Class<?> type, String path) {
-        if (!(json instanceof Map<?, ?> object)) {
-            throw new JsonException(path + ": expected an object");
-        }
+    private static Object readModel(JsonReader reader, Class<?> type, String path) throws IOException {
         Object model = newInstance(type);
         Map<String, Field> fields = FIELDS.get(type);
-        for (Map.Entry<?, ?> member : object.entrySet()) {
-            String name = (String) member.getKey();
-            Field field = fields.get(ALIASES.getOrDefault(name, name));
-            if (field != null) {
-                set(field, model, fromJsonValue(member.getValue(), field.getGenericType(), path + "." + name));
-            }
+        if (reader.beginObject()) {
+            do {
+                String name = reader.nextName();
+                Field field = fields.get(ALIASES.getOrDefault(name, name));
+                if (field == null) {
+                    reader.skipValue();
+                } else {
+                    set(field, model, readValue(reader, field.getGenericType(), path + "." + name));
+                }
+            } while (reader.nextMember());
         }
         return model;
     }
@@ -256,24 +299,16 @@ public final class CtrfJsonMapper {
         throw new JsonException(path + ": unknown test status " + json);
     }
 
-    private static List<Object> toList(Object json, Type elementType, String path) {
-        if (!(json instanceof List<?> items)) {
-            throw new JsonException(path + ": expected an array");
-        }
-        List<Object> list = new ArrayList<>(items.size());
-        for (int i = 0; i < items.size(); i++) {
-            list.add(fromJsonValue(items.get(i), elementType, path + "[" + i + "]"));
+    private static List<Object> readList(JsonReader reader, Type elementType, String path) throws IOException {
+        List<Object> list = new ArrayList<>();
+        if (reader.beginArray()) {
+            int index = 0;
+            do {
+                list.add(readValue(reader, elementType, path + "[" + index + "]"));
+                index++;
+            } while (reader.nextElement());
         }
         return list;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> toMap(Object json, String path) {
-        if (!(json instanceof Map)) {
-            throw new JsonException(path + ": expected an object");
-        }
-        // The parser's objects are LinkedHashMaps with string keys
-        return (Map<String, Object>) json;
     }
 
     private static Class<?> rawClass(Type type) {
