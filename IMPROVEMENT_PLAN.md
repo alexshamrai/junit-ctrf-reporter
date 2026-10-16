@@ -78,7 +78,7 @@ Examples:
 | `@TestFactory factory()` → `DynamicContainer("group")` → a dynamic test (listener only) | its display name | `["PaymentTest", "factory()", "group"]` |
 | `@BeforeAll` of `Refunds` fails | `initializationError` | `["Payments", "Refunds"]` |
 | `@BeforeAll` of a top-level `class SetupTest` fails | `initializationError` | `["SetupTest"]` |
-| JUnit 4 test, through Vintage | `test()` | `["com.example.LegacyTest"]` |
+| JUnit 4 test `com.example.LegacyTest.test()`, through Vintage, which shows a class by its simple name | `test()` | `["LegacyTest"]` |
 | a test directly under a custom engine | its display name | `["My Engine"]` |
 
 ### Decisions (2026-10-16)
