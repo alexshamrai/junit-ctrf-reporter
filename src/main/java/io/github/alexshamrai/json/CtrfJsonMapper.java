@@ -5,7 +5,9 @@ import io.github.alexshamrai.ctrf.model.Test;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
+import java.io.StringWriter;
 import java.io.UncheckedIOException;
+import java.io.Writer;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
@@ -18,7 +20,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Writes the CTRF model as JSON and reads it back, without a JSON library.
+ * Writes the CTRF model as JSON and reads it back, without a JSON library. It streams: it writes to a
+ * {@link java.io.Writer} and reads from a {@link java.io.Reader} as it goes, so it never holds a whole report as text
+ * or as a tree.
  * <p>
  * The model is the classes of {@code io.github.alexshamrai.ctrf.model}. Each is bound field by field, in declaration
  * order, under the field's name; static fields are skipped. The rules are what the model's Jackson annotations do,
@@ -69,7 +73,28 @@ public final class CtrfJsonMapper {
      * @throws JsonException if a value in it can't be written
      */
     public static String write(Object model) {
-        return JsonWriter.write(toJsonValue(model));
+        var text = new StringWriter();
+        try {
+            write(model, text);
+        } catch (IOException e) {
+            throw new UncheckedIOException("A StringWriter doesn't fail", e);
+        }
+        return text.toString();
+    }
+
+    /**
+     * Writes a model object as compact JSON to {@code out} as it goes: neither the text nor a tree of it is held
+     * whole. {@code out} is flushed, not closed.
+     *
+     * @param model an object of a model class
+     * @param out   where the JSON goes
+     * @throws IOException   if {@code out} fails
+     * @throws JsonException if a value in it can't be written; what came before it is already in {@code out}
+     */
+    public static void write(Object model, Writer out) throws IOException {
+        var writer = new JsonWriter(out);
+        writeValue(model, writer);
+        writer.flush();
     }
 
     /**
@@ -107,44 +132,45 @@ public final class CtrfJsonMapper {
         return type.cast(model);
     }
 
-    private static Object toJsonValue(Object value) {
+    private static void writeValue(Object value, JsonWriter out) throws IOException {
         if (value == null || value instanceof String || value instanceof Boolean || value instanceof Number) {
-            return value;
+            out.value(value);
+        } else if (value instanceof Test.TestStatus status) {
+            out.value(status.toLowerCase());
+        } else if (value instanceof Enum<?> constant) {
+            out.value(constant.name());
+        } else if (value instanceof Map<?, ?> map) {
+            out.beginObject();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                out.name(String.valueOf(entry.getKey()));
+                writeValue(entry.getValue(), out);
+            }
+            out.endObject();
+        } else if (value instanceof Iterable<?> items) {
+            out.beginArray();
+            for (Object item : items) {
+                writeValue(item, out);
+            }
+            out.endArray();
+        } else if (value instanceof Object[] items) {
+            writeValue(Arrays.asList(items), out);
+        } else if (isModel(value.getClass())) {
+            writeModel(value, out);
+        } else {
+            out.value(value.toString());
         }
-        if (value instanceof Test.TestStatus status) {
-            return status.toLowerCase();
-        }
-        if (value instanceof Enum<?> constant) {
-            return constant.name();
-        }
-        if (value instanceof Map<?, ?> map) {
-            Map<String, Object> object = new LinkedHashMap<>();
-            map.forEach((key, entry) -> object.put(String.valueOf(key), toJsonValue(entry)));
-            return object;
-        }
-        if (value instanceof Iterable<?> items) {
-            List<Object> array = new ArrayList<>();
-            items.forEach(item -> array.add(toJsonValue(item)));
-            return array;
-        }
-        if (value instanceof Object[] items) {
-            return toJsonValue(Arrays.asList(items));
-        }
-        if (isModel(value.getClass())) {
-            return modelToJson(value);
-        }
-        return value.toString();
     }
 
-    private static Map<String, Object> modelToJson(Object model) {
-        Map<String, Object> object = new LinkedHashMap<>();
+    private static void writeModel(Object model, JsonWriter out) throws IOException {
+        out.beginObject();
         for (Field field : FIELDS.get(model.getClass()).values()) {
             Object value = get(field, model);
             if (value != null) {
-                object.put(field.getName(), toJsonValue(value));
+                out.name(field.getName());
+                writeValue(value, out);
             }
         }
-        return object;
+        out.endObject();
     }
 
     private static Object readValue(JsonReader reader, Type type, String path) throws IOException {

@@ -17,6 +17,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
+import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -76,6 +77,16 @@ class JsonGoldenTest {
     @MethodSource("corpus")
     void writerWritesExactlyTheGoldenJson(String name, Object model, String golden) {
         assertThat(CtrfJsonMapper.write(model)).isEqualTo(golden);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("corpus")
+    void writerWritesExactlyTheGoldenJsonToAWriter(String name, Object model, String golden) throws IOException {
+        var out = new StringWriter();
+
+        CtrfJsonMapper.write(model, out);
+
+        assertThat(out).hasToString(golden);
     }
 
     @ParameterizedTest(name = "{0}")
