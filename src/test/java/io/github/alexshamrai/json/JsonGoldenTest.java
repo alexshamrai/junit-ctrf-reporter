@@ -1,6 +1,5 @@
 package io.github.alexshamrai.json;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
 import io.github.alexshamrai.ctrf.model.Environment;
 import io.github.alexshamrai.ctrf.model.Extra;
@@ -11,8 +10,13 @@ import io.github.alexshamrai.ctrf.model.Summary;
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.ctrf.model.Tool;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import tools.jackson.databind.json.JsonMapper;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -27,12 +31,14 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Our JSON code against Jackson, which wrote and read the reports up to 0.5.0. For every model object of the corpus,
- * the writer's bytes are Jackson's, and the reader reads Jackson's output, and its own, into what Jackson reads.
+ * Our JSON code against the JSON the reporter wrote up to 0.5.0, with Jackson 2. Each case of the corpus has its golden
+ * JSON: the full report's is {@code src/test/resources/json/golden-report.json}, the others are inline. All of it was
+ * checked, before Jackson 2 left the build, to be byte-identical to Jackson 2's output. The writer must keep writing
+ * exactly that JSON, and the reader must read it as Jackson 3 does.
  */
-class JacksonDifferentialTest {
+class JsonGoldenTest {
 
-    private static final ObjectMapper JACKSON = new ObjectMapper();
+    private static final JsonMapper JACKSON = JsonMapper.builder().build();
 
     /**
      * Every control character, the characters JSON escapes, DEL, and text outside ASCII: German, Japanese, the two
@@ -42,46 +48,49 @@ class JacksonDifferentialTest {
         .collect(Collectors.joining())
         + "\"\\/ " + (char) 0x7F + " " + new String(new int[] {0xFC, 0xDF, 0x65E5, 0x672C, 0x2028, 0x2029, 0x1F600}, 0, 7) + " end";
 
-    static Stream<Object> corpus() {
+    /**
+     * The full report holds every field, all kinds of numbers, nested values and {@link #TRICKY_TEXT}. The short cases
+     * pin what is written for fields left unset, and that empty collections are written.
+     */
+    static Stream<Arguments> corpus() {
+        String reportDefaults = "{\"reportFormat\":\"CTRF\",\"specVersion\":\"0.2.0\"}";
+        String testDefaults = "{\"duration\":0}";
         return Stream.of(
-            fullReport(),
-            CtrfJson.builder().build(),
-            new CtrfJson(),
-            Test.builder().build(),
-            new Test(),
-            Summary.builder().build(),
-            new Environment(),
-            Test.builder().name(TRICKY_TEXT).message(TRICKY_TEXT).tags(List.of(TRICKY_TEXT, "")).build(),
-            Test.builder().tags(List.of()).suite(List.of()).parameters(Map.of()).attachments(List.of()).build(),
-            CtrfJson.builder().extra(numbers()).build(),
-            CtrfJson.builder().extra(nested()).build());
+            Arguments.of("full-report", fullReport(), goldenReport()),
+            Arguments.of("report-builder-defaults", CtrfJson.builder().build(), reportDefaults),
+            Arguments.of("report-no-args", new CtrfJson(), reportDefaults),
+            Arguments.of("test-builder-defaults", Test.builder().build(), testDefaults),
+            Arguments.of("test-no-args", new Test(), testDefaults),
+            Arguments.of("summary-builder-defaults", Summary.builder().build(),
+                "{\"tests\":0,\"passed\":0,\"failed\":0,\"pending\":0,\"skipped\":0,\"other\":0,\"flaky\":0,"
+                    + "\"start\":0,\"stop\":0,\"duration\":0}"),
+            Arguments.of("environment-no-args", new Environment(), "{\"healthy\":false}"),
+            Arguments.of("test-empty-collections",
+                Test.builder().tags(List.of()).suite(List.of()).parameters(Map.of()).attachments(List.of()).build(),
+                "{\"duration\":0,\"suite\":[],\"tags\":[],\"attachments\":[],\"parameters\":{}}"));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "{0}")
     @MethodSource("corpus")
-    void writerOutputIsJacksonsByteForByte(Object model) throws Exception {
-        byte[] jackson = JACKSON.writeValueAsBytes(model);
-
-        String ours = CtrfJsonMapper.write(model);
-
-        assertThat(ours).isEqualTo(new String(jackson, StandardCharsets.UTF_8));
-        assertThat(ours.getBytes(StandardCharsets.UTF_8)).isEqualTo(jackson);
+    void writerWritesExactlyTheGoldenJson(String name, Object model, String golden) {
+        assertThat(CtrfJsonMapper.write(model)).isEqualTo(golden);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "{0}")
     @MethodSource("corpus")
-    void readerReadsJacksonsOutputAsJacksonDoes(Object model) throws Exception {
-        String json = JACKSON.writeValueAsString(model);
-
-        assertThat(CtrfJsonMapper.read(json, model.getClass())).isEqualTo(JACKSON.readValue(json, model.getClass()));
+    void readerReadsTheGoldenJsonAsJacksonDoes(String name, Object model, String golden) {
+        assertThat(CtrfJsonMapper.read(golden, model.getClass())).isEqualTo(JACKSON.readValue(golden, model.getClass()));
     }
 
-    @ParameterizedTest
-    @MethodSource("corpus")
-    void readerReadsItsOwnOutputAsJacksonDoes(Object model) throws Exception {
-        String json = CtrfJsonMapper.write(model);
-
-        assertThat(CtrfJsonMapper.read(json, model.getClass())).isEqualTo(JACKSON.readValue(json, model.getClass()));
+    private static String goldenReport() {
+        try (InputStream in = JsonGoldenTest.class.getResourceAsStream("/json/golden-report.json")) {
+            if (in == null) {
+                throw new IllegalStateException("No src/test/resources/json/golden-report.json");
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private static CtrfJson fullReport() {

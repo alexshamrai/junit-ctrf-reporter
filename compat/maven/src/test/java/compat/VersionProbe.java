@@ -16,6 +16,7 @@ final class VersionProbe {
             + "platform-launcher=" + versionOf("org.junit.platform.launcher.Launcher") + "\n"
             + "vintage-engine=" + versionOf("org.junit.vintage.engine.VintageTestEngine") + "\n"
             + "jackson-databind=" + versionOf("com.fasterxml.jackson.databind.ObjectMapper") + "\n"
+            + "jackson3-databind=" + versionOf("tools.jackson.databind.ObjectMapper") + "\n"
             + "owner=" + versionOf("org.aeonbits.owner.Config") + "\n";
         Files.writeString(Path.of(System.getProperty("compat.out")), text);
     }

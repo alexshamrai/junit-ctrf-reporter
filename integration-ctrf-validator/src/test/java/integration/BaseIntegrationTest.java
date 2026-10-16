@@ -1,9 +1,9 @@
 package integration;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.TestInstance;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,7 +11,7 @@ import java.io.IOException;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public abstract class BaseIntegrationTest {
 
-    protected final ObjectMapper objectMapper = new ObjectMapper();
+    protected final JsonMapper objectMapper = JsonMapper.builder().build();
     protected IntegrationRun run;
     protected ExpectedRun expected;
     protected CtrfJson report;

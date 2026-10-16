@@ -13,7 +13,8 @@ dependencies {
     implementation "org.slf4j:slf4j-api:${rootProject.ext.slf4jVersion}"
     implementation "ch.qos.logback:logback-classic:${rootProject.ext.logbackVersion}"
 
-    implementation "com.fasterxml.jackson.core:jackson-databind:${rootProject.ext.jaksonVersion}"
+    implementation platform("tools.jackson:jackson-bom:${rootProject.ext.jacksonVersion}")
+    implementation "tools.jackson.core:jackson-databind"
     implementation "com.networknt:json-schema-validator:${rootProject.ext.networkntValidatorVersion}"
 
     testImplementation platform("org.junit:junit-bom:${rootProject.ext.junitVersion}")

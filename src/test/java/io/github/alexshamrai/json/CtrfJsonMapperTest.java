@@ -1,11 +1,11 @@
 package io.github.alexshamrai.json;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
 import io.github.alexshamrai.ctrf.model.Environment;
 import io.github.alexshamrai.ctrf.model.Results;
 import io.github.alexshamrai.ctrf.model.Test;
 import org.junit.jupiter.api.DisplayName;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -19,8 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Cases the differential test against Jackson can't cover: input Jackson didn't write, and the places where the
- * mapper deliberately differs from Jackson.
+ * Cases {@link JsonGoldenTest} can't cover: input our writer doesn't produce, and the places where the mapper
+ * deliberately differs from Jackson.
  */
 class CtrfJsonMapperTest {
 
@@ -30,7 +30,7 @@ class CtrfJsonMapperTest {
             .runId("run-1")
             .results(Results.builder().tests(List.of(Test.builder().name("t()").status(PASSED).build())).build())
             .build();
-        String pretty = new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(report);
+        String pretty = JsonMapper.builder().build().writerWithDefaultPrettyPrinter().writeValueAsString(report);
 
         assertThat(CtrfJsonMapper.read(pretty, CtrfJson.class)).isEqualTo(report);
     }

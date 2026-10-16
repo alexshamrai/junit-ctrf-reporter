@@ -7,7 +7,7 @@ OUTPUT_DIR holds the consumer's ctrf-report.json and junit-versions.txt (written
 KIND is "jupiter" (Gradle, JUnit Jupiter), "vintage" (Gradle, JUnit 4 tests only, no Jupiter on the classpath)
 or "maven" (Maven, JUnit Jupiter, two test classes in separate Surefire forks, failed tests rerun once).
 The run passes when the consumer's tests are in the CTRF report as expected, the report has a runId, the
-consumer ran on the JUnit version it asked for, and neither Jackson nor owner is on its test classpath.
+consumer ran on the JUnit version it asked for, and neither Jackson (2 or 3) nor owner is on its test classpath.
 """
 import json
 import sys
@@ -56,8 +56,9 @@ def version_problems(out_dir, junit_version, kind):
     if not versions_file.exists():
         return [f"no {versions_file}: the consumer's passing test did not run"]
     versions = dict(line.split("=", 1) for line in versions_file.read_text().split())
-    # The reporter has no runtime dependencies: neither Jackson nor owner may reach the consumer's test classpath
-    expected = {"platform-launcher": platform_version(junit_version), "jackson-databind": "absent", "owner": "absent"}
+    # The reporter has no runtime dependencies: neither Jackson (2 or 3) nor owner may reach the consumer's test classpath
+    expected = {"platform-launcher": platform_version(junit_version), "jackson-databind": "absent",
+                "jackson3-databind": "absent", "owner": "absent"}
     if kind == "vintage":
         expected["jupiter-api"] = "absent"
         expected["vintage-engine"] = junit_version

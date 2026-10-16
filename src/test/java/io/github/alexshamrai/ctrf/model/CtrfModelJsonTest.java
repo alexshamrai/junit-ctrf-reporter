@@ -1,6 +1,6 @@
 package io.github.alexshamrai.ctrf.model;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 
@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class CtrfModelJsonTest {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JsonMapper objectMapper = JsonMapper.builder().build();
 
     @org.junit.jupiter.api.Test
     void testThatRanOnceHasNoRetryFields() throws Exception {
@@ -38,9 +38,9 @@ class CtrfModelJsonTest {
         var entry = objectMapper.readTree(written).get("retryAttempts").get(0);
 
         assertThat(entry.get("attempt").asInt()).isEqualTo(1);
-        assertThat(entry.get("status").asText()).isEqualTo("failed");
+        assertThat(entry.get("status").asString()).isEqualTo("failed");
         assertThat(entry.get("duration").asLong()).isEqualTo(5);
-        assertThat(entry.get("message").asText()).isEqualTo("boom");
+        assertThat(entry.get("message").asString()).isEqualTo("boom");
         assertThat(objectMapper.readValue(written, Test.class)).isEqualTo(test);
     }
 
@@ -71,7 +71,7 @@ class CtrfModelJsonTest {
         var withRunId = objectMapper.readTree(objectMapper.writeValueAsString(CtrfJson.builder().runId("run-1").build()));
         var withoutRunId = objectMapper.readTree(objectMapper.writeValueAsString(CtrfJson.builder().build()));
 
-        assertThat(withRunId.get("runId").asText()).isEqualTo("run-1");
+        assertThat(withRunId.get("runId").asString()).isEqualTo("run-1");
         assertThat(withoutRunId.has("runId")).isFalse();
     }
 
@@ -80,7 +80,7 @@ class CtrfModelJsonTest {
         var json = objectMapper.readTree(objectMapper.writeValueAsString(
             Test.builder().name("test1()").filePath("com.example.PaymentTest").build()));
 
-        assertThat(json.get("filePath").asText()).isEqualTo("com.example.PaymentTest");
+        assertThat(json.get("filePath").asString()).isEqualTo("com.example.PaymentTest");
         assertThat(json.has("filepath")).isFalse();
     }
 
@@ -98,7 +98,7 @@ class CtrfModelJsonTest {
 
         assertThat(json.get("buildNumber").isIntegralNumber()).isTrue();
         assertThat(json.get("buildNumber").asLong()).isEqualTo(777L);
-        assertThat(json.get("buildId").asText()).isEqualTo("2026.10.15-3");
+        assertThat(json.get("buildId").asString()).isEqualTo("2026.10.15-3");
     }
 
     @org.junit.jupiter.api.Test
@@ -128,6 +128,6 @@ class CtrfModelJsonTest {
             Test.builder().name("test1()").suite(List.of("PaymentTest", "Refunds")).build()));
 
         assertThat(json.get("suite").isArray()).isTrue();
-        assertThat(json.get("suite").get(1).asText()).isEqualTo("Refunds");
+        assertThat(json.get("suite").get(1).asString()).isEqualTo("Refunds");
     }
 }

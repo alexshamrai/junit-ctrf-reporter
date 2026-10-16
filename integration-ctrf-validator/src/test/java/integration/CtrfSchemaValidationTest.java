@@ -1,11 +1,11 @@
 package integration;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
 import io.github.alexshamrai.ctrf.model.Test.TestStatus;
 import io.github.alexshamrai.integration.JsonSchemaValidator;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.io.InputStream;

@@ -1,7 +1,5 @@
 package io.github.alexshamrai;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.networknt.schema.InputFormat;
 import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaRegistry;
@@ -14,6 +12,8 @@ import io.github.alexshamrai.util.SummaryUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,7 +38,7 @@ class CtrfSchemaConformanceTest {
     private static final String CLASS_NAME = "com.example.PaymentTest";
     private static final String CLASS_ID = "[engine:junit-jupiter]/[class:" + CLASS_NAME + "]";
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JsonMapper objectMapper = JsonMapper.builder().build();
     private final ConfigReader configReader = mock(ConfigReader.class);
     private final TestProcessor processor = new TestProcessor(configReader);
     @RegisterExtension
@@ -78,7 +78,7 @@ class CtrfSchemaConformanceTest {
 
         var report = composeReport(fullRun());
 
-        assertThat(objectMapper.readTree(report).at("/results/environment/buildId").asText()).isEqualTo("2026.10.15-3");
+        assertThat(objectMapper.readTree(report).at("/results/environment/buildId").asString()).isEqualTo("2026.10.15-3");
         assertThat(schemaErrorsOf(report)).isEmpty();
         assertThat(logs.text()).contains("buildId");
     }
