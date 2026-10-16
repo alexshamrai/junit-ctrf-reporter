@@ -47,6 +47,11 @@ public final class CtrfJsonMapper {
      */
     private static final Map<String, String> ALIASES = Map.of("filepath", "filePath");
 
+    /**
+     * How many characters of a value an error message shows.
+     */
+    private static final int MAX_SHOWN_LENGTH = 100;
+
     private static final ClassValue<Map<String, Field>> FIELDS = new ClassValue<>() {
         @Override
         protected Map<String, Field> computeValue(Class<?> type) {
@@ -298,7 +303,7 @@ public final class CtrfJsonMapper {
     private static int toInt(Object json, String path) {
         long value = toLong(json, path);
         if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
-            throw new JsonException(path + ": " + json + " is out of range");
+            throw new JsonException(path + ": " + shown(json) + " is out of range");
         }
         return (int) value;
     }
@@ -319,9 +324,9 @@ public final class CtrfJsonMapper {
                 return Long.parseLong(text.strip());
             }
         } catch (ArithmeticException | NumberFormatException e) {
-            throw new JsonException(path + ": \"" + json + "\" is not a whole number in range", e);
+            throw new JsonException(path + ": \"" + shown(json) + "\" is not a whole number in range", e);
         }
-        throw new JsonException(path + ": expected a number, not " + json);
+        throw new JsonException(path + ": expected a number, not " + shown(json));
     }
 
     // A decimal read into a whole-number field keeps its whole part, as with Jackson
@@ -342,7 +347,7 @@ public final class CtrfJsonMapper {
         if (json instanceof Integer || json instanceof Long) {
             return ((Number) json).longValue() != 0;
         }
-        throw new JsonException(path + ": expected true or false, not " + json);
+        throw new JsonException(path + ": expected true or false, not " + shown(json));
     }
 
     private static Test.TestStatus toStatus(Object json, String path) {
@@ -353,7 +358,7 @@ public final class CtrfJsonMapper {
                 }
             }
         }
-        throw new JsonException(path + ": unknown test status " + json);
+        throw new JsonException(path + ": unknown test status " + shown(json));
     }
 
     private static List<Object> readList(JsonReader reader, Type elementType, String path) throws IOException {
@@ -366,6 +371,19 @@ public final class CtrfJsonMapper {
             } while (reader.nextElement());
         }
         return list;
+    }
+
+    // A value as an error message shows it: an object or an array by its kind, anything else cut at
+    // MAX_SHOWN_LENGTH characters, so that one bad value can't fill the log
+    private static String shown(Object json) {
+        if (json instanceof Map) {
+            return "an object";
+        }
+        if (json instanceof List) {
+            return "an array";
+        }
+        String text = String.valueOf(json);
+        return text.length() > MAX_SHOWN_LENGTH ? text.substring(0, MAX_SHOWN_LENGTH) + "..." : text;
     }
 
     private static Class<?> rawClass(Type type) {

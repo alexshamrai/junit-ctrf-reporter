@@ -174,6 +174,30 @@ class CtrfJsonMapperTest {
             Arguments.of("{\"extra\":[1]}", "$.extra: expected an object"));
     }
 
+    @org.junit.jupiter.api.Test
+    @DisplayName("A long value in an error message is cut at 100 characters")
+    void longValueInAnErrorMessageIsCut() {
+        String json = "{\"duration\":\"" + "9".repeat(10_000) + "x\"}";
+
+        assertThatThrownBy(() -> CtrfJsonMapper.read(json, Test.class))
+            .isInstanceOf(JsonException.class)
+            .hasMessage("$.duration: \"" + "9".repeat(100) + "...\" is not a whole number in range");
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("An object or an array in an error message is named, not printed")
+    void objectOrArrayInAnErrorMessageIsNamed() {
+        assertThatThrownBy(() -> CtrfJsonMapper.read("{\"healthy\":{\"a\":1}}", Environment.class))
+            .isInstanceOf(JsonException.class)
+            .hasMessage("$.healthy: expected true or false, not an object");
+        assertThatThrownBy(() -> CtrfJsonMapper.read("{\"duration\":[1,2]}", Test.class))
+            .isInstanceOf(JsonException.class)
+            .hasMessage("$.duration: expected a number, not an array");
+        assertThatThrownBy(() -> CtrfJsonMapper.read("{\"status\":{}}", Test.class))
+            .isInstanceOf(JsonException.class)
+            .hasMessage("$.status: unknown test status an object");
+    }
+
     @ParameterizedTest(name = "{1}")
     @MethodSource("reportsThatDontFitTheModel")
     void reportThatDoesNotFitTheModelNamesTheFieldAndTheProblem(String json, String message) {
