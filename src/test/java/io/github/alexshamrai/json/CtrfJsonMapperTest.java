@@ -5,12 +5,19 @@ import io.github.alexshamrai.ctrf.model.Environment;
 import io.github.alexshamrai.ctrf.model.Results;
 import io.github.alexshamrai.ctrf.model.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.io.IOException;
+import java.io.StringReader;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
@@ -141,5 +148,59 @@ class CtrfJsonMapperTest {
     void textThatIsNotJsonCantBeRead() {
         assertThatThrownBy(() -> CtrfJsonMapper.read("{ not json", CtrfJson.class)).isInstanceOf(JsonException.class);
         assertThatThrownBy(() -> CtrfJsonMapper.read("[]", CtrfJson.class)).isInstanceOf(JsonException.class);
+    }
+
+    /**
+     * Reports that are valid JSON but don't fit the model, and the exact message each gives. Captured from the mapper
+     * of 0.5.1.
+     */
+    static Stream<Arguments> reportsThatDontFitTheModel() {
+        return Stream.of(
+            Arguments.of("[]", "$: expected an object"),
+            Arguments.of("{\"results\":[]}", "$.results: expected an object"),
+            Arguments.of("{\"results\":{\"tests\":{}}}", "$.results.tests: expected an array"),
+            Arguments.of("{\"results\":{\"tests\":[{\"status\":5}]}}", "$.results.tests[0].status: unknown test status 5"),
+            Arguments.of("{\"results\":{\"tests\":[{\"tags\":\"a\"}]}}", "$.results.tests[0].tags: expected an array"),
+            Arguments.of("{\"results\":{\"tests\":[{\"name\":[1,{\"a\":2}]}]}}", "$.results.tests[0].name: expected a string"),
+            Arguments.of("{\"results\":{\"tests\":[{\"duration\":1e30}]}}",
+                "$.results.tests[0].duration: \"1.0E30\" is not a whole number in range"),
+            Arguments.of("{\"results\":{\"summary\":{\"tests\":\"x\"}}}", "$.results.summary.tests: \"x\" is not a whole number in range"),
+            Arguments.of("{\"results\":{\"summary\":{\"tests\":3000000000}}}", "$.results.summary.tests: 3000000000 is out of range"),
+            Arguments.of("{\"results\":{\"environment\":{\"healthy\":\"maybe\"}}}",
+                "$.results.environment.healthy: expected true or false, not maybe"),
+            Arguments.of("{\"runId\":{}}", "$.runId: expected a string"),
+            Arguments.of("{\"extra\":[1]}", "$.extra: expected an object"));
+    }
+
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("reportsThatDontFitTheModel")
+    void reportThatDoesNotFitTheModelNamesTheFieldAndTheProblem(String json, String message) {
+        assertThatThrownBy(() -> CtrfJsonMapper.read(json, CtrfJson.class)).isInstanceOf(JsonException.class).hasMessage(message);
+    }
+
+    @ParameterizedTest(name = "chunks of {0}")
+    @ValueSource(ints = {1, 7, 8191})
+    void reportIsReadTheSameFromAReaderInAnyChunkSize(int size) throws IOException {
+        String json = JsonGoldenTest.goldenReport();
+
+        assertThat(CtrfJsonMapper.read(new ChunkedReader(json, size), CtrfJson.class)).isEqualTo(CtrfJsonMapper.read(json, CtrfJson.class));
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Review Focus 1: a trace of 20,000 characters, longer than the reader's buffer, is read whole")
+    void textLongerThanTheBufferIsReadWhole() throws IOException {
+        String trace = "java.lang.AssertionError: expected \"a\"\n\tat com.example.PaymentTest.pays(PaymentTest.java:42)\n"
+            .repeat(250).substring(0, 20_000);
+        String json = "{\"name\":\"pays()\",\"trace\":" + JsonWriter.write(trace) + "}";
+
+        assertThat(json.length()).isGreaterThan(2 * 8192);
+        assertThat(CtrfJsonMapper.read(new StringReader(json), Test.class).getTrace()).isEqualTo(trace);
+    }
+
+    @org.junit.jupiter.api.Test
+    void readerIsReadToTheEndOfTheText() {
+        assertThatThrownBy(() -> CtrfJsonMapper.read(new StringReader("{\"runId\":\"run-1\"} {}"), CtrfJson.class))
+            .isInstanceOf(JsonException.class)
+            .hasMessage("Unexpected text after the JSON value at character 18");
     }
 }

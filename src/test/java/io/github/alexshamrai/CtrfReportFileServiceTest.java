@@ -160,6 +160,56 @@ class CtrfReportFileServiceTest {
     }
 
     @Test
+    @DisplayName("A report that isn't valid UTF-8 reaches the merge function as null")
+    void reportThatIsNotUtf8ReachesTheMergeAsNull() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.write(report, new byte[] {'{', '"', 'a', '"', ':', '"', (byte) 0xC3, (byte) 0x28, '"', '}'});
+        List<CtrfJson> seen = new ArrayList<>();
+
+        serviceFor(report).update(existing -> {
+            seen.add(existing);
+            return marker("fresh");
+        });
+
+        assertThat(seen).containsExactly((CtrfJson) null);
+        assertThat(readMarker(report)).isEqualTo("fresh");
+        assertThat(logs.text()).contains("can't be read");
+    }
+
+    @Test
+    @DisplayName("Review Focus 2: non-ASCII text longer than the read buffers is read back whole")
+    void longNonAsciiTextIsReadBackWhole() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        String text = (String.valueOf((char) 0x65E5) + (char) 0xFC + (char) 0x672C).repeat(10_000);
+        var service = serviceFor(report);
+        service.update(existing -> marker(text));
+        List<String> seen = new ArrayList<>();
+
+        service.update(existing -> {
+            seen.add(existing.getGeneratedBy());
+            return existing;
+        });
+
+        assertThat(seen).containsExactly(text);
+    }
+
+    @Test
+    @DisplayName("Review Focus 3: a report that another tool saved with a byte order mark reaches the merge function")
+    void reportWithAByteOrderMarkReachesTheMerge() throws IOException {
+        Path report = tempDir.resolve("ctrf.json");
+        Files.writeString(report, (char) 0xFEFF + "{\"generatedBy\":\"first\"}", StandardCharsets.UTF_8);
+        List<String> seen = new ArrayList<>();
+
+        serviceFor(report).update(existing -> {
+            seen.add(existing.getGeneratedBy());
+            return marker("second");
+        });
+
+        assertThat(seen).containsExactly("first");
+        assertThat(logs.text()).isEmpty();
+    }
+
+    @Test
     @DisplayName("A write that fails halfway leaves the previous report parseable and unchanged")
     void writeThatFailsHalfwayLeavesThePreviousReport() throws IOException {
         Path report = tempDir.resolve("ctrf.json");

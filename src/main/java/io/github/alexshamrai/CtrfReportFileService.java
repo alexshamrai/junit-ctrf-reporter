@@ -6,6 +6,7 @@ import io.github.alexshamrai.json.CtrfJsonMapper;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.Reader;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -147,8 +148,8 @@ public class CtrfReportFileService {
         if (!Files.exists(report)) {
             return null;
         }
-        try {
-            return CtrfJsonMapper.read(Files.readString(report, StandardCharsets.UTF_8), CtrfJson.class);
+        try (Reader in = Files.newBufferedReader(report, StandardCharsets.UTF_8)) {
+            return CtrfJsonMapper.read(in, CtrfJson.class);
         } catch (IOException | RuntimeException e) {
             LOGGER.warning("Ignoring the existing report, which can't be read: " + report + " - " + e.getMessage());
             return null;

@@ -16,10 +16,12 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -82,6 +84,13 @@ class JsonGoldenTest {
         assertThat(CtrfJsonMapper.read(golden, model.getClass())).isEqualTo(JACKSON.readValue(golden, model.getClass()));
     }
 
+    @org.junit.jupiter.api.Test
+    void readerReadsALargeGeneratedReportAsJacksonDoes() throws IOException {
+        String json = CtrfJsonMapper.write(generatedReport(2_000));
+
+        assertThat(CtrfJsonMapper.read(new StringReader(json), CtrfJson.class)).isEqualTo(JACKSON.readValue(json, CtrfJson.class));
+    }
+
     static String goldenReport() {
         try (InputStream in = JsonGoldenTest.class.getResourceAsStream("/json/golden-report.json")) {
             if (in == null) {
@@ -91,6 +100,45 @@ class JsonGoldenTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /**
+     * A report with {@code count} tests of every status, every tenth failing with a message and a trace, every 25th
+     * retried, and every 100th with nested {@code extra} values and numeric parameters.
+     */
+    private static CtrfJson generatedReport(int count) {
+        Test.TestStatus[] statuses = Test.TestStatus.values();
+        List<Test> tests = new ArrayList<>();
+        for (int n = 0; n < count; n++) {
+            var test = Test.builder()
+                .testId("[engine:junit-jupiter]/[class:com.example.Generated" + (n / 50) + "]/[method:test" + n + "()]")
+                .name("test" + n + "()")
+                .status(statuses[n % statuses.length])
+                .duration(n)
+                .start(1_000L + n)
+                .stop(1_000L + 2L * n)
+                .filePath("com.example.Generated" + (n / 50))
+                .threadId("worker-" + (n % 4))
+                .tags(List.of("smoke", "t" + (n % 7)));
+            if (n % 10 == 0) {
+                test.message("expected: <" + n + "> but was: <" + (n + 1) + ">")
+                    .trace(TRICKY_TEXT + "\n\tat com.example.Generated.test" + n + "(Generated.java:" + n + ")");
+            }
+            if (n % 25 == 0) {
+                test.retries(1).flaky(true).retryAttempts(List.of(RetryAttempt.builder()
+                    .attempt(1).status(Test.TestStatus.FAILED).duration(1).start(1L).stop(2L).message("first try").build()));
+            }
+            if (n % 100 == 0) {
+                test.extra(Extra.builder().customData(nested()).build()).parameters(numbers());
+            }
+            tests.add(test.build());
+        }
+        var results = Results.builder()
+            .tool(Tool.builder().name("JUnit").version("6.1.3").build())
+            .summary(Summary.builder().tests(count).start(1_000L).stop(9_000L).build())
+            .tests(tests)
+            .build();
+        return CtrfJson.builder().runId("generated").results(results).build();
     }
 
     private static CtrfJson fullReport() {
