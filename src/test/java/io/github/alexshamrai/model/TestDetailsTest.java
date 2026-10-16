@@ -1,10 +1,13 @@
 package io.github.alexshamrai.model;
 
 import io.github.alexshamrai.adapter.ExtensionContextAdapter;
+import io.github.alexshamrai.adapter.TestContextAdapter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -163,5 +166,53 @@ class TestDetailsTest {
         assertNotNull(testDetails.startTime());
         // Verify startTime is set to current time (within reasonable bounds)
         assertEquals(true, testDetails.startTime() >= beforeTime && testDetails.startTime() <= afterTime);
+    }
+
+    @Test
+    void recordWithoutASuiteHasAnEmptyOne() {
+        assertEquals(List.of(), new TestDetails(1L, Set.of(), null, "id", "test()").suite());
+    }
+
+    @Test
+    void suiteIsCopiedAndNullMeansNone() {
+        var names = new ArrayList<>(List.of("Payments", "Refunds"));
+
+        var details = new TestDetails(1L, Set.of(), null, "id", "test()", names);
+        names.add("changed afterwards");
+
+        assertEquals(List.of("Payments", "Refunds"), details.suite());
+        assertEquals(List.of(), new TestDetails(1L, Set.of(), null, "id", "test()", null).suite());
+    }
+
+    @Test
+    void fromAdapter_takesTheAdaptersSuite() {
+        TestContextAdapter adapter = new TestContextAdapter() {
+            @Override
+            public String getUniqueId() {
+                return "id";
+            }
+
+            @Override
+            public String getDisplayName() {
+                return "refundsTheFee()";
+            }
+
+            @Override
+            public Set<String> getTags() {
+                return Set.of();
+            }
+
+            @Override
+            public Optional<String> getSourceLocation() {
+                return Optional.empty();
+            }
+
+            @Override
+            public List<String> getContainerNames() {
+                return List.of("Payments", "Refunds");
+            }
+        };
+
+        assertEquals(List.of("Payments", "Refunds"), TestDetails.fromAdapter(adapter).suite());
     }
 }

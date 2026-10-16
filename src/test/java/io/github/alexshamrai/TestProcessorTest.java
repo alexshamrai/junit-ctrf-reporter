@@ -20,6 +20,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -87,6 +88,21 @@ public class TestProcessorTest {
         assertEquals(1000, result.getDuration());
         assertNotNull(result.getThreadId());
         assertEquals(Thread.currentThread().getName(), result.getThreadId());
+    }
+
+    @org.junit.jupiter.api.Test
+    void createTest_copiesTheSuite() {
+        var details = new TestDetails(1_000L, Set.of(), "com.example.PaymentTest", "id", "refundsTheFee()",
+            List.of("Payments", "Refunds"));
+
+        assertEquals(List.of("Payments", "Refunds"), testProcessor.createTest("refundsTheFee()", details, 2_000L).getSuite());
+    }
+
+    @org.junit.jupiter.api.Test
+    void createTest_leavesAnEmptySuiteOut() {
+        var details = new TestDetails(1_000L, Set.of(), "com.example.PaymentTest", "id", "test()");
+
+        assertNull(testProcessor.createTest("test()", details, 2_000L).getSuite());
     }
 
     @org.junit.jupiter.api.Test
