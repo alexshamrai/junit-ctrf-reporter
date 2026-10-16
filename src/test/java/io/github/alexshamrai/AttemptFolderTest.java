@@ -315,4 +315,20 @@ class AttemptFolderTest {
             .duration(5)
             .build();
     }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Unfolding gives the earlier attempts the test's suite, and folding keeps the final attempt's")
+    void suiteSurvivesUnfoldAndFold() {
+        var suite = List.of("Payments", "Refunds");
+        var test = Test.builder().testId(TEST_1).filePath(CLASS_A).name("test1()").suite(suite)
+            .status(PASSED).start(300L).stop(305L).duration(5)
+            .retries(1)
+            .retryAttempts(List.of(RetryAttempt.builder().attempt(1).status(FAILED).duration(7).start(100L).stop(107L).build()))
+            .build();
+
+        var attempts = AttemptFolder.unfold(List.of(test));
+
+        assertThat(attempts).extracting(Test::getSuite).containsExactly(suite, suite);
+        assertThat(AttemptFolder.fold(attempts)).singleElement().extracting(Test::getSuite).isEqualTo(suite);
+    }
 }

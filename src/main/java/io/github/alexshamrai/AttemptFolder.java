@@ -112,6 +112,7 @@ final class AttemptFolder {
             .name(test.getName())
             .filePath(test.getFilePath())
             .tags(test.getTags())
+            .suite(test.getSuite())
             .status(earlier.getStatus())
             .duration(earlier.getDuration())
             .start(earlier.getStart())
