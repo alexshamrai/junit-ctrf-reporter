@@ -104,6 +104,7 @@ final class ReportMerger {
                     .name(latest.getName())
                     .filePath(latest.getFilePath())
                     .tags(latest.getTags())
+                    .suite(latest.getSuite())
                     .status(PASSED)
                     .start(success.start())
                     .stop(success.stop())

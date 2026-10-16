@@ -195,6 +195,31 @@ class ReportMergerTest {
         assertThat(logs.text()).contains("Ignoring the existing report, which can't be merged");
     }
 
+    @org.junit.jupiter.api.Test
+    @DisplayName("A recovered container keeps the suite of its failure")
+    void recoveredContainerKeepsItsSuite() {
+        var failure = attempt(CLASS_ID, FAILED, 60L).toBuilder().name("initializationError").suite(List.of("DbTest")).build();
+        var existing = report(RUN, 50L, 90L, true, failure);
+
+        var run = ReportMerger.merge(existing, RUN, List.of(), List.of(new ContainerSuccess(CLASS_ID, 300L, 310L)), 100L, 400L, true);
+
+        assertThat(run.tests()).singleElement().extracting(Test::getSuite).isEqualTo(List.of("DbTest"));
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Review Focus 4: a test from a report written before suites gets the suite of its new attempt")
+    void testFromAnOlderReportGetsTheSuiteOfItsNewAttempt() {
+        var existing = report(RUN, 50L, 90L, true, attempt("id-1", FAILED, 60L));
+        var newAttempt = attempt("id-1", PASSED, 150L).toBuilder().suite(List.of("DbTest")).build();
+
+        var run = ReportMerger.merge(existing, RUN, List.of(newAttempt), List.of(), 100L, 200L, true);
+
+        assertThat(run.tests()).singleElement().satisfies(test -> {
+            assertThat(test.getSuite()).containsExactly("DbTest");
+            assertThat(test.getRetries()).isEqualTo(1);
+        });
+    }
+
     private static Test attempt(String testId, Test.TestStatus status, long start) {
         return Test.builder()
             .testId(testId)
