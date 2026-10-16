@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0. Phase 3 is merged to `master` @ `61df632` (#138), not yet released; it ships as 0.5.1. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -20,7 +20,7 @@ Each improvement item includes:
 
 ## Status on `master` — 2026-10-14
 
-`master` @ `61df632` (updated 2026-10-16). Phase 3 is merged (#138) and ships as 0.5.1. Phases 1 and 2 are released as [0.5.0](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.0) (2026-10-15, Maven Central `io.github.alexshamrai:junit-ctrf-reporter:0.5.0`, release PR #136).
+`master` @ `6ff69d5` (updated 2026-10-16). Phase 3 is released as [0.5.1](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.1) (2026-10-16, release PR #139). Phases 1 and 2 are released as [0.5.0](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.0) (2026-10-15, Maven Central `io.github.alexshamrai:junit-ctrf-reporter:0.5.0`, release PR #136).
 
 | Item | Status | PR | Commits |
 |---|---|---|---|
@@ -47,7 +47,9 @@ Each improvement item includes:
 | [CB-2](#cb-2-a-nested-junit-run-ends-the-outer-run-re-scoped-from-race-condition-in-finishtestrun) Nested runs are ignored | Done | #138 | `ecb4fd1` |
 | [HP-10](#hp-10-make-the-testexecutionlistener-the-single-core-integration-point) Listener as the recommended setup; run ownership | Done | #138 | `ecb4fd1`, `61df632` |
 | [HP-1](#hp-1-refactor-singleton-pattern-in-ctrfreportmanager) Collaborators injected; singleton only as the default instance | Done | #138 | `61df632` |
-| [Phase 3](#phase-3-design--051) HP-10, HP-1, CB-2, MP-6, MP-7, MP-8, MP-9, HP-3 | Done; merged 2026-10-15 (rebase, eight commits); release 0.5.1 pending | #138 | `47cd66b`..`61df632` |
+| [Phase 3](#phase-3-design--051) HP-10, HP-1, CB-2, MP-6, MP-7, MP-8, MP-9, HP-3 | Done; merged 2026-10-15 (rebase, eight commits); released as 0.5.1 on 2026-10-16 (#139) | #138 | `47cd66b`..`61df632` |
+| Build with JDK 25, keep Java 17 (not a plan item): `--release 17` for main and test code; the tests and the compat consumers run on Java 17, 21 and 25 | Done | #140 | `6776c2e` |
+| [Tests on Jackson 3](#follow-ups-after-051) Jackson 2 removed; the JSON output pinned by golden JSON | Done | #141 | `6ff69d5` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -55,7 +57,7 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 
 ## Phase 3 Design — 0.5.1
 
-**Status**: Done. Designed 2026-10-15 against `master` @ `635b4e6`, after the 0.5.0 release; merged 2026-10-15 as #138 (`47cd66b`..`61df632`, eight commits, rebase-merged). Ships as **0.5.1**, not yet released.
+**Status**: Done. Designed 2026-10-15 against `master` @ `635b4e6`, after the 0.5.0 release; merged 2026-10-15 as #138 (`47cd66b`..`61df632`, eight commits, rebase-merged). Released as **0.5.1** on 2026-10-16 (release PR #139, `de63c00`).
 **Implementation plan**: [`docs/plans/2026-10-15-phase-3-0.5.1.md`](docs/plans/2026-10-15-phase-3-0.5.1.md)
 **Items**:
 - [HP-10](#hp-10-make-the-testexecutionlistener-the-single-core-integration-point) with [HP-1](#hp-1-refactor-singleton-pattern-in-ctrfreportmanager);
@@ -86,10 +88,13 @@ The text below is corrected where implementation proved it wrong.
 ### Follow-ups after 0.5.1
 
 - **Streaming JSON (0.5.2):** the writer and the reader build the whole report in memory. A 56 MB report (about 100,000 tests) needs about 340 MB of heap, against 200 MB with Jackson. Write and read through a `Writer` and a `Reader` instead.
-- **Tests on Jackson 3:**
-  - compare `JacksonDifferentialTest`'s output with golden files of the 0.5.0 output, instead of with Jackson 2;
-  - move `ScenarioRunner`, `CtrfModelJsonTest` and the integration validator to Jackson 3;
-  - drop `jackson-databind` 2.x from the build. The schema validator's Jackson 3 then remains the only Jackson, in test scope only.
+- **Tests on Jackson 3: done** (#141, `6ff69d5`, 2026-10-16). Jackson 2 is gone from the build: no module uses `jackson-databind` or `jackson-core` 2.x. The tests and the integration validator read JSON with Jackson 3 only.
+  - **Golden JSON:** `JsonGoldenTest` replaces `JacksonDifferentialTest`. It pins the writer's output to the JSON that 0.5.0 wrote with Jackson 2. Before Jackson 2 was removed, this JSON was checked to be byte-identical to Jackson 2's output. It also checks that the reader reads that JSON as Jackson 3 does.
+    - The full report is in `src/test/resources/json/golden-report.json`. It holds every field, all kinds of numbers, nested values and tricky text.
+    - The short cases, such as `{"duration":0}`, are inline strings.
+  - **Why golden JSON:** Jackson 3 can't be the reference, because it writes differently. For example, it sorts properties alphabetically by default.
+  - **Annotations:** the model's Jackson annotations stay compile-only. Jackson 2 and 3 share them (`com.fasterxml.jackson.annotation`), and their version comes from the Jackson 3 BOM.
+  - **Compat:** the consumers check that neither Jackson 2 nor Jackson 3 is on their test classpath.
 - **Deferred review minors,** all triaged "can wait" by the final review:
   - an `Error` thrown from a failure's `toString()` still loses the entry;
   - a capped trace can keep a stray `\r` when the cut falls inside `\r\n`;
@@ -499,7 +504,7 @@ public List<Test> getExistingTests() {
 **Priority**: Medium (lowered from Critical on 2026-10-08)
 **Complexity**: Moderate
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java`, `launcher/CtrfListener.java`, `jupiter/TestRunExtension.java`
-**Status**: Done (#138, `ecb4fd1`), 2026-10-15; ships in 0.5.1. Re-scoped 2026-10-08. Nested runs are ignored: a `TestRun` remembers its owner, and only the owner can end it. Covered by `NestedRunScenarioTest`.
+**Status**: Done (#138, `ecb4fd1`), 2026-10-15; released in 0.5.1. Re-scoped 2026-10-08. Nested runs are ignored: a `TestRun` remembers its owner, and only the owner can end it. Covered by `NestedRunScenarioTest`.
 
 #### Review Note (2026-10-08)
 The original item assumed that test callbacks can run while `finishTestRun()` executes, so results added between the CAS and `clear()` would be lost. With a single entry point that can't happen. JUnit calls `testPlanExecutionFinished` (listener), and closes the root store (extension), only after every test on every thread has finished. Verified: 10 runs of 1,000 tests on 8–9 parallel threads (5 with only the listener, 5 with only the extension) each reported 1,000 of 1,000 tests.
@@ -1004,7 +1009,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Complex
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java`, `CtrfExtension.java`, `CtrfListener.java`, test files
-**Status**: Done (#138, `61df632`), 2026-10-15; ships in 0.5.1. The manager's collaborators are injected through one package-private constructor. The singleton remains only as `getInstance()`, the default instance that the JUnit-created entry points and `EnvironmentHealthTracker` use.
+**Status**: Done (#138, `61df632`), 2026-10-15; released in 0.5.1. The manager's collaborators are injected through one package-private constructor. The singleton remains only as `getInstance()`, the default instance that the JUnit-created entry points and `EnvironmentHealthTracker` use.
 
 #### Review Note (2026-10-08)
 Once the listener owns the run state (HP-10), the singleton is only needed behind `EnvironmentHealthTracker`'s static API. Until each scenario can get a fresh manager, the regression tests in TI-5 have to run scenarios in forked JVMs.
@@ -1147,7 +1152,7 @@ Each new class should be:
 **Priority**: High
 **Complexity**: Moderate
 **Files**: `CtrfReportFileService.java`, `build.gradle`, and classes with System.out/err
-**Status**: Done (#138, `47cd66b`), 2026-10-15; ships in 0.5.1. Built with `java.util.logging`, not SLF4J (approach changed 2026-10-08), so the SLF4J-specific criteria below don't apply.
+**Status**: Done (#138, `47cd66b`), 2026-10-15; released in 0.5.1. Built with `java.util.logging`, not SLF4J (approach changed 2026-10-08), so the SLF4J-specific criteria below don't apply.
 
 #### Review Note (2026-10-08)
 On `master`, SLF4J and Logback are used only by the `integration-ctrf-validator` module, not by the library. Adding `slf4j-api` to a library that sits on every user's test classpath adds a dependency, and without a provider SLF4J 2 prints a "No SLF4J providers were found" warning. Use `java.util.logging` instead: no dependency, and the JUnit Platform itself logs through JUL. See MP-9. The rest of the prompt (log levels, no `System.out`/`System.err`) still applies.
@@ -1697,7 +1702,7 @@ Requirements:
 **Priority**: High
 **Complexity**: Complex
 **Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `jupiter/TestRunExtension.java`, `CtrfReportManager.java`, `EnvironmentHealthTracker.java`, `README.md`
-**Status**: Done (#138, `ecb4fd1`, `61df632`), 2026-10-15; ships in 0.5.1. Motivated by the verified defects in CB-5, HP-8 and HP-9. Built as designed in [Phase 3 Design — 0.5.1](#phase-3-design--051): run ownership (CB-2), and the README's "Choosing a setup". The listener stays opt-in.
+**Status**: Done (#138, `ecb4fd1`, `61df632`), 2026-10-15; released in 0.5.1. Motivated by the verified defects in CB-5, HP-8 and HP-9. Built as designed in [Phase 3 Design — 0.5.1](#phase-3-design--051): run ownership (CB-2), and the README's "Choosing a setup". The listener stays opt-in.
 
 #### Prompt
 ````
@@ -2246,7 +2251,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `jupiter/TestRunExtension.java`
-**Status**: Done (#138, `b52b060`), 2026-10-15; ships in 0.5.1.
+**Status**: Done (#138, `b52b060`), 2026-10-15; released in 0.5.1.
 
 #### Prompt
 ````
@@ -2280,7 +2285,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `jupiter/CtrfExtension.java`, `jupiter/TestRunExtension.java`, `CtrfReportManager.java`
-**Status**: Done (#138, `639fd06`), 2026-10-15; ships in 0.5.1. The extension guards every callback; the listener needs no guard, because JUnit's launcher already catches listener exceptions.
+**Status**: Done (#138, `639fd06`), 2026-10-15; released in 0.5.1. The extension guards every callback; the listener needs no guard, because JUnit's launcher already catches listener exceptions.
 
 #### Prompt
 ````
@@ -2315,7 +2320,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `TestProcessor.java`, `config/CtrfConfig.java`, `config/ConfigReader.java`
-**Status**: Done (#138, `8f91c54`), 2026-10-15; ships in 0.5.1. `ctrf.max.trace.length` defaults to 20,000.
+**Status**: Done (#138, `8f91c54`), 2026-10-15; released in 0.5.1. `ctrf.max.trace.length` defaults to 20,000.
 
 #### Prompt
 ````
@@ -2343,7 +2348,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `config/CtrfConfig.java`, `config/ConfigReader.java`, `CtrfReportFileService.java`, `build.gradle`, `README.md`
-**Status**: Done (#138, `d888754`, `037e253`), 2026-10-15; ships in 0.5.1. Our own config loader, JSON writer and JSON reader leave no runtime dependencies. Finding 2 was wrong: `owner` is developed again (`2.0.0-SNAPSHOT`), but hasn't released since 1.0.12 (2020-06-06).
+**Status**: Done (#138, `d888754`, `037e253`), 2026-10-15; released in 0.5.1. Our own config loader, JSON writer and JSON reader leave no runtime dependencies. Finding 2 was wrong: `owner` is developed again (`2.0.0-SNAPSHOT`), but hasn't released since 1.0.12 (2020-06-06).
 
 #### Prompt
 ````
@@ -4651,12 +4656,12 @@ Report Generation:
 
 ## Implementation Order
 
-Updated 2026-10-08; progress marked 2026-10-14. This replaces the original four-phase order, whose Phase 1 and most of Phase 2 are already done on `master`.
+Updated 2026-10-08; progress marked 2026-10-16. This replaces the original four-phase order, whose Phase 1 and most of Phase 2 are already done on `master`.
 
 ### Already done on `master`
 CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 (its regression is tracked in CB-6), TI-3 (partially)
 
-Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
+Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. Phase 3 is done (#138) and released as 0.5.1. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
 
 ### Phase 1: Stop wrong results and broken builds (small, independent changes)
 1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix. **Done** (#124)
@@ -4678,14 +4683,14 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 
 ### Phase 3: Architecture and robustness
 
-Designed 2026-10-15 for 0.5.1; see [Phase 3 Design — 0.5.1](#phase-3-design--051).
+**Released as 0.5.1** on 2026-10-16 (release PR #139). Designed 2026-10-15; see [Phase 3 Design — 0.5.1](#phase-3-design--051). Its follow-ups are in [Follow-ups after 0.5.1](#follow-ups-after-051): the Jackson 3 one is done (#141); streaming JSON and the deferred minors are open.
 
-13. HP-10: Listener as the single core integration point, then revisit HP-1
-14. CB-2: Only the run that started reporting may end it (nested JUnit runs)
-15. MP-6: `AutoCloseable` instead of `CloseableResource`
-16. MP-7: Reporter errors never affect test outcomes
-17. MP-8: Separate `message` from `trace`
-18. MP-9: Dependency and configuration hygiene (includes HP-3, using JUL)
+13. HP-10: Listener as the single core integration point, then revisit HP-1. **Done** (#138)
+14. CB-2: Only the run that started reporting may end it (nested JUnit runs). **Done** (#138)
+15. MP-6: `AutoCloseable` instead of `CloseableResource`. **Done** (#138)
+16. MP-7: Reporter errors never affect test outcomes. **Done** (#138)
+17. MP-8: Separate `message` from `trace`. **Done** (#138)
+18. MP-9: Dependency and configuration hygiene (includes HP-3, using JUL). **Done** (#138)
 
 ### Phase 4: Polish
 19. DI-3, DI-1, DI-2: Documentation
