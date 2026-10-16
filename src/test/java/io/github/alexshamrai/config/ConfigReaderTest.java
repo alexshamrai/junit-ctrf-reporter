@@ -361,6 +361,18 @@ class ConfigReaderTest {
     }
 
     @Test
+    @DisplayName("A ctrf.properties saved with a UTF-8 byte order mark keeps its first key")
+    void propertiesFileWithAByteOrderMarkKeepsItsFirstKey(@TempDir Path directory) throws Exception {
+        Files.writeString(directory.resolve("ctrf.properties"), (char) 0xFEFF + "ctrf.app.name=payments\nctrf.app.version=1.2.3\n",
+            StandardCharsets.UTF_8);
+
+        ConfigReader reader = readWithPropertiesFrom(directory);
+
+        assertEquals("payments", reader.getAppName());
+        assertEquals("1.2.3", reader.getAppVersion());
+    }
+
+    @Test
     @DisplayName("Review Focus 2: a ctrf.properties that isn't valid UTF-8 is read as ISO-8859-1")
     void propertiesFileThatIsNotUtf8IsReadAsIso88591(@TempDir Path directory) throws Exception {
         String name = "Caf" + (char) 0xE9;
