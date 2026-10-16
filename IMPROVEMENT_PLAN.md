@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 is done: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), every scenario's report is checked against the official schema (TI-5, #146), and the file service's behaviour on permission errors, odd paths and interrupts is pinned (TI-2, #147). MP-4 (#148) does change the jar: a blank, invalid or directory `ctrf.report.path` no longer loses the report. So does #149: through the extension, a class whose setup or teardown aborts is no longer reported as failed; TI-1 (#150), the concurrency tests, found it. DI-1 and DI-2 (#151) document the public API and move the architecture into `ARCHITECTURE.md`. The next release's notes are the 0.5.2 ones, HP-12's, MP-4's line in its status, and #149's line in TI-1's status. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 is done: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it ships in 0.5.2, the next release (decided 2026-10-16; semver would make a feature 0.6.0). Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), every scenario's report is checked against the official schema (TI-5, #146), and the file service's behaviour on permission errors, odd paths and interrupts is pinned (TI-2, #147). MP-4 (#148) does change the jar: a blank, invalid or directory `ctrf.report.path` no longer loses the report. So does #149: through the extension, a class whose setup or teardown aborts is no longer reported as failed; TI-1 (#150), the concurrency tests, found it. DI-1 and DI-2 (#151) document the public API and move the architecture into `ARCHITECTURE.md`. `CtrfExtension` is deprecated in 0.5.2 (#153) and is to be removed in 0.6.0 (#152). The 0.5.2 release notes are the 0.5.2 ones, HP-12's, MP-4's line in its status, #149's line in TI-1's status, and #153's deprecation notice. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -60,6 +60,7 @@ Each improvement item includes:
 | [TI-1](#ti-1-add-comprehensive-concurrency-tests) Concurrency tests | Done: 4,000 lifecycles and 200 concurrent finishes in-process; JUnit's parallel execution through both entry points | #150 | `811cc4a` |
 | [DI-1](#di-1-add-comprehensive-javadoc) Javadoc | Done: every public class and method documented; checkstyle keeps it so | #151 | `2b9e66e` |
 | [DI-2](#di-2-add-architecture-documentation) Architecture doc | Done: `ARCHITECTURE.md`, imported by `CLAUDE.md` | #151 | `c292639` |
+| Deprecate `CtrfExtension` (not a plan item; decided 2026-10-16) | Done: `@Deprecated(since = "0.5.2")` with a warning once per run; removal is #152, for 0.6.0 | #153 | `2fa65ec` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -67,7 +68,7 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 
 ## HP-12 Design — `suite`
 
-**Status**: Done. Designed 2026-10-16 against `master` @ `513c03d`; merged 2026-10-16 as #144 (`04fe3c9`..`c793e51`, four commits, rebase-merged). Not released yet. The version is decided at release: this is a feature, so semver says 0.6.0.
+**Status**: Done. Designed 2026-10-16 against `master` @ `513c03d`; merged 2026-10-16 as #144 (`04fe3c9`..`c793e51`, four commits, rebase-merged). Not released yet. Ships in 0.5.2 (decided 2026-10-16).
 **Item**: [HP-12](#hp-12-fill-suite-with-each-tests-container-hierarchy). CTRF viewers group and filter tests by `suite`, defined as "Suite hierarchy from top-level to immediate parent", an array of strings with at least one item. This library never sets it, so every test appears ungrouped.
 
 ### The rule
@@ -5057,7 +5058,7 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 
 ### Phase 4: Polish
 
-**Done** on 2026-10-16. What it changes for users ships with 0.5.2's changes as the next release, 0.6.0 by semver.
+**Done** on 2026-10-16. What it changes for users ships in 0.5.2, together with 0.5.2's own changes.
 
 19. HP-12: Fill `suite` with each test's container hierarchy. **Done** (#144), 2026-10-16; not released
 20. DI-3: Fix incorrect documentation. **Done** (#145), 2026-10-16
@@ -5067,6 +5068,10 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 24. MP-4: Input validation, re-scoped to the report path. **Done** (#148), 2026-10-16; not released
 25. TI-1: Concurrency tests. **Done** (#150), 2026-10-16; it found the extension's aborted-class bug, fixed in #149, not released
 26. CQ-2, CQ-4, SP-2: **Not planned** (2026-10-16); see below
+27. Deprecate `CtrfExtension` in favour of `CtrfListener`. **Done** (#153), 2026-10-16; ships in 0.5.2. Decided after Phase 4: the extension can't see what the listener sees, it had bugs the listener never had, and every feature needed two implementations
+
+### Phase 5: One entry point (0.6.0)
+28. Remove `CtrfExtension` and `TestRunExtension`, their tests, the extension integration module and its workflow, and the extension compat consumer (#152). Then decide whether the jar registers the listener itself, behind a `ctrf.enabled` switch
 
 ### Not planned
 - CQ-1: superseded by CB-7 and HP-6
