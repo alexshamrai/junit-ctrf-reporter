@@ -6,6 +6,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * The {@code results.tool} object: the tool that ran the tests, JUnit, and its version.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

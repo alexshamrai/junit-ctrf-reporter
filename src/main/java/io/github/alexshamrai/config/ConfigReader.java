@@ -121,10 +121,20 @@ public class ConfigReader {
         this.runId = string("ctrf.run.id");
     }
 
+    /**
+     * Returns where the report is written; a blank or invalid value has already fallen back to the default.
+     *
+     * @return {@code ctrf.report.path}, {@code ctrf-report.json} by default
+     */
     public String getReportPath() {
         return reportPath;
     }
 
+    /**
+     * Returns the longest failure {@code message} the report holds, in characters; a longer one is cut and ends with {@code ...}.
+     *
+     * @return {@code ctrf.max.message.length}, 500 by default
+     */
     public int getMaxMessageLength() {
         return maxMessageLength;
     }
@@ -138,70 +148,155 @@ public class ConfigReader {
         return maxTraceLength;
     }
 
+    /**
+     * Returns the JUnit version the report names in {@code results.tool.version}.
+     *
+     * @return {@code junit.version}, or {@code null} if it isn't set
+     */
     public String getJUnitVersion() {
         return junitVersion;
     }
 
+    /**
+     * Returns the report's name, {@code results.environment.reportName}.
+     *
+     * @return {@code ctrf.report.name}, or {@code null} if it isn't set
+     */
     public String getReportName() {
         return reportName;
     }
 
+    /**
+     * Returns the name of the application under test, {@code results.environment.appName}.
+     *
+     * @return {@code ctrf.app.name}, or {@code null} if it isn't set
+     */
     public String getAppName() {
         return appName;
     }
 
+    /**
+     * Returns the version of the application under test, {@code results.environment.appVersion}.
+     *
+     * @return {@code ctrf.app.version}, or {@code null} if it isn't set
+     */
     public String getAppVersion() {
         return appVersion;
     }
 
+    /**
+     * Returns the build's name or ID, {@code results.environment.buildName}.
+     *
+     * @return {@code ctrf.build.name}, or {@code null} if it isn't set
+     */
     public String getBuildName() {
         return buildName;
     }
 
+    /**
+     * Returns the CI build number: a whole number is written as {@code buildNumber}, any other value as {@code buildId}.
+     *
+     * @return {@code ctrf.build.number}, or {@code null} if it isn't set
+     */
     public String getBuildNumber() {
         return buildNumber;
     }
 
+    /**
+     * Returns the URL of the build in the CI system, {@code results.environment.buildUrl}.
+     *
+     * @return {@code ctrf.build.url}, or {@code null} if it isn't set
+     */
     public String getBuildUrl() {
         return buildUrl;
     }
 
+    /**
+     * Returns the source repository's name, {@code results.environment.repositoryName}.
+     *
+     * @return {@code ctrf.repository.name}, or {@code null} if it isn't set
+     */
     public String getRepositoryName() {
         return repositoryName;
     }
 
+    /**
+     * Returns the source repository's URL, {@code results.environment.repositoryUrl}.
+     *
+     * @return {@code ctrf.repository.url}, or {@code null} if it isn't set
+     */
     public String getRepositoryUrl() {
         return repositoryUrl;
     }
 
+    /**
+     * Returns the commit being tested, {@code results.environment.commit}.
+     *
+     * @return {@code ctrf.commit}, or {@code null} if it isn't set
+     */
     public String getCommit() {
         return commit;
     }
 
+    /**
+     * Returns the source control branch, {@code results.environment.branchName}.
+     *
+     * @return {@code ctrf.branch.name}, or {@code null} if it isn't set
+     */
     public String getBranchName() {
         return branchName;
     }
 
+    /**
+     * Returns the operating system platform, {@code results.environment.osPlatform}.
+     *
+     * @return {@code ctrf.os.platform}, or {@code null} if it isn't set
+     */
     public String getOsPlatform() {
         return osPlatform;
     }
 
+    /**
+     * Returns the operating system release, {@code results.environment.osRelease}.
+     *
+     * @return {@code ctrf.os.release}, or {@code null} if it isn't set
+     */
     public String getOsRelease() {
         return osRelease;
     }
 
+    /**
+     * Returns the operating system version, {@code results.environment.osVersion}.
+     *
+     * @return {@code ctrf.os.version}, or {@code null} if it isn't set
+     */
     public String getOsVersion() {
         return osVersion;
     }
 
+    /**
+     * Returns the test environment, such as staging, {@code results.environment.testEnvironment}.
+     *
+     * @return {@code ctrf.test.environment}, or {@code null} if it isn't set
+     */
     public String getTestEnvironment() {
         return testEnvironment;
     }
 
+    /**
+     * Returns whether the report gets {@code results.summary.extra.startupDuration}: from the run's start to its first test's.
+     *
+     * @return {@code ctrf.calculate.startup.duration}, false by default
+     */
     public boolean calculateStartupDuration() {
         return calculateStartupDuration;
     }
 
+    /**
+     * Returns the configured run id, which the JVMs of one build share; without one, the run id is detected.
+     *
+     * @return {@code ctrf.run.id}, or {@code null} if it isn't set
+     */
     public String getRunId() {
         return runId;
     }

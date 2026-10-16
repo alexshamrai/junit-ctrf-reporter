@@ -14,6 +14,9 @@ import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PENDING;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.SKIPPED;
 
+/**
+ * Builds a report's {@code results.summary} from its tests.
+ */
 public class SummaryUtil {
 
     /**

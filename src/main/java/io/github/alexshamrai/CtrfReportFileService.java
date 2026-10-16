@@ -58,6 +58,11 @@ public class CtrfReportFileService {
     private final ConfigReader configReader;
     private final Duration lockTimeout;
 
+    /**
+     * Creates a service for the report at {@code ctrf.report.path}, which waits up to 60 seconds for the lock.
+     *
+     * @param configReader the configuration that names the report
+     */
     public CtrfReportFileService(ConfigReader configReader) {
         this(configReader, DEFAULT_LOCK_TIMEOUT);
     }
