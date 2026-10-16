@@ -175,6 +175,8 @@ The library handles parallel test execution using thread-safe collections manage
 
 While tests run, thread safety comes from concurrent data structures and atomic operations. Writing the report is the one locked section: `CtrfReportFileService.update` takes a JVM-wide lock and an exclusive file lock on `<report>.lock`, so the JVMs of one run (forks, retry rounds) merge one after another. **ReportMerger** and **AttemptFolder** are stateless and run inside that section.
 
+`CtrfReportManagerConcurrencyTest` pins this from many threads at once (whole test lifecycles, and concurrent finishes of one run), and `ParallelExecutionScenarioTest` runs JUnit's parallel execution on 8 threads through both entry points.
+
 ### Configuration
 
 Configuration priority (highest to lowest):
