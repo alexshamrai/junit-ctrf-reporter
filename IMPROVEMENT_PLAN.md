@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started with [HP-12](#hp-12-design--suite), designed. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -59,7 +59,7 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 
 ## HP-12 Design — `suite`
 
-**Status**: Designed 2026-10-16 against `master` @ `513c03d`; not implemented yet. The version is decided at release: this is a feature, so semver says 0.6.0.
+**Status**: Done. Designed 2026-10-16 against `master` @ `513c03d`; merged 2026-10-16 as #144 (`04fe3c9`..`c793e51`, four commits, rebase-merged). Not released yet. The version is decided at release: this is a feature, so semver says 0.6.0.
 **Item**: [HP-12](#hp-12-fill-suite-with-each-tests-container-hierarchy). CTRF viewers group and filter tests by `suite`, defined as "Suite hierarchy from top-level to immediate parent", an array of strings with at least one item. This library never sets it, so every test appears ungrouped.
 
 ### The rule
@@ -185,19 +185,30 @@ As for 0.5.2:
   - all main classes are class-file version 61.
 - **Commits 2 to 4 also run** both integration modules with the validator, and compat.
 
+### Changes during implementation (2026-10-16)
+
+- **Vintage shows a class by its simple name,** so a JUnit 4 test's `suite` is `["LegacyTest"]`, not the full class name. The example above is corrected, and compat expects the simple name for every consumer.
+- **The final review** by a fresh reviewer found two Important issues, both fixed before the merge with a test that failed first: the engine inside a `@Suite` class stood in every suite, and a `TestPlan` that throws would have lost the test's name. See "Added after the final review" under Decisions.
+- **A test that passed without the change,** the check that the listener and the extension agree, compared two maps of empty suites. It now also requires the listener's suites to be there.
+- **Follow-ups,** the review's minors, not done:
+  - a display name of null would make `TestDetails` throw in `List.copyOf`; JUnit never gives one;
+  - the comment at `CtrfLogicTest.java:30` is 150 characters long, and the validator module has no checkstyle;
+  - display names with `&`, quotes, `<`, a backslash or an emoji are pinned only at the validator's oracle; an end-to-end fake would pin them through the writer.
+
 ### Release notes (user-visible changes)
 
 - **Every test has a `suite`:** the display names of its classes, nested classes and parameterized or dynamic containers, outermost first, without the engine. CTRF viewers can now group tests as the IDE does.
 - **A class's `initializationError` or `teardownError`** is grouped under that class.
+- **Under a `@Suite` class,** no engine is part of `suite` either. Through `CtrfListener`, the `@Suite` class's name comes first; `CtrfExtension` sees only what Jupiter runs, so its suites start at the test class.
 
 ### Acceptance Criteria
 
-- [ ] Every test entry has a `suite` that matches the official schema, except a test known only by its ID
-- [ ] The listener and the extension produce the same `suite` for the same test
-- [ ] Scenario tests cover nested classes, parameterized, repeated and dynamic tests, class-level failures, a skipped class and a recovered class
-- [ ] The integration validator checks each entry's `suite` against JUnit's own event log
-- [ ] No public signature changes; existing `TestDetails` and `TestIdentifierAdapter` constructors keep working
-- [ ] All library classes are class-file version 61 (Java 17)
+- [x] Every test entry has a `suite` that matches the official schema, except a test known only by its ID
+- [x] The listener and the extension produce the same `suite` for the same test; under `@Suite`, only the listener has the `@Suite` class first
+- [x] Scenario tests cover nested classes, parameterized, repeated and dynamic tests, class-level failures, a skipped class and a recovered class
+- [x] The integration validator checks each entry's `suite` against JUnit's own event log
+- [x] No public signature changes; existing `TestDetails` and `TestIdentifierAdapter` constructors keep working
+- [x] All library classes are class-file version 61 (Java 17)
 
 ---
 
@@ -2081,7 +2092,7 @@ Reproduced through both entry points: `@BeforeAll` fails in round 1 and passes i
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `model/TestDetails.java`, `TestProcessor.java`, `adapter/*`, scenario tests
-**Status**: Designed 2026-10-16; see [HP-12 Design — `suite`](#hp-12-design--suite), which settles the questions below. Split from HP-5 on 2026-10-15; HP-5 types `suite` as a list but leaves it unset.
+**Status**: Done (#144, `04fe3c9`..`c793e51`), 2026-10-16; not released. Designed 2026-10-16; see [HP-12 Design — `suite`](#hp-12-design--suite), which settles the questions below. Split from HP-5 on 2026-10-15; HP-5 types `suite` as a list but leaves it unset.
 
 #### Why
 
@@ -5005,8 +5016,9 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 18. MP-9: Dependency and configuration hygiene (includes HP-3, using JUL). **Done** (#138)
 
 ### Phase 4: Polish
-19. DI-3, DI-1, DI-2: Documentation
-20. MP-4, CQ-2, CQ-4, TI-1, TI-2, SP-2, HP-12
+19. HP-12: Fill `suite` with each test's container hierarchy. **Done** (#144), 2026-10-16; not released
+20. DI-3, DI-1, DI-2: Documentation
+21. MP-4, CQ-2, CQ-4, TI-1, TI-2, SP-2
 
 ### Not planned
 - CQ-1: superseded by CB-7 and HP-6
