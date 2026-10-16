@@ -87,11 +87,17 @@ The project uses checkstyle for code quality. Run the checks with:
 
 ## Project Structure
 
-- `src/main/java` - Source code
-- `src/test/java` - Test code
-- `src/test/resources` - Test resources and configuration files
+- `src/main/java` - the library
+- `src/test/java` - its unit and scenario tests
+- `integration-tests-listener`, `integration-tests-extension` - fake tests that produce a report through each entry point
+- `integration-ctrf-validator` - checks those reports; see [INTEGRATION_TESTS.md](INTEGRATION_TESTS.md)
+- `compat` - consumer projects for the compatibility check above
+- `schema` - the pinned official CTRF schema, a test resource only
+- `config/checkstyle` - the checkstyle rules and the IntelliJ IDEA code style
 
-Automated Release Process
+How the library is put together, package by package, is in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Automated Release Process
 This project uses GitHub Actions workflows to manage releases to Maven Central. The process involves preparing a release branch, then running the publishing workflow on it.
 
 ### Step 1: Prepare Release Branch

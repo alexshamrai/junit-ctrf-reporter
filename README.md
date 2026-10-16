@@ -436,7 +436,7 @@ Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribut
 
 ## Development
 
-For information on setting up the project locally for development, see [DEVELOPMENT.md](DEVELOPMENT.md).
+For information on setting up the project locally for development, see [DEVELOPMENT.md](DEVELOPMENT.md). How the library is put together is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 

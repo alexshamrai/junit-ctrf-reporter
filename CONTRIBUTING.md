@@ -23,6 +23,7 @@ Please be respectful and considerate of others when contributing to this project
 
 ## Coding Standards
 
+- Read [ARCHITECTURE.md](ARCHITECTURE.md) for how the library is put together, and [DEVELOPMENT.md](DEVELOPMENT.md) for the build
 - Follow the Java coding conventions
 - Write unit tests for new features
 - Ensure all tests pass before submitting a PR
