@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). The 0.5.2 fix for 0.5.1's heap use is designed: [0.5.2 Design — streaming JSON](#052-design--streaming-json). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). The 0.5.2 fix for 0.5.1's heap use, streaming JSON, is merged (#142) and not released yet: [0.5.2 Design — streaming JSON](#052-design--streaming-json). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -20,7 +20,7 @@ Each improvement item includes:
 
 ## Status on `master` — 2026-10-14
 
-`master` @ `6ff69d5` (updated 2026-10-16). Phase 3 is released as [0.5.1](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.1) (2026-10-16, release PR #139). Phases 1 and 2 are released as [0.5.0](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.0) (2026-10-15, Maven Central `io.github.alexshamrai:junit-ctrf-reporter:0.5.0`, release PR #136).
+`master` @ `6083b2f` (updated 2026-10-16). Streaming JSON (#142) is merged for 0.5.2, which isn't released yet. Phase 3 is released as [0.5.1](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.1) (2026-10-16, release PR #139). Phases 1 and 2 are released as [0.5.0](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.0) (2026-10-15, Maven Central `io.github.alexshamrai:junit-ctrf-reporter:0.5.0`, release PR #136).
 
 | Item | Status | PR | Commits |
 |---|---|---|---|
@@ -50,6 +50,7 @@ Each improvement item includes:
 | [Phase 3](#phase-3-design--051) HP-10, HP-1, CB-2, MP-6, MP-7, MP-8, MP-9, HP-3 | Done; merged 2026-10-15 (rebase, eight commits); released as 0.5.1 on 2026-10-16 (#139) | #138 | `47cd66b`..`61df632` |
 | Build with JDK 25, keep Java 17 (not a plan item): `--release 17` for main and test code; the tests and the compat consumers run on Java 17, 21 and 25 | Done | #140 | `6776c2e` |
 | [Tests on Jackson 3](#follow-ups-after-051) Jackson 2 removed; the JSON output pinned by golden JSON | Done | #141 | `6ff69d5` |
+| [0.5.2 streaming JSON](#052-design--streaming-json) The JSON code streams both ways; a rerun reads only the old report's `runId`; heap guard | Done; merged 2026-10-16 (rebase, five commits); not released | #142 | `67f33d5`..`6083b2f` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -57,7 +58,8 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 
 ## 0.5.2 Design — streaming JSON
 
-**Status**: Designed 2026-10-16 against `master` @ `6ff69d5`; not implemented yet. Ships as **0.5.2**.
+**Status**: Done. Designed 2026-10-16 against `master` @ `6ff69d5`; merged 2026-10-16 as #142 (`67f33d5`..`6083b2f`, five commits, rebase-merged). Ships as **0.5.2**, not released yet.
+**Implementation plan**: [`docs/plans/2026-10-16-streaming-json-0.5.2.md`](docs/plans/2026-10-16-streaming-json-0.5.2.md)
 **Fixes**: the streaming follow-up in [Follow-ups after 0.5.1](#follow-ups-after-051). 0.5.1's JSON code holds whole-text copies and trees in memory, so it needs about twice the heap of 0.5.0 to write a large report.
 
 ### Measurements (2026-10-16)
@@ -75,6 +77,32 @@ The smallest `-Xmx`, in 8 MB steps, at which a JVM records 100,000 tests through
 - **0.5.1's write path** turns the model into a tree of maps, the tree into a `StringBuilder` that grows by doubling, that into a `String`, and the `String` into a `byte[]`: about 200 MB for this report. Its read path holds the whole text, a tree and the model at once.
 - **The floor is 80 MB:** the recorded tests themselves. The about 48 MB above it, the same in every version, is `AttemptFolder`'s copies while folding and composing. That isn't JSON code, and stays out of scope.
 - The benchmark isn't kept in the repository; the heap guard below keeps the result.
+
+### Changes during implementation (2026-10-16)
+
+- **Results,** measured on the merged code with the same benchmark: the smallest `-Xmx` in 8 MB steps for 100,000 tests.
+
+  | Scenario | 0.5.1 | 0.5.0 | Java 17 | Java 21 | Java 25 |
+  |---|---|---|---|---|---|
+  | First write | 280 MB | 128 MB | 120 MB | 120 MB | 128 MB |
+  | Replace another run's report | 328 MB | 224 MB | 120 MB | 128 MB | 128 MB |
+  | Merge two forks | 280 MB | 144 MB | 136 MB | 136 MB | 136 MB |
+
+  At 2 MB steps on Java 21, first needs 122 MB and replace 118 MB: replace needs no more than first, and the 8 MB difference above is the step size.
+- **Heap guard:** `-Xmx176m`, the largest number above (136 MB) plus about 25%, rounded up to 8 MB. It fails on 0.5.1's code (3/3 `OutOfMemoryError`) and passes in about 8 seconds per JDK.
+- **From the final review,** folded into commits 4 and 5:
+  - `update(String, UnaryOperator)` rejects a null `runId` with a `NullPointerException` before touching the report. Without that, the error was caught as a report problem, and the report was replaced;
+  - `readRunId` reads a report that is the literal `null` as one without a run id, as the full read reads it as no report, so it's replaced without a warning through either `update`;
+  - the heap guard's JVMs use G1, the collector the limit was measured with;
+  - a test sends a same-run report saved with a BOM through `update(String, …)`, end to end.
+- **Benchmark harness:** compiled with `--release 17` for the Java 17 run; compiled by JDK 21, Java 17 couldn't load it.
+- **Decided in the plan, unchanged:**
+  - a binding error early in the text is reported before a syntax error later in it;
+  - `readRunId` takes the first `runId`.
+- **Left out of scope by the review:**
+  - the listener's end-of-run call has no `Throwable` guard. That's existing code, MP-7's territory;
+  - `AttemptFolder`'s copies, the roughly 48 MB above the 80 MB of recorded tests;
+  - the three stacked 8 KB read buffers. `InputStreamReader(InputStream, Charset)` would replace invalid UTF-8 instead of rejecting it.
 
 ### Decisions (2026-10-16)
 
@@ -149,8 +177,8 @@ The smallest `-Xmx`, in 8 MB steps, at which a JVM records 100,000 tests through
 | 1 | `JsonReader`, a streaming tokenizer; `JsonParser.parse` becomes a wrapper over it |
 | 2 | `CtrfJsonMapper` binds a `Reader` straight into the model; the file service reads through a `BufferedReader` |
 | 3 | `JsonWriter` and `CtrfJsonMapper` write straight to a `Writer`; the file service writes through a `BufferedWriter` |
-| 4 | A report of another run is replaced after reading only its `runId` |
-| 5 | Heap guard; docs: `CLAUDE.md`'s data flow, the release notes, the follow-up marked done |
+| 4 | A report of another run is replaced after reading only its `runId`; a null `runId` is rejected |
+| 5 | Heap guard (`-Xmx176m`, G1); `CLAUDE.md`. The release notes and the follow-up are in this file |
 
 ### Verification
 
@@ -166,22 +194,22 @@ The smallest `-Xmx`, in 8 MB steps, at which a JVM records 100,000 tests through
 
 ### 0.5.2 release notes (user-visible changes)
 
-The numbers are re-measured on the final branch before the release.
+Measured on the merged code, 100,000 tests (a report of about 56 MB), Java 21.
 
-- **Less heap for large reports:** writing 100,000 tests needs about 128 MB again, as in 0.5.0, instead of 0.5.1's 280 MB; merging forks needs about 144 MB instead of 280 MB.
-- **A rerun no longer loads the previous run's report:** it's replaced after reading its `runId`. At 100,000 tests, about 128 MB instead of 328 MB in 0.5.1 and 224 MB in 0.5.0.
+- **Less heap for large reports:** writing them needs about 120 MB, against 280 MB in 0.5.1 and 128 MB in 0.5.0; merging forks about 136 MB, against 280 MB in 0.5.1 and 144 MB in 0.5.0.
+- **A rerun no longer loads the previous run's report:** it's replaced after reading its `runId`. At 100,000 tests, about 120 MB, against 328 MB in 0.5.1 and 224 MB in 0.5.0.
 - **Logs:** a damaged report of another run is replaced without the "Ignoring the existing report" warning.
 
 ### Acceptance Criteria
 
-- [ ] The output is byte-identical: `JsonGoldenTest` passes unchanged
-- [ ] Every existing JSON, file service, scenario, integration and compat test passes; `JsonParserTest` runs unchanged on `JsonReader`
-- [ ] Reading in chunks of 1, 2, 3 and 7 characters gives the same results and error positions as reading a `String`
-- [ ] The reader matches Jackson 3 on a generated 2,000-test report
-- [ ] A report of another run isn't read past its `runId`
-- [ ] The heap guard passes for first write, replace and merge on Java 17, 21 and 25, and fails on 0.5.1's code
-- [ ] On the benchmark (JDK 21), no scenario needs more heap than 0.5.0 (128, 224 and 144 MB), and replace needs no more than first write
-- [ ] All library classes are class-file version 61 (Java 17)
+- [x] The output is byte-identical: `JsonGoldenTest` passes unchanged
+- [x] Every existing JSON, file service, scenario, integration and compat test passes; `JsonParserTest` runs unchanged on `JsonReader`
+- [x] Reading in chunks of 1, 2, 3 and 7 characters gives the same results and error positions as reading a `String`
+- [x] The reader matches Jackson 3 on a generated 2,000-test report
+- [x] A report of another run isn't read past its `runId`
+- [x] The heap guard passes for first write, replace and merge on Java 17, 21 and 25, and fails on 0.5.1's code
+- [x] On the benchmark (JDK 21), no scenario needs more heap than 0.5.0 (128, 224 and 144 MB), and replace needs no more than first write
+- [x] All library classes are class-file version 61 (Java 17)
 
 ---
 
@@ -217,7 +245,7 @@ The text below is corrected where implementation proved it wrong.
 
 ### Follow-ups after 0.5.1
 
-- **Streaming JSON (0.5.2):** the writer and the reader build the whole report in memory. A 56 MB report (about 100,000 tests) needs about 340 MB of heap, against 200 MB with Jackson. Write and read through a `Writer` and a `Reader` instead. Designed in [0.5.2 Design — streaming JSON](#052-design--streaming-json), with new measurements.
+- **Streaming JSON (0.5.2): done** (#142, `67f33d5`..`6083b2f`, 2026-10-16; not released). The writer and the reader built the whole report in memory, so a 100,000-test report needed 280 to 328 MB of heap. They now stream, and a rerun reads only the old report's `runId`: 120 to 136 MB. See [0.5.2 Design — streaming JSON](#052-design--streaming-json).
 - **Tests on Jackson 3: done** (#141, `6ff69d5`, 2026-10-16). Jackson 2 is gone from the build: no module uses `jackson-databind` or `jackson-core` 2.x. The tests and the integration validator read JSON with Jackson 3 only.
   - **Golden JSON:** `JsonGoldenTest` replaces `JacksonDifferentialTest`. It pins the writer's output to the JSON that 0.5.0 wrote with Jackson 2. Before Jackson 2 was removed, this JSON was checked to be byte-identical to Jackson 2's output. It also checks that the reader reads that JSON as Jackson 3 does.
     - The full report is in `src/test/resources/json/golden-report.json`. It holds every field, all kinds of numbers, nested values and tricky text.
@@ -4814,7 +4842,7 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 
 ### Phase 3: Architecture and robustness
 
-**Released as 0.5.1** on 2026-10-16 (release PR #139). Designed 2026-10-15; see [Phase 3 Design — 0.5.1](#phase-3-design--051). Its follow-ups are in [Follow-ups after 0.5.1](#follow-ups-after-051): the Jackson 3 one is done (#141); streaming JSON and the deferred minors are open.
+**Released as 0.5.1** on 2026-10-16 (release PR #139). Designed 2026-10-15; see [Phase 3 Design — 0.5.1](#phase-3-design--051). Its follow-ups are in [Follow-ups after 0.5.1](#follow-ups-after-051): the Jackson 3 one is done (#141), and streaming JSON (#142, for 0.5.2, not released); the deferred minors are open.
 
 13. HP-10: Listener as the single core integration point, then revisit HP-1. **Done** (#138)
 14. CB-2: Only the run that started reporting may end it (nested JUnit runs). **Done** (#138)
