@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), every scenario's report is checked against the official schema (TI-5, #146), and the file service's behaviour on permission errors, odd paths and interrupts is pinned (TI-2, #147). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), every scenario's report is checked against the official schema (TI-5, #146), and the file service's behaviour on permission errors, odd paths and interrupts is pinned (TI-2, #147). MP-4 (#148) does change the jar: a blank, invalid or directory `ctrf.report.path` no longer loses the report. The next release's notes are the 0.5.2 ones, HP-12's, and MP-4's line in its status. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -55,6 +55,7 @@ Each improvement item includes:
 | [HP-12](#hp-12-design--suite) `suite` holds each test's container hierarchy | Done; merged 2026-10-16 (rebase, four commits); not released | #144 | `04fe3c9`..`c793e51` |
 | [DI-3](#di-3-fix-incorrect-documentation) Incorrect documentation | Done: `CLAUDE.md`'s single-test commands and stale class names; its six original points were already fixed | #145 | `3984760` |
 | [TI-2](#ti-2-add-file-system-error-tests) File system error tests | Done: permission errors, an empty report, odd paths, a directory as the path, an interrupted thread | #147 | `ad4756c` |
+| [MP-4](#mp-4-add-comprehensive-input-validation) Input validation, re-scoped to the report path | Done: a blank, invalid or directory `ctrf.report.path` warns and still gets a report; not released | #148 | `3fa6e30` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -701,7 +702,7 @@ Snapshot of 2026-10-08. For the current state, see [Status on `master` — 2026-
 | MP-1 Single-pass `SummaryUtil` | Done | `64f5bdd` |
 | MP-2 Cache existing report | Done, caused a regression | `c7772e5`: the cache is never invalidated, so same-JVM reruns lose results (CB-6c) |
 | MP-3 `CopyOnWriteArrayList` | Open, raised to High | Measured: 80k tests take 48 s; HP-6 resolves it |
-| MP-4 Input validation | Open, constraint added | Must never throw into JUnit callbacks (MP-7) |
+| MP-4 Input validation | Done (#148), re-scoped to the report path | Must never throw into JUnit callbacks (MP-7) |
 | CQ-1 Feature envy | Superseded | Extracted as `FlakyTestDetector`; the name-based design shown there is the CB-7 bug |
 | CQ-2 Value objects | Open (Low) | Don't call the value object `TestIdentifier` (clashes with JUnit's class) |
 | CQ-3 Long parameter lists | Stale | The referenced path and method don't exist on `master` |
@@ -2400,7 +2401,13 @@ If order doesn't matter: `ConcurrentLinkedQueue` (fastest for concurrent writes)
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: Multiple (ConfigReader, CtrfReportManager, model classes)
-**Status**: Open; constraint added 2026-10-08
+**Status**: Done, re-scoped (#148, `3fa6e30`), 2026-10-16; not released. Of the five points below, only the report path still needed work:
+- **Configuration values** have been checked since MP-9: a number or boolean that can't be read, or a negative length, warns and gives the default.
+- **The report path** is the fix. A blank one, also after expanding references, or one that `Paths.get` rejects, warns in `ConfigReader` and gives the default. One that names a directory gets `ctrf-report.json` inside it, with a warning. The file service resolves the path inside its error guard, and a warning whose exception message is only a path adds the exception's type.
+- **Not needed:** null test names, which JUnit never gives; validating public parameters and model objects, which only the library builds; a `Validators` class; a check when the run starts, since the warnings come once, at the write.
+- **Left as is:** negative durations. The schema allows them, and they need the wall clock to step back during a test.
+
+Release notes: a blank or invalid `ctrf.report.path` warns and uses `ctrf-report.json`; one that names a directory writes `ctrf-report.json` inside it, with a warning.
 
 #### Review Note (2026-10-08)
 Validation must never throw into JUnit callbacks (`beforeEach`, `TestWatcher`, the store `close()`). An exception there fails or masks the user's tests (MP-7). For invalid configuration, log a warning and fall back to the default instead of throwing `IllegalArgumentException` as sketched below. Do not reject `..` in report paths (see SP-1).
@@ -2509,13 +2516,13 @@ Files to update:
 
 #### Acceptance Criteria
 - [ ] Validators utility class created with comprehensive methods
-- [ ] Configuration validated on startup
-- [ ] Report path validated before writing
+- [x] Configuration validated on startup
+- [x] Report path validated before writing
 - [ ] All public method parameters validated
 - [ ] Model objects cannot be created in invalid states
-- [ ] Clear error messages for validation failures
-- [ ] Tests cover all validation scenarios
-- [ ] Documentation explains validation behavior
+- [x] Clear error messages for validation failures
+- [x] Tests cover all validation scenarios
+- [x] Documentation explains validation behavior
 - [ ] No invalid states possible at runtime
 
 ---
@@ -4998,7 +5005,7 @@ Updated 2026-10-08; progress marked 2026-10-16. This replaces the original four-
 ### Already done on `master`
 CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 (its regression is tracked in CB-6), TI-3 (partially)
 
-Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. Phase 3 is done (#138) and released as 0.5.1. In Phase 4, HP-12 (#144), DI-3 (#145), TI-5's schema check (#146) and TI-2 (#147) are done. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
+Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. Phase 3 is done (#138) and released as 0.5.1. In Phase 4, HP-12 (#144), DI-3 (#145), TI-5's schema check (#146), TI-2 (#147) and MP-4 (#148) are done. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
 
 ### Phase 1: Stop wrong results and broken builds (small, independent changes)
 1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix. **Done** (#124)
@@ -5035,7 +5042,8 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 21. TI-5: Check every scenario's report against the official schema. **Done** (#146), 2026-10-16; checking them against JUnit's event log stays open
 22. DI-1, DI-2: Documentation
 23. TI-2: File system error tests. **Done** (#147), 2026-10-16
-24. MP-4, CQ-2, CQ-4, TI-1, SP-2
+24. MP-4: Input validation, re-scoped to the report path. **Done** (#148), 2026-10-16; not released
+25. CQ-2, CQ-4, TI-1, SP-2
 
 ### Not planned
 - CQ-1: superseded by CB-7 and HP-6
