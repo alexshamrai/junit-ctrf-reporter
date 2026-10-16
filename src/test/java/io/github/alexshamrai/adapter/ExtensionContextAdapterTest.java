@@ -79,4 +79,41 @@ class ExtensionContextAdapterTest {
 
         assertThat(adapter.getTags()).isEmpty();
     }
+
+    @Test
+    @DisplayName("The suite is the display names of the contexts above, without the root, which is the engine's")
+    void suiteIsTheContextsAboveWithoutTheRoot() {
+        var root = context("JUnit Jupiter", null);
+        var outer = context("Payments", root);
+        var nested = context("Refunds", outer);
+        var method = context("refundsEachAmount(int)", nested);
+        var invocation = context("[1] 1", method);
+
+        var adapter = new ExtensionContextAdapter(invocation);
+
+        assertThat(adapter.getContainerNames()).containsExactly("Payments", "Refunds", "refundsEachAmount(int)");
+        assertThat(adapter.getEngineName()).contains("JUnit Jupiter");
+        assertThat(adapter.getSuite()).containsExactly("Payments", "Refunds", "refundsEachAmount(int)");
+    }
+
+    @Test
+    @DisplayName("A class's suite of children ends with its own name; the root's suite is the engine's name")
+    void classAndRootSuites() {
+        var root = context("JUnit Jupiter", null);
+        var outer = context("Payments", root);
+        var nested = context("Refunds", outer);
+
+        assertThat(new ExtensionContextAdapter(nested).getSuiteOfChildren()).containsExactly("Payments", "Refunds");
+        assertThat(new ExtensionContextAdapter(outer).getSuite()).containsExactly("JUnit Jupiter");
+        assertThat(new ExtensionContextAdapter(outer).getSuiteOfChildren()).containsExactly("Payments");
+        assertThat(new ExtensionContextAdapter(root).getContainerNames()).isEmpty();
+        assertThat(new ExtensionContextAdapter(root).getSuite()).containsExactly("JUnit Jupiter");
+    }
+
+    private static ExtensionContext context(String displayName, ExtensionContext parent) {
+        var context = mock(ExtensionContext.class);
+        when(context.getDisplayName()).thenReturn(displayName);
+        when(context.getParent()).thenReturn(Optional.ofNullable(parent));
+        return context;
+    }
 }

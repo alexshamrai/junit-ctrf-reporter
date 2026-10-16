@@ -1,13 +1,25 @@
 package io.github.alexshamrai.adapter;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.DisplayNameGeneration;
+import org.junit.jupiter.api.DisplayNameGenerator;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.platform.commons.PreconditionViolationException;
 import org.junit.platform.engine.TestSource;
 import org.junit.platform.engine.TestTag;
+import org.junit.platform.engine.discovery.DiscoverySelectors;
 import org.junit.platform.engine.support.descriptor.ClassSource;
 import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.TestIdentifier;
+import org.junit.platform.launcher.TestPlan;
+import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
+import org.junit.platform.launcher.core.LauncherFactory;
+import org.junit.platform.suite.api.SelectClasses;
+import org.junit.platform.suite.api.Suite;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -113,5 +125,127 @@ class TestIdentifierAdapterTest {
         var adapter = new TestIdentifierAdapter(identifier);
 
         assertThat(adapter.getTags()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("With its plan, the suite is the display names of the containers above, without the engine")
+    void suiteFromThePlanIsTheContainersAboveWithoutTheEngine() {
+        TestPlan plan = discover(PaymentsFixture.class);
+
+        var adapter = new TestIdentifierAdapter(onlyTest(plan), plan);
+
+        assertThat(adapter.getContainerNames()).containsExactly("Payments", "Refunds");
+        assertThat(adapter.getEngineName()).contains("JUnit Jupiter");
+        assertThat(adapter.getSuite()).containsExactly("Payments", "Refunds");
+    }
+
+    @Test
+    @DisplayName("The engine's suite is its own name; a top-level class groups its children under its own name")
+    void engineAndTopLevelClass() {
+        TestPlan plan = discover(PaymentsFixture.class);
+        TestIdentifier engine = plan.getRoots().stream()
+            .filter(root -> root.getUniqueId().equals("[engine:junit-jupiter]"))
+            .findFirst()
+            .orElseThrow();
+        TestIdentifier topLevelClass = plan.getChildren(engine).iterator().next();
+
+        assertThat(new TestIdentifierAdapter(engine, plan).getSuite()).containsExactly("JUnit Jupiter");
+        assertThat(new TestIdentifierAdapter(topLevelClass, plan).getSuite()).containsExactly("JUnit Jupiter");
+        assertThat(new TestIdentifierAdapter(topLevelClass, plan).getSuiteOfChildren()).containsExactly("Payments");
+    }
+
+    @Test
+    @DisplayName("Review Focus 2: names from a @DisplayNameGeneration are used as JUnit generates them")
+    void suiteUsesGeneratedDisplayNames() {
+        TestPlan plan = discover(GeneratedNamesFixture.class);
+
+        assertThat(new TestIdentifierAdapter(onlyTest(plan), plan).getSuite()).containsExactly("Generated GeneratedNamesFixture");
+    }
+
+    @Test
+    @DisplayName("Without a plan, there is no suite")
+    void withoutAPlanThereIsNoSuite() {
+        TestPlan plan = discover(PaymentsFixture.class);
+
+        assertThat(new TestIdentifierAdapter(onlyTest(plan)).getSuite()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Under a suite engine, every engine is left out, and the @Suite class stays")
+    void suiteEngineAndTheEngineInsideItAreLeftOut() {
+        TestPlan plan = discover(PaymentsSuite.class);
+
+        var adapter = new TestIdentifierAdapter(onlyTest(plan), plan);
+
+        assertThat(adapter.getSuite()).containsExactly("PaymentsSuite", "Payments", "Refunds");
+        assertThat(adapter.getEngineName()).contains("JUnit Jupiter");
+    }
+
+    @Test
+    @DisplayName("An identifier whose ancestors the plan can't give has no suite, and doesn't throw")
+    void identifierThePlanCantPlaceHasNoSuite() {
+        var identifier = mock(TestIdentifier.class);
+        var plan = mock(TestPlan.class);
+        when(plan.getParent(identifier)).thenThrow(new PreconditionViolationException("not in the plan"));
+
+        var adapter = new TestIdentifierAdapter(identifier, plan);
+
+        assertThat(adapter.getContainerNames()).isEmpty();
+        assertThat(adapter.getEngineName()).isEmpty();
+        assertThat(adapter.getSuite()).isEmpty();
+    }
+
+    private static TestPlan discover(Class<?> fixture) {
+        return LauncherFactory.create().discover(LauncherDiscoveryRequestBuilder.request()
+            .selectors(DiscoverySelectors.selectClass(fixture))
+            .build());
+    }
+
+    private static TestIdentifier onlyTest(TestPlan plan) {
+        List<TestIdentifier> tests = plan.getRoots().stream()
+            .flatMap(root -> plan.getDescendants(root).stream())
+            .filter(TestIdentifier::isTest)
+            .toList();
+        assertThat(tests).hasSize(1);
+        return tests.get(0);
+    }
+
+    @Tag("scenario-fixture")
+    @DisplayName("Payments")
+    static class PaymentsFixture {
+
+        @Nested
+        class Refunds {
+
+            @Test
+            void refundsTheFee() {
+            }
+        }
+    }
+
+    @Tag("scenario-fixture")
+    @Suite
+    @SelectClasses(PaymentsFixture.class)
+    static class PaymentsSuite {
+    }
+
+    @Tag("scenario-fixture")
+    @DisplayNameGeneration(PrefixingGenerator.class)
+    static class GeneratedNamesFixture {
+
+        @Test
+        void refunds() {
+        }
+    }
+
+    /**
+     * Names every class "Generated " followed by its simple name.
+     */
+    static class PrefixingGenerator extends DisplayNameGenerator.Standard {
+
+        @Override
+        public String generateDisplayNameForClass(Class<?> testClass) {
+            return "Generated " + testClass.getSimpleName();
+        }
     }
 }

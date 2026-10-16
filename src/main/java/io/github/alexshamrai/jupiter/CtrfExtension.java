@@ -8,6 +8,7 @@ import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestWatcher;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -188,7 +189,8 @@ public class CtrfExtension implements TestRunExtension, AfterAllCallback, Before
             .map(Class::getName)
             .orElse(context.getDisplayName());
 
-        reportManager.onTestStart(new TestDetails(startTime, context.getTags(), className, uniqueId, name));
+        List<String> suite = new ExtensionContextAdapter(context).getSuiteOfChildren();
+        reportManager.onTestStart(new TestDetails(startTime, context.getTags(), className, uniqueId, name, suite));
         reportManager.onTestFailure(uniqueId, error);
     }
 
