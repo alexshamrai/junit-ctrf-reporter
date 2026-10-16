@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). The 0.5.2 fix for 0.5.1's heap use, streaming JSON, is merged (#142) and not released yet: [0.5.2 Design — streaming JSON](#052-design--streaming-json). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 is next. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -20,7 +20,7 @@ Each improvement item includes:
 
 ## Status on `master` — 2026-10-14
 
-`master` @ `6083b2f` (updated 2026-10-16). Streaming JSON (#142) is merged for 0.5.2, which isn't released yet. Phase 3 is released as [0.5.1](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.1) (2026-10-16, release PR #139). Phases 1 and 2 are released as [0.5.0](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.0) (2026-10-15, Maven Central `io.github.alexshamrai:junit-ctrf-reporter:0.5.0`, release PR #136).
+`master` @ `513c03d` (updated 2026-10-16). Streaming JSON (#142) and the review minors (#143) are merged for 0.5.2, which isn't released yet. Phase 3 is released as [0.5.1](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.1) (2026-10-16, release PR #139). Phases 1 and 2 are released as [0.5.0](https://github.com/alexshamrai/junit-ctrf-reporter/releases/tag/v0.5.0) (2026-10-15, Maven Central `io.github.alexshamrai:junit-ctrf-reporter:0.5.0`, release PR #136).
 
 | Item | Status | PR | Commits |
 |---|---|---|---|
@@ -51,6 +51,7 @@ Each improvement item includes:
 | Build with JDK 25, keep Java 17 (not a plan item): `--release 17` for main and test code; the tests and the compat consumers run on Java 17, 21 and 25 | Done | #140 | `6776c2e` |
 | [Tests on Jackson 3](#follow-ups-after-051) Jackson 2 removed; the JSON output pinned by golden JSON | Done | #141 | `6ff69d5` |
 | [0.5.2 streaming JSON](#052-design--streaming-json) The JSON code streams both ways; a rerun reads only the old report's `runId`; heap guard | Done; merged 2026-10-16 (rebase, five commits); not released | #142 | `67f33d5`..`6083b2f` |
+| [Review minors](#follow-ups-after-051) the five the Phase 3 final review deferred | Done; merged 2026-10-16 (rebase, five commits); not released | #143 | `9cdb0df`..`513c03d` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -200,6 +201,13 @@ Measured on the merged code, 100,000 tests (a report of about 56 MB), Java 21.
 - **A rerun no longer loads the previous run's report:** it's replaced after reading its `runId`. At 100,000 tests, about 120 MB, against 328 MB in 0.5.1 and 224 MB in 0.5.0.
 - **Logs:** a damaged report of another run is replaced without the "Ignoring the existing report" warning.
 
+Also in 0.5.2, from the Phase 3 review (#143):
+
+- **A failure whose `toString()` throws an `Error`** is reported, by its class name, instead of missing from the report.
+- **A `ctrf.properties` saved with a UTF-8 BOM** keeps its first setting.
+- **A capped trace with Windows line endings** never ends a line in `\r\r\n`.
+- **A warning about a report that can't be read** shows at most 100 characters of the offending value, and names objects and arrays instead of printing them.
+
 ### Acceptance Criteria
 
 - [x] The output is byte-identical: `JsonGoldenTest` passes unchanged
@@ -253,12 +261,12 @@ The text below is corrected where implementation proved it wrong.
   - **Why golden JSON:** Jackson 3 can't be the reference, because it writes differently. For example, it sorts properties alphabetically by default.
   - **Annotations:** the model's Jackson annotations stay compile-only. Jackson 2 and 3 share them (`com.fasterxml.jackson.annotation`), and their version comes from the Jackson 3 BOM.
   - **Compat:** the consumers check that neither Jackson 2 nor Jackson 3 is on their test classpath.
-- **Deferred review minors,** all triaged "can wait" by the final review:
-  - an `Error` thrown from a failure's `toString()` still loses the entry;
-  - a capped trace can keep a stray `\r` when the cut falls inside `\r\n`;
-  - `ConfigReader(Map, Map, Map)` doesn't document that it rejects nulls;
-  - mapper error messages include whole offending values;
-  - a `ctrf.properties` saved with a UTF-8 BOM loses its first key, as with `owner`.
+- **Deferred review minors: done** (#143, `9cdb0df`..`513c03d`, 2026-10-16; not released). Each has one commit with its own test:
+  - an `Error` thrown from a failure's `toString()` lost the entry. Any `Throwable` is now caught, and the failure is reported by its class name; a `VirtualMachineError` still propagates, as everywhere in the reporter;
+  - a capped trace could keep a stray `\r` when the cut fell inside `\r\n`. The cut now moves back one character;
+  - `ConfigReader(Map, Map, Map)` didn't document that it rejects nulls. Its Javadoc says so now, and a test pins it;
+  - mapper error messages included whole offending values. Objects and arrays are now named ("an object", "an array"), and other values cut at 100 characters; the 12 pinned messages are unchanged;
+  - a `ctrf.properties` saved with a UTF-8 BOM lost its first key, as with `owner`. The BOM is now dropped after decoding.
 
 ### Decisions (2026-10-15)
 
@@ -4842,7 +4850,7 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 
 ### Phase 3: Architecture and robustness
 
-**Released as 0.5.1** on 2026-10-16 (release PR #139). Designed 2026-10-15; see [Phase 3 Design — 0.5.1](#phase-3-design--051). Its follow-ups are in [Follow-ups after 0.5.1](#follow-ups-after-051): the Jackson 3 one is done (#141), and streaming JSON (#142, for 0.5.2, not released); the deferred minors are open.
+**Released as 0.5.1** on 2026-10-16 (release PR #139). Designed 2026-10-15; see [Phase 3 Design — 0.5.1](#phase-3-design--051). Its follow-ups are in [Follow-ups after 0.5.1](#follow-ups-after-051): the Jackson 3 one is done (#141), and so are streaming JSON (#142) and the deferred minors (#143), both for 0.5.2, not released.
 
 13. HP-10: Listener as the single core integration point, then revisit HP-1. **Done** (#138)
 14. CB-2: Only the run that started reporting may end it (nested JUnit runs). **Done** (#138)
