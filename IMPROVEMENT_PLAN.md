@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 is next. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started with [HP-12](#hp-12-design--suite), designed. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -54,6 +54,139 @@ Each improvement item includes:
 | [Review minors](#follow-ups-after-051) the five the Phase 3 final review deferred | Done; merged 2026-10-16 (rebase, five commits); not released | #143 | `9cdb0df`..`513c03d` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
+
+---
+
+## HP-12 Design — `suite`
+
+**Status**: Designed 2026-10-16 against `master` @ `513c03d`; not implemented yet. The version is decided at release: this is a feature, so semver says 0.6.0.
+**Item**: [HP-12](#hp-12-fill-suite-with-each-tests-container-hierarchy). CTRF viewers group and filter tests by `suite`, defined as "Suite hierarchy from top-level to immediate parent", an array of strings with at least one item. This library never sets it, so every test appears ungrouped.
+
+### The rule
+
+- **`suite` is the display names of the test's ancestors, outermost first, without the engine.**
+- If that leaves nothing, the engine's display name is used instead, so every entry with a known engine has a `suite`.
+- If not even an engine is known, there's no `suite`. That only happens for a test the manager knows by its ID alone, which it records as "Unknown Test".
+- **A class's `initializationError` or `teardownError` entry** adds the class's own display name at the end, so it's grouped with the tests it affected. Other container entries keep their own name and get their ancestors, like a test: a failed `@MethodSource` or `@TestFactory`, a failed engine, or the one skipped entry for a parameterized method.
+
+Examples:
+
+| Test | `name` | `suite` |
+|---|---|---|
+| `@DisplayName("Payments") class PaymentTest` → `@Nested class Refunds` → `@Test refundsTheFee()` | `refundsTheFee()` | `["Payments", "Refunds"]` |
+| the same class → `@ParameterizedTest refundsTheFee(int)`, invocation 1 | `[1] 1` | `["Payments", "Refunds", "refundsTheFee(int)"]` |
+| `@TestFactory factory()` → `DynamicContainer("group")` → a dynamic test (listener only) | its display name | `["PaymentTest", "factory()", "group"]` |
+| `@BeforeAll` of `Refunds` fails | `initializationError` | `["Payments", "Refunds"]` |
+| JUnit 4 test, through Vintage | `test()` | `["com.example.LegacyTest"]` |
+| a test directly under a custom engine | its display name | `["My Engine"]` |
+
+### Decisions (2026-10-16)
+
+- **Display names,** as the IDE tree and Gradle's report show them, honouring `@DisplayName` and `@DisplayNameGeneration`. `filePath` keeps the exact class name for tooling.
+  - Rejected: simple class names, which ignore the names authors chose for readers.
+  - Rejected: fully qualified class names, which are long and repeat `filePath`.
+- **The engine is left out,** as CTRF's reference example starts at the first group: `suite: ['Math', 'Addition']` with the file in `filePath`.
+  - Rejected: always starting with the engine, which adds the same first level to every test in single-engine projects.
+- **Class errors are grouped under the class.**
+  - Rejected: next to the class, one level above its tests.
+- **Each entry point computes `suite` when the test starts.** The listener walks the `TestPlan`, the extension walks the `ExtensionContext` parents.
+  - Rejected: deriving it from the `testId`, whose segments hold class and method names, not display names.
+  - Rejected: recording a container tree in the manager and building suites at the end. That's more state for no gain, since both entry points know a test's ancestors when it starts.
+- **Public API is only added to:**
+  - `TestContextAdapter.getSuite()` is a default method;
+  - `TestDetails` keeps its 5-argument constructor;
+  - `TestIdentifierAdapter` keeps its 1-argument constructor.
+- **Dynamic tests through the extension:** not reported, as today, because JUnit runs no extension callbacks for them.
+- **One branch, `feat/hp-12-suite`, with four commits, each green, rebase-merged, no squash.**
+- **Java 17** and the JUnit 5.10 compile floor stay; `TestPlan.getParent` exists in 5.10.
+
+### Data model
+
+- **`TestContextAdapter`** gets `default List<String> getSuite()`, returning an empty list. The two adapters override it.
+- **`TestDetails`** gets a sixth component, `List<String> suite`.
+  - It's stored as an unmodifiable copy, never null; an empty list means no `suite`.
+  - The 5-argument constructor stays and passes an empty list.
+  - `fromAdapter` takes the adapter's suite.
+- **`TestProcessor.createTest`** copies `suite` into the CTRF test, or leaves it out when it's empty, because the schema needs at least one item.
+- **The manager's HP-9 fallback,** a finish whose start wasn't recorded, takes the suite from the reported details.
+- **The CTRF model** already has `List<String> suite` on `Test`. `RetryAttempt` has none, and the official schema defines none there.
+
+### The listener
+
+- **New constructor `TestIdentifierAdapter(TestIdentifier, TestPlan)`.** Its `getSuite()` walks `plan.getParent(…)` upwards, collecting each parent's display name. The topmost one is the engine; it's dropped, and the names are reversed. An identifier without a parent is the engine itself.
+- **`createTestDetails`** passes the listener's `TestPlan`. Finished tests, tests skipped one by one, and the tests HP-8 reports inside a skipped or aborted container all get their `suite` this way.
+- **`handleContainerFailure`:**
+  - a class error gets the class's suite plus the class's display name;
+  - any other container gets its ancestors.
+
+### The extension
+
+- **`ExtensionContextAdapter.getSuite()`** walks `context.getParent()` up to the root context, which is the engine ("JUnit Jupiter"). The root is dropped, and the names are reversed.
+- **`reportClassFailure`** adds the class context's display name.
+- **Why they agree:** an `ExtensionContext`'s and a `TestIdentifier`'s display names both come from the same `TestDescriptor`. A parameterized or repeated invocation's parent context is its method's, as in the plan.
+
+### Retries, forks and merging
+
+- **`AttemptFolder.fold`** is unchanged. One test per `testId`, from its final attempt, so the final attempt's `suite` is written.
+- **`AttemptFolder.toAttempt`,** which rebuilds earlier attempts when a report is unfolded, also copies `suite`. The output doesn't depend on it, since only the final attempt's `suite` is written, but every attempt then carries the whole identity.
+- **`ReportMerger.withRecoveries`** copies `suite` into the passed entry it builds for a class that failed and then recovered (HP-11). Without it, a recovered class would lose its `suite`, because that entry is the final one.
+- **Reports written before this change:** a test from an older report of the same run keeps no `suite` until it runs again. Reading and writing need no change.
+
+### Tests
+
+- **Unit:**
+  - `TestDetails`: the old constructor gives an empty suite, `fromAdapter` takes the adapter's, and the suite is a copy;
+  - the default `getSuite()` is empty;
+  - `TestIdentifierAdapter` on a `TestPlan` discovered from fixture classes: nested display names, the engine fallback, and an empty suite from the 1-argument constructor;
+  - `ExtensionContextAdapter` on a mocked chain of contexts: root, class, nested class, method, invocation; and the root alone;
+  - `TestProcessor`: an empty suite is left out, a non-empty one is copied;
+  - `AttemptFolder` keeps `suite` through unfold and fold;
+  - `ReportMerger`'s recovery entry keeps the class's suite;
+  - `CtrfReportManager`'s HP-9 fallback keeps it.
+- **Scenario, forked JVMs, listener and extension:**
+  - **Fixtures:** a `@DisplayName` class with a `@Nested` class holding a `@Test`, a `@ParameterizedTest` with two invocations and a `@RepeatedTest(2)`; a `@TestFactory` with a `DynamicContainer`; a class whose `@BeforeAll` fails; a class whose `@AfterAll` fails; a `@Disabled` class.
+  - **Assertions:** each entry's exact `suite`, and the same `suite` from both entry points for every test both report.
+  - **Recovery:** the existing HP-11 recovery scenario also checks the recovered class's `suite`.
+- **Integration validator:**
+  - `JunitEvents` records each `started` event's `name` and `parentId`, and works out each started node's expected suite by the rule above;
+  - `JunitCrossCheckTest` checks every report entry that JUnit started against it, in both integration modules;
+  - `CtrfLogicTest` checks that every entry has a non-empty `suite`, including HP-8 entries, which JUnit's log doesn't list;
+  - both integration modules get `PaymentsTest`: `@DisplayName("Payments")`, with a `@Nested` class `Refunds` holding one `@Test` and a `@ParameterizedTest` of two values, all passing;
+  - `CtrfLogicTest`'s pinned summary grows by those 3 passed tests: the listener module from 28/14/7/7 (tests, passed, failed, skipped) to 31/17/7/7, the extension module from 22/14/5/3 to 25/17/5/3.
+- **Unchanged:** the golden JSON, whose full report already sets `suite`, and the schema checks.
+
+### Commits
+
+| # | Commit |
+|---|---|
+| 1 | `TestDetails` carries a `suite`; `TestContextAdapter.getSuite()`; `TestProcessor` writes it |
+| 2 | The listener and the extension compute `suite`; scenario tests |
+| 3 | Retries, merging and HP-11 recoveries keep `suite` |
+| 4 | The integration validator checks `suite` against JUnit's event log; `PaymentsTest` in both integration modules; README and `CLAUDE.md` |
+
+### Verification
+
+As for 0.5.2:
+- **Every commit:**
+  - tests written first and watched failing;
+  - `./gradlew :build`, which runs the tests on Java 25, 17 and 21, and checkstyle;
+  - `:javadoc`;
+  - all main classes are class-file version 61.
+- **Commits 2 to 4 also run** both integration modules with the validator, and compat.
+
+### Release notes (user-visible changes)
+
+- **Every test has a `suite`:** the display names of its classes, nested classes and parameterized or dynamic containers, outermost first, without the engine. CTRF viewers can now group tests as the IDE does.
+- **A class's `initializationError` or `teardownError`** is grouped under that class.
+
+### Acceptance Criteria
+
+- [ ] Every test entry has a `suite` that matches the official schema, except a test known only by its ID
+- [ ] The listener and the extension produce the same `suite` for the same test
+- [ ] Scenario tests cover nested classes, parameterized, repeated and dynamic tests, class-level failures, a skipped class and a recovered class
+- [ ] The integration validator checks each entry's `suite` against JUnit's own event log
+- [ ] No public signature changes; existing `TestDetails` and `TestIdentifierAdapter` constructors keep working
+- [ ] All library classes are class-file version 61 (Java 17)
 
 ---
 
@@ -597,6 +730,7 @@ Context: `ctrf-io/junit-to-ctrf` already converts the JUnit XML that Gradle and 
 
 ## Table of Contents
 
+1. [HP-12 Design — `suite`](#hp-12-design--suite)
 1. [0.5.2 Design — streaming JSON](#052-design--streaming-json)
 1. [Phase 3 Design — 0.5.1](#phase-3-design--051)
 1. [Review Update — 2026-10-08](#review-update--2026-10-08)
@@ -1936,13 +2070,13 @@ Reproduced through both entry points: `@BeforeAll` fails in round 1 and passes i
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `model/TestDetails.java`, `TestProcessor.java`, `adapter/*`, scenario tests
-**Status**: Open. Split from HP-5 on 2026-10-15; HP-5 types `suite` as a list but leaves it unset.
+**Status**: Designed 2026-10-16; see [HP-12 Design — `suite`](#hp-12-design--suite), which settles the questions below. Split from HP-5 on 2026-10-15; HP-5 types `suite` as a list but leaves it unset.
 
 #### Why
 
 CTRF consumers group and filter tests by `suite`. The spec defines it as "Suite hierarchy from top-level to immediate parent": an array of strings with at least one item. This library never sets it, so every test appears ungrouped.
 
-#### To decide
+#### To decide (decided in [HP-12 Design](#hp-12-design--suite))
 
 - **What goes in it:**
   - display names or class names;
