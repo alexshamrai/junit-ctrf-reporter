@@ -31,6 +31,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.abort;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class CtrfReportFileServiceTest {
 
@@ -380,10 +382,11 @@ class CtrfReportFileServiceTest {
     @Test
     @DisplayName("A move that keeps failing is retried for about a second, then reported, leaving no temp file")
     void moveThatKeepsFailingIsRetriedThenReported() throws IOException {
-        Path report = tempDir.resolve("ctrf.json");
-        Files.createDirectory(report);
+        Path directory = Files.createDirectory(tempDir.resolve("reports"));
+        // The report goes inside the directory that ctrf.report.path names; a directory in its place makes every move fail
+        Path report = Files.createDirectory(directory.resolve("ctrf-report.json"));
         Path inside = Files.writeString(report.resolve("keep.txt"), "x");
-        var service = serviceFor(report);
+        var service = serviceFor(directory);
 
         long begin = System.nanoTime();
         assertThatCode(() -> service.update(existing -> marker("x"))).doesNotThrowAnyException();
@@ -514,7 +517,7 @@ class CtrfReportFileServiceTest {
 
         assertThat(seen).containsExactly((CtrfJson) null);
         assertThat(readMarker(report)).isEqualTo("second");
-        assertThat(logs.text()).contains("can't be read: " + report);
+        assertThat(logs.text()).contains("can't be read: " + report).contains("AccessDeniedException");
     }
 
     @Test
@@ -557,17 +560,53 @@ class CtrfReportFileServiceTest {
     }
 
     @Test
-    @DisplayName("A report path that names a directory is reported, not thrown, and the directory is left as it was")
-    void reportPathThatIsADirectoryIsReportedNotThrown() throws IOException {
+    @DisplayName("A report path that names a directory gets ctrf-report.json inside it, with a warning, and its other files stay")
+    void reportPathThatIsADirectoryGetsTheReportInsideIt() throws IOException {
         Path directory = Files.createDirectory(tempDir.resolve("reports"));
-        Path inside = Files.writeString(directory.resolve("other.txt"), "kept");
+        Path other = Files.writeString(directory.resolve("other.txt"), "kept");
+        var service = serviceFor(directory);
+        service.update(existing -> marker("first"));
+        List<String> seen = new ArrayList<>();
 
-        assertThatCode(() -> serviceFor(directory).update(existing -> marker("never"))).doesNotThrowAnyException();
+        service.update(existing -> {
+            seen.add(existing.getGeneratedBy());
+            return marker("second");
+        });
 
-        assertThat(directory).isDirectory();
-        assertThat(inside).hasContent("kept");
-        assertThat(tempFilesNextTo(directory)).isEmpty();
-        assertThat(logs.text()).contains("Failed to write results to file: " + directory);
+        Path report = directory.resolve("ctrf-report.json");
+        assertThat(seen).containsExactly("first");
+        assertThat(readMarker(report)).isEqualTo("second");
+        assertThat(other).hasContent("kept");
+        assertThat(directory.resolve("ctrf-report.json.lock")).exists();
+        assertThat(tempFilesNextTo(report)).isEmpty();
+        assertThat(logs.text())
+            .contains("ctrf.report.path names a directory, " + directory + ", so the report is written to " + report)
+            .doesNotContain("Failed to write")
+            .doesNotContain("can't be read");
+    }
+
+    @Test
+    @DisplayName("A report path that the file system can't take is reported, not thrown")
+    void invalidReportPathIsReportedNotThrown() {
+        var config = mock(ConfigReader.class);
+        when(config.getReportPath()).thenReturn("bad" + (char) 0 + "name.json");
+        var service = new CtrfReportFileService(config);
+
+        assertThatCode(() -> service.update(existing -> marker("never"))).doesNotThrowAnyException();
+        assertThatCode(() -> service.update("this-run", existing -> marker("never"))).doesNotThrowAnyException();
+
+        assertThat(logs.text()).contains("isn't a valid path");
+    }
+
+    @Test
+    @DisplayName("A report path under a regular file is reported with what went wrong, and the file stays")
+    void reportUnderARegularFileIsReportedWithTheReason() throws IOException {
+        Path file = Files.writeString(tempDir.resolve("plain.txt"), "x");
+
+        assertThatCode(() -> serviceFor(file.resolve("ctrf.json")).update(existing -> marker("never"))).doesNotThrowAnyException();
+
+        assertThat(file).hasContent("x");
+        assertThat(logs.text()).contains("Failed to write results to file").contains("FileAlreadyExistsException");
     }
 
     @Test

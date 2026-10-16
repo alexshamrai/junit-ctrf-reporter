@@ -149,7 +149,7 @@ Each setting is looked up in these places, and the first one that sets it wins:
 3. a `ctrf.properties` file on the test classpath, usually `src/test/resources/ctrf.properties`, saved as UTF-8;
 4. the default in the [Configuration Reference](#configuration-reference).
 
-The reporter reads its configuration once, when it starts. A value can use another setting or a system property, as in `ctrf.report.path=${user.home}/reports/ctrf.json`; a name that nothing sets expands to an empty string. Numbers may have spaces around them. A number or a `true`/`false` setting that can't be read, or a negative length, logs a warning and the default is used instead.
+The reporter reads its configuration once, when it starts. A value can use another setting or a system property, as in `ctrf.report.path=${user.home}/reports/ctrf.json`; a name that nothing sets expands to an empty string. Numbers may have spaces around them. A number or a `true`/`false` setting that can't be read, a negative length, or a report path that is blank or isn't a valid path logs a warning and the default is used instead.
 
 Up to 0.5.0, `CTRF_*` environment variables were ignored. They are now read, so a `CTRF_*` variable that your CI defines for another step, such as a `CTRF_REPORT_PATH` for a publishing action, configures the reporter too. A relative path is resolved against the test JVM's working directory, which is usually the module's directory. Rename such a variable if it isn't meant for the reporter.
 
@@ -206,7 +206,7 @@ The following parameters can be configured in the `ctrf.properties` file:
 
 | Parameter                         | Description                                                  | Default Value      |
 |-----------------------------------|--------------------------------------------------------------|--------------------|
-| `ctrf.report.path`                | The file path where the CTRF report will be saved            | `ctrf-report.json` |
+| `ctrf.report.path`                | The file path where the CTRF report will be saved. A directory gets `ctrf-report.json` inside it, with a warning | `ctrf-report.json` |
 | `ctrf.max.message.length`         | Maximum length of a failure's `message`, which is the exception's class and message; a longer one is cut and ends with `...` | `500`              |
 | `ctrf.max.trace.length`           | Maximum length of a failure's `trace`, its stack trace; `0` means no limit. A longer trace keeps the lines that fit, a line saying how much was cut, and every `Caused by:` line | `20000`            |
 | `ctrf.calculate.startup.duration` | Whether to calculate and include test suite startup duration | `false`            |
