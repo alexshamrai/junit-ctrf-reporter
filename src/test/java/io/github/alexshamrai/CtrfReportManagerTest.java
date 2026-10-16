@@ -369,6 +369,34 @@ class CtrfReportManagerTest {
     }
 
     @org.junit.jupiter.api.Test
+    @DisplayName("A result without a recorded start keeps the suite it was given")
+    void onTestSuccess_withoutRecordedStart_keepsTheGivenSuite() {
+        reportManager.startTestRun("Listener");
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(new Test());
+        var given = new TestDetails(5_000L, Set.of(), "com.example.PaymentTest", "id-1", "refundsTheFee()",
+            List.of("Payments", "Refunds"));
+
+        reportManager.onTestSuccess(given);
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(testProcessor).createTest(eq("refundsTheFee()"), detailsCaptor.capture(), anyLong());
+        assertEquals(List.of("Payments", "Refunds"), detailsCaptor.getValue().suite());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Review Focus 5: a test known only by its unique ID has no suite")
+    void onTestSuccess_ofAnUnknownTest_hasNoSuite() {
+        reportManager.startTestRun("Listener");
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(new Test());
+
+        reportManager.onTestSuccess("id-never-started");
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(testProcessor).createTest(anyString(), detailsCaptor.capture(), anyLong());
+        assertEquals(List.of(), detailsCaptor.getValue().suite());
+    }
+
+    @org.junit.jupiter.api.Test
     @DisplayName("A container success without a start time uses its stop time")
     void onContainerSuccess_withoutStartUsesTheStopTime() {
         reportOnDisk = reportOfRun(RUN_ID, true, Test.builder().testId("class-1").name("initializationError").status(FAILED).build());

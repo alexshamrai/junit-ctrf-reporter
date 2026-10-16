@@ -2,6 +2,7 @@ package io.github.alexshamrai.model;
 
 import io.github.alexshamrai.adapter.TestContextAdapter;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -17,14 +18,35 @@ public record TestDetails(
     Set<String> tags,
     String filePath,
     String uniqueId,
-    String displayName
+    String displayName,
+    List<String> suite
 ) {
+
+    /**
+     * Creates TestDetails. The suite is copied; {@code null} means none, as an empty list does.
+     */
+    public TestDetails {
+        suite = suite == null ? List.of() : List.copyOf(suite);
+    }
+
+    /**
+     * Creates TestDetails without a suite.
+     *
+     * @param startTime   when the test started
+     * @param tags        the test's tags
+     * @param filePath    the test's class, or {@code null}
+     * @param uniqueId    the JUnit unique ID
+     * @param displayName the test's display name
+     */
+    public TestDetails(long startTime, Set<String> tags, String filePath, String uniqueId, String displayName) {
+        this(startTime, tags, filePath, uniqueId, displayName, List.of());
+    }
 
     /**
      * Creates TestDetails from a test context adapter.
      * <p>
      * This static factory method extracts all relevant test metadata (unique ID, display name,
-     * tags, source location) from the adapter and constructs a TestDetails record with the
+     * tags, source location, suite) from the adapter and constructs a TestDetails record with the
      * current timestamp as the start time.
      *
      * @param adapter the test context adapter
@@ -36,7 +58,8 @@ public record TestDetails(
             adapter.getTags(),
             adapter.getSourceLocation().orElse(null),
             adapter.getUniqueId(),
-            adapter.getDisplayName()
+            adapter.getDisplayName(),
+            adapter.getSuite()
         );
     }
 }

@@ -49,6 +49,7 @@ public class TestProcessor {
             .name(displayName) // Use the displayName parameter
             .tags(details.tags() != null ? new ArrayList<>(details.tags()) : new ArrayList<>())
             .filePath(details.filePath())
+            .suite(details.suite().isEmpty() ? null : new ArrayList<>(details.suite()))
             .start(details.startTime())
             .stop(stopTime)
             .duration(stopTime - details.startTime())

@@ -140,7 +140,8 @@ public final class CtrfReportManager {
         long stopTime = System.currentTimeMillis();
         TestDetails details = run.state().removeTestDetails(reported.uniqueId());
         if (details == null) {
-            details = new TestDetails(stopTime, reported.tags(), reported.filePath(), reported.uniqueId(), reported.displayName());
+            details = new TestDetails(stopTime, reported.tags(), reported.filePath(), reported.uniqueId(), reported.displayName(),
+                reported.suite());
         }
 
         var newTest = testProcessor.createTest(details.displayName(), details, stopTime);
