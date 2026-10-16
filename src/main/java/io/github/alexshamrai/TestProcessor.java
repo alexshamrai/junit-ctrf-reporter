@@ -87,12 +87,15 @@ public class TestProcessor {
         return message.length() > maxLength ? message.substring(0, maxLength) + "..." : message;
     }
 
-    // A failure whose toString() throws or returns null is still reported, by its class name
+    // A failure whose toString() throws, even an Error, or returns null is still reported, by its class name. A
+    // VirtualMachineError isn't caught, as everywhere in the reporter: the JVM can't recover from it
     private static String describe(Throwable cause) {
         try {
             String text = cause.toString();
             return text != null ? text : cause.getClass().getName();
-        } catch (RuntimeException e) {
+        } catch (VirtualMachineError e) {
+            throw e;
+        } catch (Throwable e) {
             return cause.getClass().getName();
         }
     }
@@ -102,7 +105,9 @@ public class TestProcessor {
         var writer = new StringWriter();
         try {
             cause.printStackTrace(new PrintWriter(writer));
-        } catch (RuntimeException e) {
+        } catch (VirtualMachineError e) {
+            throw e;
+        } catch (Throwable e) {
             return describe(cause);
         }
         return writer.toString();

@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
@@ -217,6 +218,39 @@ public class TestProcessorTest {
 
         assertEquals(exception.getClass().getName(), test.getMessage());
         assertEquals(exception.getClass().getName(), test.getTrace());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A failure whose toString() throws an Error is still recorded, by its class name")
+    void failureWhoseToStringThrowsAnErrorIsStillRecorded() {
+        var test = Test.builder().build();
+        var exception = new IllegalStateException() {
+            @Override
+            public String toString() {
+                throw new AssertionError("toString is broken");
+            }
+        };
+        when(configReader.getMaxMessageLength()).thenReturn(500);
+
+        testProcessor.setFailureDetails(test, exception);
+
+        assertEquals(exception.getClass().getName(), test.getMessage());
+        assertEquals(exception.getClass().getName(), test.getTrace());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A VirtualMachineError from a failure's toString() isn't swallowed")
+    void virtualMachineErrorFromAFailuresToStringPropagates() {
+        var test = Test.builder().build();
+        var exception = new IllegalStateException() {
+            @Override
+            public String toString() {
+                throw new OutOfMemoryError("no memory for the message");
+            }
+        };
+        when(configReader.getMaxMessageLength()).thenReturn(500);
+
+        assertThrows(OutOfMemoryError.class, () -> testProcessor.setFailureDetails(test, exception));
     }
 
     @org.junit.jupiter.api.Test
