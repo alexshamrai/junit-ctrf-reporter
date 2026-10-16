@@ -3,6 +3,8 @@ package io.github.alexshamrai.json;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigInteger;
@@ -11,6 +13,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -63,6 +66,63 @@ class JsonParserTest {
         "tru", "nul", "\"open", "\"bad \\x escape\"", "\"\\u12G4\"", "{} {}", "{1:2}", "'single'", "NaN"})
     void malformedJsonThrows(String json) {
         assertThatThrownBy(() -> JsonParser.parse(json)).isInstanceOf(JsonException.class);
+    }
+
+    /**
+     * Malformed input and the exact message it gives, character position included. Captured from the parser of 0.5.1.
+     */
+    static Stream<Arguments> malformedJson() {
+        String bom = String.valueOf((char) 0xFEFF);
+        return Stream.of(
+            Arguments.of("", "Unexpected end of the JSON text at character 0"),
+            Arguments.of(" ", "Unexpected end of the JSON text at character 1"),
+            Arguments.of("{", "Expected a member name at character 1"),
+            Arguments.of("{1:2}", "Expected a member name at character 1"),
+            Arguments.of("{\"a\"", "Expected ':' at character 4"),
+            Arguments.of("{\"a\" 1}", "Expected ':' at character 5"),
+            Arguments.of("{\"a\":}", "Unexpected character '}' at character 5"),
+            Arguments.of("{\"a\":1", "Expected '}' at character 6"),
+            Arguments.of("{\"a\":1 2}", "Expected '}' at character 7"),
+            Arguments.of("{\"a\":1,", "Expected a member name at character 7"),
+            Arguments.of("{\"a\":1,}", "Expected a member name at character 7"),
+            Arguments.of("{} {}", "Unexpected text after the JSON value at character 3"),
+            Arguments.of("[", "Unexpected end of the JSON text at character 1"),
+            Arguments.of("[1", "Expected ']' at character 2"),
+            Arguments.of("[1,]", "Unexpected character ']' at character 3"),
+            Arguments.of("[1 2]", "Expected ']' at character 3"),
+            Arguments.of(" [ 1 , 2 ] x", "Unexpected text after the JSON value at character 11"),
+            Arguments.of("01", "Unexpected text after the JSON value at character 1"),
+            Arguments.of("-", "Expected a digit at character 1"),
+            Arguments.of("1.", "Expected a digit at character 2"),
+            Arguments.of("1e", "Expected a digit at character 2"),
+            Arguments.of(".5", "Unexpected character '.' at character 0"),
+            Arguments.of("NaN", "Unexpected character 'N' at character 0"),
+            Arguments.of("'single'", "Unexpected character ''' at character 0"),
+            Arguments.of("tru", "Expected true at character 0"),
+            Arguments.of("falsy", "Expected false at character 0"),
+            Arguments.of("[true,fals]", "Expected false at character 6"),
+            Arguments.of("nul", "Expected null at character 0"),
+            Arguments.of("\"open", "Unterminated string at character 5"),
+            Arguments.of("\"tab\there\"", "Unescaped control character in a string at character 5"),
+            Arguments.of("\"\\", "Unterminated escape at character 2"),
+            Arguments.of("\"end\\", "Unterminated escape at character 5"),
+            Arguments.of("\"bad \\x escape\"", "Invalid escape \\x at character 7"),
+            Arguments.of("\"\\u12G4\"", "Invalid \\u escape at character 3"),
+            Arguments.of("\"\\u", "Truncated \\u escape at character 3"),
+            Arguments.of("\"\\u12", "Truncated \\u escape at character 3"),
+            Arguments.of("\"\\u1G", "Truncated \\u escape at character 3"),
+            Arguments.of("  " + bom + "{}", "Unexpected character '" + bom + "' at character 2"),
+            Arguments.of(bom + " \"x\" y", "Unexpected text after the JSON value at character 6"),
+            Arguments.of("1".repeat(1001), "Number longer than 1000 characters at character 1001"),
+            Arguments.of("-" + "2".repeat(1000), "Number longer than 1000 characters at character 1001"),
+            Arguments.of("[".repeat(101), "Arrays and objects nest deeper than 100 levels at character 100"),
+            Arguments.of("{\"a\":".repeat(101), "Arrays and objects nest deeper than 100 levels at character 500"));
+    }
+
+    @ParameterizedTest(name = "{index}: {1}")
+    @MethodSource("malformedJson")
+    void malformedJsonIsReportedWithThePositionOfTheProblem(String json, String message) {
+        assertThatThrownBy(() -> JsonParser.parse(json)).isInstanceOf(JsonException.class).hasMessage(message);
     }
 
     @Test
