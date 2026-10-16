@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), and every scenario's report is checked against the official schema (TI-5, #146). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), every scenario's report is checked against the official schema (TI-5, #146), and the file service's behaviour on permission errors, odd paths and interrupts is pinned (TI-2, #147). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -54,6 +54,7 @@ Each improvement item includes:
 | [Review minors](#follow-ups-after-051) the five the Phase 3 final review deferred | Done; merged 2026-10-16 (rebase, five commits); not released | #143 | `9cdb0df`..`513c03d` |
 | [HP-12](#hp-12-design--suite) `suite` holds each test's container hierarchy | Done; merged 2026-10-16 (rebase, four commits); not released | #144 | `04fe3c9`..`c793e51` |
 | [DI-3](#di-3-fix-incorrect-documentation) Incorrect documentation | Done: `CLAUDE.md`'s single-test commands and stale class names; its six original points were already fixed | #145 | `3984760` |
+| [TI-2](#ti-2-add-file-system-error-tests) File system error tests | Done: permission errors, an empty report, odd paths, a directory as the path, an interrupted thread | #147 | `ad4756c` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -706,7 +707,7 @@ Snapshot of 2026-10-08. For the current state, see [Status on `master` — 2026-
 | CQ-3 Long parameter lists | Stale | The referenced path and method don't exist on `master` |
 | CQ-4 Magic constants | Open | `"initializationError"` is defined in four places |
 | TI-1 Concurrency tests | Open, needs update | Sample code uses removed APIs; real data loss is across JVMs (TI-5) |
-| TI-2 File-system error tests | Open | The MP-5 cases are superseded with MP-5; CB-6 added the atomic-write and unparsable-report cases |
+| TI-2 File-system error tests | Done (#147) | The MP-5 cases are superseded with MP-5; CB-6 added the atomic-write and unparsable-report cases, #147 the rest |
 | TI-3 Health-test isolation | Partially done | Reset hook in `@BeforeEach`/`@AfterEach`; still a shared singleton |
 | DI-1 Javadoc | Open | Sample Javadoc repeats the wrong flaky rule |
 | DI-2 Architecture doc | Open | Should describe the target architecture below |
@@ -2404,6 +2405,9 @@ If order doesn't matter: `ConcurrentLinkedQueue` (fastest for concurrent writes)
 #### Review Note (2026-10-08)
 Validation must never throw into JUnit callbacks (`beforeEach`, `TestWatcher`, the store `close()`). An exception there fails or masks the user's tests (MP-7). For invalid configuration, log a warning and fall back to the default instead of throwing `IllegalArgumentException` as sketched below. Do not reject `..` in report paths (see SP-1).
 
+#### Review Note (2026-10-16)
+Found with TI-2 (#147): when `ctrf.report.path` names a directory, the reporter warns that the existing report can't be read ("Is a directory"), retries the move for about a second, and then warns "Failed to write results to file: <path> - <temp file>", without a reason. A check that the path isn't a directory, with one clear warning, belongs here.
+
 #### Prompt
 ```
 Add comprehensive input validation throughout the codebase to prevent invalid states and improve error messages.
@@ -3559,7 +3563,15 @@ Tools to use:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `src/test/java/io/github/alexshamrai/CtrfReportFileServiceTest.java`
-**Status**: Open
+**Status**: Done (#147, `ad4756c`), 2026-10-16. Six tests were added to `CtrfReportFileServiceTest`, pinning what the service does today, without throwing:
+- the report's own directory became read-only: the earlier report stays, no temp file is left, "Access denied" is logged;
+- a report the JVM isn't allowed to read is replaced, with a warning;
+- an empty report is replaced, with a warning, through either `update`;
+- a path with spaces and non-ASCII characters is written, with its lock file next to it, and merged into;
+- a report path naming a directory leaves it alone, with a warning; see MP-4 for that warning;
+- on a thread whose interrupt flag is set, the update works as usual and the flag stays set.
+
+Each was seen failing against a deliberate break of the behaviour it pins. The rest of the list was covered before: corrupted, legacy, too deeply nested and non-UTF-8 reports, a byte order mark, a write that fails halfway (CB-6d), a move that keeps failing (the path a full disk takes, which can't be simulated portably), a held lock and concurrent threads; parallel JVMs by the CB-6 fork scenarios, and a 100,000-test report by `HeapGuardScenarioTest`. The MP-5 cases below were superseded with MP-5: CB-6 decided that an unparsable report is replaced, with a warning. The "mock `ObjectMapper`" case no longer applies; the library has no Jackson.
 
 #### Review Note (2026-10-08)
 Add the MP-5 cases: spec-valid unknown fields such as a root `runId`, a missing `environment.healthy`, and an unparsable file that must be kept rather than overwritten. Also add an atomic-write case (CB-6d).
@@ -3715,14 +3727,14 @@ Requirements:
 ```
 
 #### Acceptance Criteria
-- [ ] All file system error scenarios tested
-- [ ] Edge cases covered
-- [ ] Tests use temp directories
-- [ ] No files left after tests
-- [ ] Error handling verified
-- [ ] Large file performance tested
-- [ ] Special characters in paths tested
-- [ ] Documentation explains expected behavior
+- [x] All file system error scenarios tested
+- [x] Edge cases covered
+- [x] Tests use temp directories
+- [x] No files left after tests
+- [x] Error handling verified
+- [x] Large file performance tested
+- [x] Special characters in paths tested
+- [x] Documentation explains expected behavior
 
 ---
 
@@ -4986,7 +4998,7 @@ Updated 2026-10-08; progress marked 2026-10-16. This replaces the original four-
 ### Already done on `master`
 CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 (its regression is tracked in CB-6), TI-3 (partially)
 
-Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. Phase 3 is done (#138) and released as 0.5.1. In Phase 4, HP-12 (#144), DI-3 (#145) and TI-5's schema check (#146) are done. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
+Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. Phase 3 is done (#138) and released as 0.5.1. In Phase 4, HP-12 (#144), DI-3 (#145), TI-5's schema check (#146) and TI-2 (#147) are done. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
 
 ### Phase 1: Stop wrong results and broken builds (small, independent changes)
 1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix. **Done** (#124)
@@ -5022,7 +5034,8 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 20. DI-3: Fix incorrect documentation. **Done** (#145), 2026-10-16
 21. TI-5: Check every scenario's report against the official schema. **Done** (#146), 2026-10-16; checking them against JUnit's event log stays open
 22. DI-1, DI-2: Documentation
-23. MP-4, CQ-2, CQ-4, TI-1, TI-2, SP-2
+23. TI-2: File system error tests. **Done** (#147), 2026-10-16
+24. MP-4, CQ-2, CQ-4, TI-1, SP-2
 
 ### Not planned
 - CQ-1: superseded by CB-7 and HP-6
