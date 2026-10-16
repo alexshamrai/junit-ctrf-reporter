@@ -88,6 +88,7 @@ public class ConfigReader {
      * @param systemProperties the system properties
      * @param environment      the environment variables
      * @param fileProperties   the contents of {@code ctrf.properties}
+     * @throws NullPointerException if a map, or a key or a value in one, is {@code null}
      */
     public ConfigReader(Map<String, String> systemProperties, Map<String, String> environment,
                         Map<String, String> fileProperties) {
