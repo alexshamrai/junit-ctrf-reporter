@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), every scenario's report is checked against the official schema (TI-5, #146), and the file service's behaviour on permission errors, odd paths and interrupts is pinned (TI-2, #147). MP-4 (#148) does change the jar: a blank, invalid or directory `ctrf.report.path` no longer loses the report. So does #149: through the extension, a class whose setup or teardown aborts is no longer reported as failed; TI-1 (#150) found it. The next release's notes are the 0.5.2 ones, HP-12's, MP-4's line in its status, and #149's line in TI-1's status. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), every scenario's report is checked against the official schema (TI-5, #146), and the file service's behaviour on permission errors, odd paths and interrupts is pinned (TI-2, #147). MP-4 (#148) does change the jar: a blank, invalid or directory `ctrf.report.path` no longer loses the report. So does #149: through the extension, a class whose setup or teardown aborts is no longer reported as failed; TI-1 (#150), the concurrency tests, found it. DI-1 and DI-2 (#151) document the public API and move the architecture into `ARCHITECTURE.md`. The next release's notes are the 0.5.2 ones, HP-12's, MP-4's line in its status, and #149's line in TI-1's status. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -58,6 +58,8 @@ Each improvement item includes:
 | [MP-4](#mp-4-add-comprehensive-input-validation) Input validation, re-scoped to the report path | Done: a blank, invalid or directory `ctrf.report.path` warns and still gets a report; not released | #148 | `3fa6e30` |
 | Extension: an aborted class isn't a failure (not a plan item; found by TI-1) | Done: an aborted setup is one skipped `initializationError`, an aborted teardown adds nothing; not released | #149 | `bdf424b` |
 | [TI-1](#ti-1-add-comprehensive-concurrency-tests) Concurrency tests | Done: 4,000 lifecycles and 200 concurrent finishes in-process; JUnit's parallel execution through both entry points | #150 | `811cc4a` |
+| [DI-1](#di-1-add-comprehensive-javadoc) Javadoc | Done: every public class and method documented; checkstyle keeps it so | #151 | `2b9e66e` |
+| [DI-2](#di-2-add-architecture-documentation) Architecture doc | Done: `ARCHITECTURE.md`, imported by `CLAUDE.md` | #151 | `c292639` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -712,8 +714,8 @@ Snapshot of 2026-10-08. For the current state, see [Status on `master` — 2026-
 | TI-1 Concurrency tests | Done (#150) | Sample code uses removed APIs; real data loss is across JVMs (TI-5). It found the extension's aborted-class bug, fixed in #149 |
 | TI-2 File-system error tests | Done (#147) | The MP-5 cases are superseded with MP-5; CB-6 added the atomic-write and unparsable-report cases, #147 the rest |
 | TI-3 Health-test isolation | Partially done | Reset hook in `@BeforeEach`/`@AfterEach`; still a shared singleton |
-| DI-1 Javadoc | Open | Sample Javadoc repeats the wrong flaky rule |
-| DI-2 Architecture doc | Open | Should describe the target architecture below |
+| DI-1 Javadoc | Done (#151) | Sample Javadoc repeats the wrong flaky rule |
+| DI-2 Architecture doc | Done (#151) | Should describe the target architecture below |
 | SP-1 Path validation | Re-evaluated: not recommended | Not a trust boundary; rejecting `..` breaks multi-module setups |
 | SP-2 Benchmarks | Open | Baseline numbers are in MP-3 |
 
@@ -4110,7 +4112,7 @@ a fresh manager (HP-1), or run each scenario in a forked JVM.
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: All public classes and methods
-**Status**: Open
+**Status**: Done (#151, `2b9e66e`), 2026-10-16. All 60 gaps that javadoc's missing-comment check found on master are filled: `ConfigReader`'s getters, the CTRF model classes and `TestStatus`, `TestDetails`'s components, five `CtrfReportManager` methods, and the helpers. checkstyle's `MissingJavadocType` and `MissingJavadocMethod` now run at public scope on the main sources, so a new undocumented public class or method fails `:build`. `:javadoc` prints 13 warnings, down from 60; all are constructors that Lombok generates, which javadoc doesn't see, plus `SummaryUtil`'s implicit one. Left out, to keep it concise: a `package-info.java` per package (the README names the API), and `@since`, `@author` and usage examples on every method.
 
 #### Review Note (2026-10-08)
 The sample class Javadoc below repeats the old flaky rule: "pass after previous failures (retries > 0) or if multiple executions have different outcomes". Use the spec definition instead: the final status is passed, and at least one earlier attempt failed (CB-7). The sample method signatures are also outdated (see the TI-1 note).
@@ -4313,14 +4315,14 @@ Guidelines:
 ```
 
 #### Acceptance Criteria
-- [ ] All public classes have class-level javadoc
-- [ ] All public methods have complete javadoc
-- [ ] All @param, @return, @throws documented
+- [x] All public classes have class-level javadoc
+- [x] All public methods have complete javadoc
+- [x] All @param, @return, @throws documented
 - [ ] Package-info.java created for each package
 - [ ] Thread safety documented where relevant
-- [ ] Examples provided for complex APIs
+- [x] Examples provided for complex APIs
 - [ ] Javadoc builds without warnings
-- [ ] Documentation is accurate and helpful
+- [x] Documentation is accurate and helpful
 
 ---
 
@@ -4329,7 +4331,7 @@ Guidelines:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: New file `ARCHITECTURE.md`
-**Status**: Open
+**Status**: Done (#151, `c292639`), 2026-10-16. `CLAUDE.md`'s Architecture Overview and Project Structure already described the target architecture below. They moved word for word into `ARCHITECTURE.md`, which `CLAUDE.md` imports with `@ARCHITECTURE.md`, so there is one copy. `DEVELOPMENT.md` got its missing "Automated Release Process" heading and a full project structure; `CONTRIBUTING.md` and the README link to `ARCHITECTURE.md`. The testing strategy stays in `CLAUDE.md` and `INTEGRATION_TESTS.md`.
 
 #### Review Note (2026-10-08)
 Describe the target architecture from the Review Update rather than the current design: listener first, attempts keyed by `testId`, shards plus a merge step. Drop the "Why CopyOnWriteArrayList?" section (see MP-3 and HP-6). Document the report semantics: one test per logical test, `retries`/`retryAttempts`, and the flaky definition.
@@ -4485,14 +4487,14 @@ Requirements:
 ```
 
 #### Acceptance Criteria
-- [ ] ARCHITECTURE.md created
-- [ ] All major components documented
-- [ ] Diagrams explain data flow
-- [ ] Threading model explained clearly
-- [ ] Design decisions documented with rationale
+- [x] ARCHITECTURE.md created
+- [x] All major components documented
+- [x] Diagrams explain data flow
+- [x] Threading model explained clearly
+- [x] Design decisions documented with rationale
 - [ ] Extension points documented
 - [ ] Testing strategy explained
-- [ ] Document is kept up to date
+- [x] Document is kept up to date
 
 ---
 
@@ -5022,7 +5024,7 @@ Updated 2026-10-08; progress marked 2026-10-16. This replaces the original four-
 ### Already done on `master`
 CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 (its regression is tracked in CB-6), TI-3 (partially)
 
-Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. Phase 3 is done (#138) and released as 0.5.1. In Phase 4, HP-12 (#144), DI-3 (#145), TI-5's schema check (#146), TI-2 (#147), MP-4 (#148) and TI-1 (#150) are done, and so is the extension fix TI-1 found (#149). See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
+Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. Phase 3 is done (#138) and released as 0.5.1. In Phase 4, HP-12 (#144), DI-3 (#145), TI-5's schema check (#146), TI-2 (#147), MP-4 (#148), TI-1 (#150), DI-1 and DI-2 (#151) are done, and so is the extension fix TI-1 found (#149). See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
 
 ### Phase 1: Stop wrong results and broken builds (small, independent changes)
 1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix. **Done** (#124)
@@ -5057,7 +5059,7 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 19. HP-12: Fill `suite` with each test's container hierarchy. **Done** (#144), 2026-10-16; not released
 20. DI-3: Fix incorrect documentation. **Done** (#145), 2026-10-16
 21. TI-5: Check every scenario's report against the official schema. **Done** (#146), 2026-10-16; checking them against JUnit's event log stays open
-22. DI-1, DI-2: Documentation
+22. DI-1, DI-2: Documentation. **Done** (#151), 2026-10-16
 23. TI-2: File system error tests. **Done** (#147), 2026-10-16
 24. MP-4: Input validation, re-scoped to the report path. **Done** (#148), 2026-10-16; not released
 25. TI-1: Concurrency tests. **Done** (#150), 2026-10-16; it found the extension's aborted-class bug, fixed in #149, not released
