@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), every scenario's report is checked against the official schema (TI-5, #146), and the file service's behaviour on permission errors, odd paths and interrupts is pinned (TI-2, #147). MP-4 (#148) does change the jar: a blank, invalid or directory `ctrf.report.path` no longer loses the report. The next release's notes are the 0.5.2 ones, HP-12's, and MP-4's line in its status. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), every scenario's report is checked against the official schema (TI-5, #146), and the file service's behaviour on permission errors, odd paths and interrupts is pinned (TI-2, #147). MP-4 (#148) does change the jar: a blank, invalid or directory `ctrf.report.path` no longer loses the report. So does #149: through the extension, a class whose setup or teardown aborts is no longer reported as failed; TI-1 (#150) found it. The next release's notes are the 0.5.2 ones, HP-12's, MP-4's line in its status, and #149's line in TI-1's status. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -56,6 +56,8 @@ Each improvement item includes:
 | [DI-3](#di-3-fix-incorrect-documentation) Incorrect documentation | Done: `CLAUDE.md`'s single-test commands and stale class names; its six original points were already fixed | #145 | `3984760` |
 | [TI-2](#ti-2-add-file-system-error-tests) File system error tests | Done: permission errors, an empty report, odd paths, a directory as the path, an interrupted thread | #147 | `ad4756c` |
 | [MP-4](#mp-4-add-comprehensive-input-validation) Input validation, re-scoped to the report path | Done: a blank, invalid or directory `ctrf.report.path` warns and still gets a report; not released | #148 | `3fa6e30` |
+| Extension: an aborted class isn't a failure (not a plan item; found by TI-1) | Done: an aborted setup is one skipped `initializationError`, an aborted teardown adds nothing; not released | #149 | `bdf424b` |
+| [TI-1](#ti-1-add-comprehensive-concurrency-tests) Concurrency tests | Done: 4,000 lifecycles and 200 concurrent finishes in-process; JUnit's parallel execution through both entry points | #150 | `811cc4a` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -707,7 +709,7 @@ Snapshot of 2026-10-08. For the current state, see [Status on `master` — 2026-
 | CQ-2 Value objects | Open (Low) | Don't call the value object `TestIdentifier` (clashes with JUnit's class) |
 | CQ-3 Long parameter lists | Stale | The referenced path and method don't exist on `master` |
 | CQ-4 Magic constants | Open | `"initializationError"` is defined in four places |
-| TI-1 Concurrency tests | Open, needs update | Sample code uses removed APIs; real data loss is across JVMs (TI-5) |
+| TI-1 Concurrency tests | Done (#150) | Sample code uses removed APIs; real data loss is across JVMs (TI-5). It found the extension's aborted-class bug, fixed in #149 |
 | TI-2 File-system error tests | Done (#147) | The MP-5 cases are superseded with MP-5; CB-6 added the atomic-write and unparsable-report cases, #147 the rest |
 | TI-3 Health-test isolation | Partially done | Reset hook in `@BeforeEach`/`@AfterEach`; still a shared singleton |
 | DI-1 Javadoc | Open | Sample Javadoc repeats the wrong flaky rule |
@@ -3305,7 +3307,22 @@ Requirements:
 **Priority**: High
 **Complexity**: Complex
 **Files**: New test file `src/test/java/io/github/alexshamrai/CtrfReportManagerConcurrencyTest.java`
-**Status**: Open; update the sample before implementing
+**Status**: Done (#150, `811cc4a`), 2026-10-16; test code only. The sample below wasn't used: it calls methods that no longer exist.
+- **`CtrfReportManagerConcurrencyTest`** drives the real processor, composer and file service from 8 threads released at once:
+  - 4,000 test lifecycles, with one thread marking the environment unhealthy: each test is reported once, with its status, name and file;
+  - 200 rounds of 8 threads finishing the same run: each round writes the report exactly once.
+- **`ParallelExecutionScenarioTest`** runs JUnit's parallel execution on 8 threads, in a forked JVM, through both entry points: 802 tests, including a nested class that aborts in `@AfterAll` after its 500 tests ran. Each test is reported once, with JUnit's counts, on 8 or 9 threads.
+- **Swapping in an unsafe piece was caught:**
+  - a `LinkedList` for the attempts queue, every run;
+  - a `HashMap` for the start records, 19 of 20 runs;
+  - a plain get-then-set for the finish's compare-and-set, 20 of 20;
+  - a `HashSet` for the listener's reported-id set, 3 of 10. That race is rare by nature.
+
+  The unit tests passed 100 runs in a row, the scenarios 20.
+- **Found a bug, not a race,** fixed first in #149 (`bdf424b`). Through the extension, a class whose `@BeforeAll` or `@AfterAll` aborted with a failed assumption was reported as failed, though JUnit counts no failure. Now an aborted setup is one skipped `initializationError`, rawStatus `aborted`, and an aborted teardown adds nothing. Release notes: "`CtrfExtension`: a class whose `@BeforeAll` or `@AfterAll` aborts with a failed assumption is no longer reported as failed."
+- **Not tested:**
+  - results arriving while the run finishes, which JUnit doesn't allow;
+  - environment health on its own, an `AtomicBoolean` that the lifecycle test marks from one thread among eight.
 
 #### Review Note (2026-10-08)
 The sample code uses APIs that no longer exist: `onTestStart(String)`, `finishTestRun()` with no arguments, and a public no-argument constructor. On `master` the signatures are `onTestStart(TestDetails)` and `finishTestRun(Optional<ExtensionContext>)`. The data loss seen in practice happens across JVMs, across repeated executions (CB-6) and through nested JUnit runs (CB-2), not across threads. The CB-2 race that `testRaceConditionBetweenAddAndFinish` targets isn't reachable; it was checked under parallel load. TI-5 covers the real scenarios and is more valuable. Keep this item for the thread-level guarantees.
@@ -3555,13 +3572,13 @@ Tools to use:
 ```
 
 #### Acceptance Criteria
-- [ ] Comprehensive concurrency test suite created
-- [ ] Tests cover all concurrent access patterns
+- [x] Comprehensive concurrency test suite created
+- [x] Tests cover all concurrent access patterns
 - [ ] Tests reliably detect race conditions
-- [ ] Tests pass consistently (run 100 times)
+- [x] Tests pass consistently (run 100 times)
 - [ ] High-volume test verifies performance
-- [ ] Tests document expected thread-safe behavior
-- [ ] Any race conditions discovered are documented
+- [x] Tests document expected thread-safe behavior
+- [x] Any race conditions discovered are documented
 
 ---
 
@@ -5005,7 +5022,7 @@ Updated 2026-10-08; progress marked 2026-10-16. This replaces the original four-
 ### Already done on `master`
 CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 (its regression is tracked in CB-6), TI-3 (partially)
 
-Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. Phase 3 is done (#138) and released as 0.5.1. In Phase 4, HP-12 (#144), DI-3 (#145), TI-5's schema check (#146), TI-2 (#147) and MP-4 (#148) are done. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
+Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. Phase 3 is done (#138) and released as 0.5.1. In Phase 4, HP-12 (#144), DI-3 (#145), TI-5's schema check (#146), TI-2 (#147), MP-4 (#148) and TI-1 (#150) are done, and so is the extension fix TI-1 found (#149). See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
 
 ### Phase 1: Stop wrong results and broken builds (small, independent changes)
 1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix. **Done** (#124)
@@ -5043,7 +5060,8 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 22. DI-1, DI-2: Documentation
 23. TI-2: File system error tests. **Done** (#147), 2026-10-16
 24. MP-4: Input validation, re-scoped to the report path. **Done** (#148), 2026-10-16; not released
-25. CQ-2, CQ-4, TI-1, SP-2
+25. TI-1: Concurrency tests. **Done** (#150), 2026-10-16; it found the extension's aborted-class bug, fixed in #149, not released
+26. CQ-2, CQ-4, SP-2
 
 ### Not planned
 - CQ-1: superseded by CB-7 and HP-6
