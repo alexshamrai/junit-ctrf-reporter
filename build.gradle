@@ -24,8 +24,8 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 ext {
-    projectVersion = '0.5.2-SNAPSHOT'
-    releaseVersion = '0.5.1'
+    projectVersion = '0.5.3-SNAPSHOT'
+    releaseVersion = '0.5.2'
 
     junitVersion = '6.1.3'
     // The oldest supported JUnit: main code compiles against it. renovate.json keeps it on 5.10.x
