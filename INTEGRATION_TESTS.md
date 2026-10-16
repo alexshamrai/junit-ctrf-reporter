@@ -28,6 +28,7 @@ integration-tests-listener/
         │       ├── DummyFailedTest.java       # Tests designed to fail
         │       ├── DummySuccessTest.java      # Tests designed to succeed
         │       ├── FirstLongTest.java         # Tests with specific durations
+        │       ├── PaymentsTest.java          # @Nested tests under a @DisplayName, for suite
         │       └── SecondLongTest.java        # More tests with specific durations
 ```
 
@@ -67,6 +68,10 @@ public abstract class BaseFakeTest {
 - **InitializationErrorTest** and **AnotherInitializationErrorTest**: fail in `@BeforeAll`; each is reported as an `initializationError` entry
 - **AfterAllFailureTest**: fails in `@AfterAll` after its test passed; reported as a `teardownError` entry
 - **BrokenSourceTest** (listener module only): a `@MethodSource` and a `@TestFactory` that throw; each is reported as a failed entry under its own name. The extension cannot see failures below class level, so the extension module has no such test
+
+#### Suite Verification
+
+- **PaymentsTest**: a `@Nested` class `Refunds` under `@DisplayName("Payments")`, with a test and a two-value `@ParameterizedTest`, all passing. Their `suite` is `["Payments", "Refunds"]`, and `["Payments", "Refunds", "refundsEachAmount(int)"]` for the parameterized ones. `JunitCrossCheckTest` checks every entry's `suite` against JUnit's own event log
 
 ### Environment Health Testing
 

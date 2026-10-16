@@ -27,17 +27,17 @@ public class CtrfLogicTest extends BaseIntegrationTest {
 
         // Each test appears once, as its final attempt: the test-retry plugin's second round is folded into
         // retryAttempts. Both modules: the shared fake tests, AfterAllFailureTest's passing test and its
-        // teardownError, and AssumptionTest's aborted test, which counts as skipped. The listener module also
+        // teardownError, and AssumptionTest's aborted test, which counts as skipped, and PaymentsTest's three passing tests. The listener module also
         // reports BrokenSourceTest's two failed containers, and the four tests of DisabledClassTest and
         // ConditionallySkippedClassTest as skipped.
         if (run.isListener()) {
-            assertThat(summary.getTests()).isEqualTo(28);
-            assertThat(summary.getPassed()).isEqualTo(14);
+            assertThat(summary.getTests()).isEqualTo(31);
+            assertThat(summary.getPassed()).isEqualTo(17);
             assertThat(summary.getFailed()).isEqualTo(7);
             assertThat(summary.getSkipped()).isEqualTo(7);
         } else {
-            assertThat(summary.getTests()).isEqualTo(22);
-            assertThat(summary.getPassed()).isEqualTo(14);
+            assertThat(summary.getTests()).isEqualTo(25);
+            assertThat(summary.getPassed()).isEqualTo(17);
             assertThat(summary.getFailed()).isEqualTo(5);
             assertThat(summary.getSkipped()).isEqualTo(3);
         }
@@ -265,6 +265,21 @@ public class CtrfLogicTest extends BaseIntegrationTest {
      * The report entry whose testId is the given fake test class's ID, followed by {@code /segment} unless the segment
      * is {@code null} (a class-level entry). Fails if the report doesn't have exactly one.
      */
+    @Test
+    void verifyEveryTestHasASuite() {
+        assertThat(report.getResults().getTests()).allSatisfy(test ->
+            assertThat(test.getSuite()).as("suite of %s", test.getTestId()).isNotEmpty().doesNotContainNull());
+    }
+
+    @Test
+    void verifyNestedAndParameterizedTestsAreGroupedByDisplayName() {
+        assertThat(testWithId("PaymentsTest", "[nested-class:Refunds]/[method:refundsTheFee()]").getSuite())
+            .containsExactly("Payments", "Refunds");
+        assertThat(testWithId("PaymentsTest",
+            "[nested-class:Refunds]/[test-template:refundsEachAmount(int)]/[test-template-invocation:#1]").getSuite())
+            .containsExactly("Payments", "Refunds", "refundsEachAmount(int)");
+    }
+
     private io.github.alexshamrai.ctrf.model.Test testWithId(String fakeClass, String segment) {
         var testId = "[engine:junit-jupiter]/[class:" + FAKE_PACKAGE + fakeClass + "]" + (segment == null ? "" : "/" + segment);
         var matches = report.getResults().getTests().stream()
