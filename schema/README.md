@@ -8,8 +8,9 @@
 - commit: `e325eb33c7662a208bfa4d093a41cc55439d6e6a`
 - SHA-256: `cb9bd075beb0e046076046793f96bb1ba72bd1b1d331b1fbd42ac0ea36776cf3`
 
-The tests load it as a test resource: `CtrfSchemaConformanceTest` in the main module, and
-`CtrfSchemaValidationTest` in `integration-ctrf-validator`. It is not part of the published library.
+The tests load it as a test resource: in the main module, `CtrfSchema` loads it for
+`CtrfSchemaConformanceTest` and for every report a scenario test produces, and in
+`integration-ctrf-validator`, `CtrfSchemaValidationTest` does. It is not part of the published library.
 
 ## Updating to a new CTRF version
 

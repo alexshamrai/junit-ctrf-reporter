@@ -1,5 +1,6 @@
 package io.github.alexshamrai.scenario;
 
+import io.github.alexshamrai.CtrfSchema;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
 import io.github.alexshamrai.ctrf.model.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -99,6 +100,23 @@ final class ScenarioRunner {
         return workspace.result(counts, logs.toString());
     }
 
+    /**
+     * Reads the report that the scenario JVMs wrote, which must match the official CTRF schema; {@code log} is their
+     * output, for the failure message.
+     */
+    static CtrfJson readReport(Path report, String log) throws IOException {
+        if (!Files.exists(report)) {
+            throw new IllegalStateException("The scenario JVMs wrote no report:\n" + log);
+        }
+        String json = Files.readString(report);
+        List<String> errors = CtrfSchema.errorsOf(json);
+        if (!errors.isEmpty()) {
+            throw new IllegalStateException("The report " + report + " breaks the official CTRF schema:\n"
+                + String.join("\n", errors) + "\n" + log);
+        }
+        return JsonMapper.builder().build().readValue(json, CtrfJson.class);
+    }
+
     private static Jvm[] repeat(Jvm jvm, int times) {
         Jvm[] jvms = new Jvm[times];
         Arrays.fill(jvms, jvm);
@@ -189,10 +207,7 @@ final class ScenarioRunner {
         }
 
         Result result(Map<String, Long> junitCounts, String log) throws IOException {
-            if (!Files.exists(report)) {
-                throw new IllegalStateException("The scenario JVMs wrote no report:\n" + log);
-            }
-            return new Result(JsonMapper.builder().build().readValue(report.toFile(), CtrfJson.class), junitCounts, log);
+            return new Result(readReport(report, log), junitCounts, log);
         }
 
         private Path output(int index) {
