@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 has started: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it's a feature, so semver says the next release is 0.6.0. Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), and every scenario's report is checked against the official schema (TI-5, #146). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -37,7 +37,7 @@ Each improvement item includes:
 | [HP-11](#hp-11-a-class-failure-that-recovers-on-retry-stays-failed) Class failure that recovers on retry | Done, with CB-6 | #132 | `9084a83` |
 | [HP-5](#hp-5-conform-to-the-official-ctrf-schema) Conform to the official CTRF schema | Done | #134 | `291f21d` |
 | [TI-4](#ti-4-validate-integration-output-against-the-official-schema-and-junits-own-counts) Official schema and JUnit counts in the validator | Done: the JUnit event-log cross-check and expectations from the run (#135); the official schema (HP-5, #134); CI with 2 forks (CB-6, #132) | #132, #134, #135 | `9084a83`, `291f21d`, `059992b` |
-| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-2, CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests; scenario outputs aren't validated against the official schema yet | #138 (CB-2) | `ecb4fd1` |
+| [TI-5](#ti-5-regression-tests-for-every-verified-scenario) Regression scenarios | Partially done: CB-2, CB-5, CB-6, CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11 have scenario tests, and every scenario's report is checked against the official schema (#146); checking them against JUnit's event log is open | #138 (CB-2), #146 | `ecb4fd1`, `77dce2e` |
 | [MP-5](#mp-5-read-previous-reports-tolerantly) Read previous reports tolerantly | Superseded by CB-6; unknown fields are ignored since MP-9 (#138) | #132, #138 | `9084a83`, `037e253` |
 | [HP-3](#hp-3-implement-proper-logging-framework) Logging through `java.util.logging` | Done | #138 | `47cd66b` |
 | [MP-9](#mp-9-dependency-and-configuration-hygiene-owner-env-vars-jackson) Own config loader and JSON code; no runtime dependencies | Done | #138 | `d888754`, `037e253` |
@@ -52,6 +52,8 @@ Each improvement item includes:
 | [Tests on Jackson 3](#follow-ups-after-051) Jackson 2 removed; the JSON output pinned by golden JSON | Done | #141 | `6ff69d5` |
 | [0.5.2 streaming JSON](#052-design--streaming-json) The JSON code streams both ways; a rerun reads only the old report's `runId`; heap guard | Done; merged 2026-10-16 (rebase, five commits); not released | #142 | `67f33d5`..`6083b2f` |
 | [Review minors](#follow-ups-after-051) the five the Phase 3 final review deferred | Done; merged 2026-10-16 (rebase, five commits); not released | #143 | `9cdb0df`..`513c03d` |
+| [HP-12](#hp-12-design--suite) `suite` holds each test's container hierarchy | Done; merged 2026-10-16 (rebase, four commits); not released | #144 | `04fe3c9`..`c793e51` |
+| [DI-3](#di-3-fix-incorrect-documentation) Incorrect documentation | Done: `CLAUDE.md`'s single-test commands and stale class names; its six original points were already fixed | #145 | `3984760` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -4012,7 +4014,7 @@ The per-task and whole-branch reviews of #135 left these open.
 **Priority**: High
 **Complexity**: Moderate
 **Files**: new tests under `src/test/java/io/github/alexshamrai/scenario/` (or a new integration module), fake test classes
-**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. CB-2 is covered since #138 (`NestedRunScenarioTest`). Still open: validating each scenario's output against the official schema and, since TI-4 (#135), against JUnit's event log. HP-5 (#134) pinned that schema at `schema/ctrf.schema.json`; `CtrfSchemaConformanceTest` shows how to load it in tests.
+**Status**: Partially done. Forked-JVM scenario tests in `src/test/java/io/github/alexshamrai/scenario/` cover CB-5, CB-6 (forks, new builds, same-JVM rerun), CB-7, HP-6, HP-7, HP-8, HP-9 and HP-11, each written with its fix. CB-2 is covered since #138 (`NestedRunScenarioTest`). Since #146 (`77dce2e`, 2026-10-16), `ScenarioRunner` checks every scenario's report against the official schema, through the test helper `CtrfSchema`; all of them pass. `HeapGuardScenarioTest`, which reads its own 100,000-test report, is left out. Still open: checking each scenario's report against JUnit's event log, as TI-4 (#135) does for the integration modules. That needs the root tests to use `JunitEvents` from the validator module, `ScenarioMain` to write JUnit's event log, and rules for the scenarios that differ from JUnit on purpose (HP-8 entries, HP-11 recoveries, accumulation, same-JVM reruns, the extension's missing dynamic tests); it is a separate design. The suite isn't under a minute: its 56 tests took 67 to 72 seconds, summed, on 2026-10-16.
 
 #### Prompt
 ````
@@ -4463,7 +4465,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Simple
 **Files**: `README.md`, `launcher/CtrfListener.java`, `CLAUDE.md`, `config/CtrfConfig.java`
-**Status**: Open (verified 2026-10-08)
+**Status**: Done (#145, `3984760`), 2026-10-16. The six points below were already fixed on `master`, mostly with the items they name. What was still wrong was in `CLAUDE.md`: both "Running Single Tests" commands failed, because `test` without the colon applied the filter to every module and the example method no longer existed; the component table and the project tree named `SuiteExecutionErrorHandler`, removed by CB-5, and `TestDetailsUtil`; and the tree left out the `adapter/` package and `ClassState`. Also checked: every `ctrf.*` key in the README and `CLAUDE.md` exists in `ConfigReader`, every class, file and path the docs name exists, and `./gradlew clean build` passes as documented.
 
 #### Prompt
 ````
@@ -4489,10 +4491,10 @@ Fix documentation that is wrong today:
 ````
 
 #### Acceptance Criteria
-- [ ] Every documented setting and command works as written
-- [ ] README dependency snippets are test-scoped
-- [ ] README says to use either the listener or the extension, not both
-- [ ] CLAUDE.md matches the code
+- [x] Every documented setting and command works as written
+- [x] README dependency snippets are test-scoped
+- [x] README says to use either the listener or the extension, not both
+- [x] CLAUDE.md matches the code
 
 ---
 
@@ -4984,7 +4986,7 @@ Updated 2026-10-08; progress marked 2026-10-16. This replaces the original four-
 ### Already done on `master`
 CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 (its regression is tracked in CB-6), TI-3 (partially)
 
-Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. Phase 3 is done (#138) and released as 0.5.1. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
+Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3, CB-6, HP-11, HP-5 and TI-4. MP-5 is superseded by CB-6, which completes Phase 2. Phase 3 is done (#138) and released as 0.5.1. In Phase 4, HP-12 (#144), DI-3 (#145) and TI-5's schema check (#146) are done. See [Status on `master` — 2026-10-14](#status-on-master--2026-10-14).
 
 ### Phase 1: Stop wrong results and broken builds (small, independent changes)
 1. CB-4: Remove JUnit runtime dependencies, fix the README scopes, add the consumer matrix. **Done** (#124)
@@ -4993,7 +4995,7 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 4. HP-8: Report tests inside skipped containers. **Done** (#127)
 5. HP-7: Report aborted tests as skipped. **Done** (#129)
 6. HP-9: Keep test identity in the extension. **Done** (#128)
-7. TI-5: Write the regression scenario for each of the fixes above alongside it. **Done** for items 1–6; TI-5 itself stays partially done
+7. TI-5: Write the regression scenario for each of the fixes above alongside it. **Done** for items 1–6; TI-5 itself stays partially done; its schema check is done since #146
 
 ### Phase 2: Data model and persistence (changes the report shape, so bump the minor version)
 
@@ -5017,8 +5019,10 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 
 ### Phase 4: Polish
 19. HP-12: Fill `suite` with each test's container hierarchy. **Done** (#144), 2026-10-16; not released
-20. DI-3, DI-1, DI-2: Documentation
-21. MP-4, CQ-2, CQ-4, TI-1, TI-2, SP-2
+20. DI-3: Fix incorrect documentation. **Done** (#145), 2026-10-16
+21. TI-5: Check every scenario's report against the official schema. **Done** (#146), 2026-10-16; checking them against JUnit's event log stays open
+22. DI-1, DI-2: Documentation
+23. MP-4, CQ-2, CQ-4, TI-1, TI-2, SP-2
 
 ### Not planned
 - CQ-1: superseded by CB-7 and HP-6
