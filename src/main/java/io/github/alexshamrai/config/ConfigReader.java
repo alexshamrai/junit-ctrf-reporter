@@ -44,6 +44,7 @@ public class ConfigReader {
     private static final String MAX_MESSAGE_LENGTH = "ctrf.max.message.length";
     private static final String MAX_TRACE_LENGTH = "ctrf.max.trace.length";
     private static final String CALCULATE_STARTUP_DURATION = "ctrf.calculate.startup.duration";
+    private static final String BYTE_ORDER_MARK = String.valueOf((char) 0xFEFF);
     private static final Map<String, String> DEFAULTS = Map.of(
         REPORT_PATH, "ctrf-report.json",
         MAX_MESSAGE_LENGTH, "500",
@@ -311,14 +312,16 @@ public class ConfigReader {
         return in != null ? in : ConfigReader.class.getClassLoader().getResourceAsStream(PROPERTIES_FILE);
     }
 
-    // UTF-8, as owner read it; ISO-8859-1, the traditional encoding of .properties files, when it isn't valid UTF-8
+    // UTF-8, as owner read it, without a leading byte order mark, which owner kept as part of the first key;
+    // ISO-8859-1, the traditional encoding of .properties files, when it isn't valid UTF-8
     private static String decode(byte[] bytes) {
         try {
-            return StandardCharsets.UTF_8.newDecoder()
+            String text = StandardCharsets.UTF_8.newDecoder()
                 .onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT)
                 .decode(ByteBuffer.wrap(bytes))
                 .toString();
+            return text.startsWith(BYTE_ORDER_MARK) ? text.substring(1) : text;
         } catch (CharacterCodingException e) {
             return new String(bytes, StandardCharsets.ISO_8859_1);
         }
