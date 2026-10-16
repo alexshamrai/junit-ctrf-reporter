@@ -1,3 +1,8 @@
+plugins {
+    // Downloads the JDKs the build asks for when they aren't installed: 25 to build, 17 and 21 to test on
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
 rootProject.name = 'junit-ctrf-reporter'
 include 'integration-tests-extension'
 include 'integration-tests-listener'

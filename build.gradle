@@ -13,13 +13,14 @@ repositories {
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        // The JDK that builds the library and runs the default test task. Users run the jar on Java 17 or later:
+        // see options.release below, and the testOnJava17 and testOnJava21 tasks
+        languageVersion.set(JavaLanguageVersion.of(25))
     }
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
 }
 
-compileJava {
+// Java 17 class files, and only Java 17 APIs, for main and test code alike, whatever JDK compiles them
+tasks.withType(JavaCompile).configureEach {
     options.release = 17
     options.encoding = 'UTF-8'
 }
@@ -81,10 +82,30 @@ sourceSets {
     }
 }
 
-test {
+tasks.withType(Test).configureEach {
     useJUnitPlatform {
         // Scenario fixtures fail on purpose; ScenarioRunner runs them in a separate JVM
         excludeTags 'scenario-fixture'
+    }
+}
+
+// The same unit tests and scenarios on the older Java versions users run. ScenarioRunner starts its JVMs from the
+// JDK that runs the tests, so the scenarios run on that version too
+[17, 21].each { javaVersion ->
+    def testOnJava = tasks.register("testOnJava${javaVersion}", Test) {
+        description = "Runs the unit tests and scenarios on Java ${javaVersion}."
+        group = LifecycleBasePlugin.VERIFICATION_GROUP
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        javaLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(javaVersion)
+        }
+        // Its own report: in the default ctrf-report.json, the same tests on two JDKs would fold into retries
+        systemProperty 'ctrf.report.path',
+            "${layout.buildDirectory.get().asFile}/test-results/testOnJava${javaVersion}/ctrf-report.json"
+    }
+    tasks.named('check') {
+        dependsOn testOnJava
     }
 }
 
