@@ -61,10 +61,10 @@ ENV_HEALTHY=false ./gradlew clean :integration-tests-listener:test :integration-
 
 ```bash
 # Run a specific test class
-./gradlew test --tests "io.github.alexshamrai.CtrfReportManagerTest"
+./gradlew :test --tests "io.github.alexshamrai.CtrfReportManagerTest"
 
 # Run a specific test method
-./gradlew test --tests "io.github.alexshamrai.CtrfReportManagerTest.testOnTestSuccess"
+./gradlew :test --tests "io.github.alexshamrai.CtrfReportManagerTest.onTestSuccess_processesResult"
 ```
 
 ## Architecture Overview
@@ -138,7 +138,6 @@ CtrfReportFileService.update (under a JVM lock and a lock on <report>.lock)
 | **CtrfReportFileService**       | `update`: locked read of the same run's report, merge function, atomic streaming write                |
 | **CtrfJsonMapper**              | Streams the model to and from JSON without a library (`JsonWriter`, `JsonReader`); ignores unknown fields |
 | **ConfigReader**                | Reads the configuration once: system property → env var (exact name, then `CTRF_X_Y` for `ctrf.*` keys) → `ctrf.properties` (UTF-8) → default; `${...}` references; an invalid number or boolean warns and uses the default |
-| **SuiteExecutionErrorHandler**  | Captures suite-level initialization/execution failures                                                |
 | **StartupDurationProcessor**    | Optionally calculates test suite startup duration                                                     |
 
 ### CTRF Model Classes
@@ -204,7 +203,9 @@ test {
 
 ```
 src/main/java/io/github/alexshamrai/
+├── adapter/                       # TestContextAdapter and its listener and extension implementations
 ├── jupiter/
+│   ├── ClassState.java            # What the extension tracks about one running test class
 │   ├── CtrfExtension.java         # JUnit Jupiter Extension entry point
 │   ├── RunEndResource.java        # End-of-run hook: CloseableResource and AutoCloseable
 │   └── TestRunExtension.java      # Lifecycle hooks interface
@@ -215,7 +216,7 @@ src/main/java/io/github/alexshamrai/
 ├── json/                          # Own JSON writer, parser and model binding (internal)
 ├── model/
 │   └── TestDetails.java           # Internal DTO for test data
-├── util/                          # Utilities (SummaryUtil, TestDetailsUtil)
+├── util/                          # Utilities (SummaryUtil)
 ├── CtrfReportManager.java         # Coordinator: the active TestRun; getInstance() is the default instance
 ├── TestStateTracker.java          # Manages test state collections
 ├── TestRun.java                   # One run's owner and state
@@ -227,7 +228,6 @@ src/main/java/io/github/alexshamrai/
 ├── CtrfJsonComposer.java          # JSON structure assembly
 ├── CtrfReportFileService.java     # File I/O operations
 ├── TestProcessor.java             # Test result processing
-├── SuiteExecutionErrorHandler.java # Suite-level error handling
 └── StartupDurationProcessor.java  # Optional startup duration calculation
 
 schema/                            # Pinned official CTRF schema (test resource only)
