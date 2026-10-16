@@ -328,6 +328,22 @@ When the environment is marked unhealthy, the CTRF report includes:
 }
 ```
 
+## Suites
+
+Each test's `suite` lists the display names of its containers, outermost first: its class, any `@Nested` classes, and the method of a parameterized, repeated or dynamic test. The engine isn't part of it. A test with no other container gets the engine's name. CTRF viewers group tests by `suite`, as an IDE does.
+
+```json
+{
+  "name": "[1] 1",
+  "suite": ["Payments", "Refunds", "refundsEachAmount(int)"],
+  "filePath": "com.example.PaymentsTest$Refunds"
+}
+```
+
+A class's `initializationError` or `teardownError` is grouped under that class, with its tests: its `suite` ends with the class's name.
+
+Under a `@Suite` class, no engine is part of `suite` either. With `CtrfListener`, the `@Suite` class's name comes first: `["PaymentsSuite", "Payments", "Refunds"]`. `CtrfExtension` sees only what Jupiter runs, so its suites start at the test class.
+
 ## Retries and Flaky Tests
 
 When a failed test is retried, for example by the Gradle [test-retry plugin](https://github.com/gradle/test-retry-gradle-plugin), the report contains the test once. The test object is its final attempt, and earlier attempts are listed in `retryAttempts`, as the CTRF specification defines:

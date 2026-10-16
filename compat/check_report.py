@@ -7,7 +7,8 @@ OUTPUT_DIR holds the consumer's ctrf-report.json and junit-versions.txt (written
 KIND is "jupiter" (Gradle, JUnit Jupiter), "vintage" (Gradle, JUnit 4 tests only, no Jupiter on the classpath)
 or "maven" (Maven, JUnit Jupiter, two test classes in separate Surefire forks, failed tests rerun once).
 The run passes when the consumer's tests are in the CTRF report as expected, the report has a runId, the
-consumer ran on the JUnit version it asked for, and neither Jackson (2 or 3) nor owner is on its test classpath.
+consumer ran on the JUnit version it asked for, each test's suite is its class's name, and neither Jackson
+(2 or 3) nor owner is on its test classpath.
 """
 import json
 import sys
@@ -48,6 +49,12 @@ def report_problems(out_dir, kind):
         pids = {fork.read_text().strip() for fork in forks}
         if len(forks) != 2 or len(pids) != 2:
             problems.append(f"expected the two test classes in two JVMs, got {[f.name for f in forks]} with pids {sorted(pids)}")
+    # Each consumer test sits in a top-level class without @DisplayName. Jupiter and Vintage both name that class
+    # by its simple name, and that one name is the test's suite
+    for test in document["results"]["tests"]:
+        want = [test["filePath"].rsplit(".", 1)[-1]]
+        if test.get("suite") != want:
+            problems.append(f"{test['name']} has suite {test.get('suite')}, expected {want}")
     return problems
 
 

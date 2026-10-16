@@ -80,4 +80,16 @@ public class JunitCrossCheckTest extends BaseIntegrationTest {
                 .allSatisfy(test -> assertThat(test.getStatus()).as("status of %s", test.getTestId()).isEqualTo(TestStatus.SKIPPED));
         });
     }
+
+    @Test
+    void everyEntryHasTheSuiteOfItsPlaceInJunitsHierarchy() {
+        List<String> problems = new ArrayList<>();
+        entries.values().forEach(entry -> junit.expectedSuite(entry.getTestId(), entry.getName()).ifPresent(want -> {
+            if (!want.equals(entry.getSuite())) {
+                problems.add(entry.getTestId() + ": JUnit's hierarchy gives " + want + ", the report says " + entry.getSuite());
+            }
+        }));
+
+        assertThat(problems).as("entries whose suite isn't their place in JUnit's hierarchy").isEmpty();
+    }
 }

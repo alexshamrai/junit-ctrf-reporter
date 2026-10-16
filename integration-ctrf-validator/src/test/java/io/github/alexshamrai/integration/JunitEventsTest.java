@@ -1,6 +1,7 @@
 package io.github.alexshamrai.integration;
 
 import io.github.alexshamrai.integration.JunitEvents.Expected;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -217,6 +218,70 @@ class JunitEventsTest {
             .hasMessageStartingWith("No JUnit event log");
     }
 
+    @Test
+    void suiteIsTheContainersAboveWithoutTheEngine() {
+        String engine = "[engine:junit-jupiter]";
+        String payments = engine + "/[class:a.PaymentsTest]";
+        String refunds = payments + "/[nested-class:Refunds]";
+        String test = refunds + "/[method:refundsTheFee()]";
+        var junit = JunitEvents.fromXml(List.of(document(
+            started(1, engine, "CONTAINER", "JUnit Jupiter", null),
+            started(2, payments, "CONTAINER", "Payments", 1),
+            started(3, refunds, "CONTAINER", "Refunds", 2),
+            started(4, test, "TEST", "refundsTheFee()", 3),
+            finished(4, "2026-10-15T10:00:01Z", "SUCCESSFUL"),
+            finished(3, "2026-10-15T10:00:01Z", "SUCCESSFUL"),
+            finished(2, "2026-10-15T10:00:01Z", "SUCCESSFUL"),
+            finished(1, "2026-10-15T10:00:01Z", "SUCCESSFUL"))));
+
+        assertThat(junit.expectedSuite(test, "refundsTheFee()")).contains(List.of("Payments", "Refunds"));
+        assertThat(junit.expectedSuite(refunds, "teardownError")).contains(List.of("Payments", "Refunds"));
+        assertThat(junit.expectedSuite(payments, "initializationError")).contains(List.of("Payments"));
+        assertThat(junit.expectedSuite(payments, "a container entry")).contains(List.of("JUnit Jupiter"));
+        assertThat(junit.expectedSuite(engine + "/[class:a.Unknown]", "anything")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Review Focus 1: names with characters XML escapes are compared as JUnit wrote them")
+    void suiteKeepsNamesWithEscapedCharacters() {
+        String engine = "[engine:junit-jupiter]";
+        String fees = engine + "/[class:a.FeesTest]";
+        String test = fees + "/[method:t()]";
+        var junit = JunitEvents.fromXml(List.of(document(
+            started(1, engine, "CONTAINER", "JUnit Jupiter", null),
+            started(2, fees, "CONTAINER", "Fees &amp; &quot;refunds&quot; &lt;EU&gt;", 1),
+            started(3, test, "TEST", "t()", 2),
+            finished(3, "2026-10-15T10:00:01Z", "SUCCESSFUL"),
+            finished(2, "2026-10-15T10:00:01Z", "SUCCESSFUL"),
+            finished(1, "2026-10-15T10:00:01Z", "SUCCESSFUL"))));
+
+        assertThat(junit.expectedSuite(test, "t()")).contains(List.of("Fees & \"refunds\" <EU>"));
+    }
+
+    @Test
+    @DisplayName("Under a suite engine, every engine is left out, and the @Suite class stays")
+    void underASuiteEngineEveryEngineIsLeftOut() {
+        String suiteEngine = "[engine:junit-platform-suite]";
+        String suite = suiteEngine + "/[suite:a.PaymentsSuite]";
+        String jupiter = suite + "/[engine:junit-jupiter]";
+        String payments = jupiter + "/[class:a.PaymentsTest]";
+        String test = payments + "/[method:t()]";
+        var junit = JunitEvents.fromXml(List.of(document(
+            started(1, suiteEngine, "CONTAINER", "JUnit Platform Suite", null),
+            started(2, suite, "CONTAINER", "PaymentsSuite", 1),
+            started(3, jupiter, "CONTAINER", "JUnit Jupiter", 2),
+            started(4, payments, "CONTAINER", "Payments", 3),
+            started(5, test, "TEST", "t()", 4),
+            finished(5, "2026-10-15T10:00:01Z", "SUCCESSFUL"),
+            finished(4, "2026-10-15T10:00:01Z", "SUCCESSFUL"),
+            finished(3, "2026-10-15T10:00:01Z", "SUCCESSFUL"),
+            finished(2, "2026-10-15T10:00:01Z", "SUCCESSFUL"),
+            finished(1, "2026-10-15T10:00:01Z", "SUCCESSFUL"))));
+
+        assertThat(junit.expectedSuite(test, "t()")).contains(List.of("PaymentsSuite", "Payments"));
+        assertThat(junit.expectedSuite(payments, "initializationError")).contains(List.of("PaymentsSuite", "Payments"));
+    }
+
     private static void write(Path file, String content) throws IOException {
         Files.createDirectories(file.getParent());
         Files.writeString(file, content);
@@ -237,6 +302,13 @@ class JunitEventsTest {
 
     private static String started(int id, String uniqueId, String type) {
         return "<e:started id=\"" + id + "\" name=\"node\" time=\"2026-10-15T10:00:00Z\"><metadata>"
+            + "<junit:uniqueId>" + uniqueId + "</junit:uniqueId><junit:type>" + type + "</junit:type>"
+            + "</metadata></e:started>";
+    }
+
+    private static String started(int id, String uniqueId, String type, String name, Integer parentId) {
+        return "<e:started id=\"" + id + "\" name=\"" + name + "\"" + (parentId == null ? "" : " parentId=\"" + parentId + "\"")
+            + " time=\"2026-10-15T10:00:00Z\"><metadata>"
             + "<junit:uniqueId>" + uniqueId + "</junit:uniqueId><junit:type>" + type + "</junit:type>"
             + "</metadata></e:started>";
     }

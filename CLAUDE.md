@@ -284,6 +284,10 @@ The project uses GitHub Actions for automated releases to Maven Central:
 
 Each test appears once in the report, as its final attempt. Earlier attempts with the same `testId` (the JUnit unique ID) go into `retryAttempts`, numbered from 1, and `retries` is their count. A test is marked as `flaky: true` only if its final attempt passed after at least one failed attempt; `summary.flaky` counts such tests. Entries from older reports without a `testId` are grouped by file path and name among themselves, never by name alone, and never joined to entries that have a `testId`. A class failure (initializationError/teardownError) followed by the class's success in a later round becomes a passed, flaky entry (HP-11).
 
+### Suites
+
+Each test's `suite` is the display names of its ancestors, outermost first, without the engine. The listener walks the `TestPlan`, the extension the `ExtensionContext` parents, and `TestContextAdapter`'s default `getSuite()` and `getSuiteOfChildren()` hold the rule. Under `@Suite`, the listener leaves out every engine, the suite engine and the one it runs, by the last unique-ID segment's type, so the `@Suite` class comes first; the extension can't see above Jupiter's engine, so its suites start at the class. With no other container, the suite is the nearest engine's name. A class's `initializationError` or `teardownError` uses `getSuiteOfChildren()`, so it ends with the class's own name and never falls back to the engine. `AttemptFolder` and `ReportMerger` carry it through retries and HP-11 recoveries, and the integration validator checks it against JUnit's own event log.
+
 ### Rerun Support
 
 Nothing is read when a run starts. At the end of each execution, `CtrfReportFileService.update` reads the report's root `runId` under a lock. Only if it matches is the whole report read, and `ReportMerger` unfolds its tests and appends this execution's attempts, so forks, retry rounds in new JVMs and reruns in the same JVM all end up in one report. A report of another run is replaced without being read further, and `HeapGuardScenarioTest` keeps the heap a report of 100,000 tests needs under a fixed limit.
