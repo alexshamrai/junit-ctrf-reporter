@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-16:** Phases 1 and 2 are released as 0.5.0, and Phase 3 as 0.5.1. Since 0.5.1, two build and test changes are merged; they don't change the published jar: the build uses JDK 25 and tests on Java 17, 21 and 25 (#140), and Jackson 2 is gone from the tests (#141). 0.5.2 is on `master` and not released yet: streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), and the five deferred review minors (#143). Phase 4 is done: [HP-12](#hp-12-design--suite), which fills `suite`, is merged (#144) and not released either; it ships in 0.5.2, the next release (decided 2026-10-16; semver would make a feature 0.6.0). Two changes followed that don't change the jar: `CLAUDE.md`'s broken commands and stale class names are fixed (DI-3, #145), every scenario's report is checked against the official schema (TI-5, #146), and the file service's behaviour on permission errors, odd paths and interrupts is pinned (TI-2, #147). MP-4 (#148) does change the jar: a blank, invalid or directory `ctrf.report.path` no longer loses the report. So does #149: through the extension, a class whose setup or teardown aborts is no longer reported as failed; TI-1 (#150), the concurrency tests, found it. DI-1 and DI-2 (#151) document the public API and move the architecture into `ARCHITECTURE.md`. `CtrfExtension` is deprecated in 0.5.2 (#153) and is to be removed in 0.6.0 (#152). The 0.5.2 release notes are the 0.5.2 ones, HP-12's, MP-4's line in its status, #149's line in TI-1's status, and #153's deprecation notice. [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-19:** Phases 1 and 2 are released as 0.5.0, Phase 3 as 0.5.1, and Phase 4 as **0.5.2** on 2026-10-16 (release PR #154, GitHub release v0.5.2). 0.5.2 holds streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), the five deferred review minors (#143), [HP-12](#hp-12-design--suite)'s `suite` (#144), MP-4's report-path handling (#148), the extension's aborted-class fix (#149), and the deprecation of `CtrfExtension` (#153), with tests and docs (#140, #141, #145, #146, #147, #150, #151). Its release notes are on the GitHub release. Left: TI-3 (in review), and Phase 5, the removal of `CtrfExtension` in 0.6.0 (#152). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -50,17 +50,17 @@ Each improvement item includes:
 | [Phase 3](#phase-3-design--051) HP-10, HP-1, CB-2, MP-6, MP-7, MP-8, MP-9, HP-3 | Done; merged 2026-10-15 (rebase, eight commits); released as 0.5.1 on 2026-10-16 (#139) | #138 | `47cd66b`..`61df632` |
 | Build with JDK 25, keep Java 17 (not a plan item): `--release 17` for main and test code; the tests and the compat consumers run on Java 17, 21 and 25 | Done | #140 | `6776c2e` |
 | [Tests on Jackson 3](#follow-ups-after-051) Jackson 2 removed; the JSON output pinned by golden JSON | Done | #141 | `6ff69d5` |
-| [0.5.2 streaming JSON](#052-design--streaming-json) The JSON code streams both ways; a rerun reads only the old report's `runId`; heap guard | Done; merged 2026-10-16 (rebase, five commits); not released | #142 | `67f33d5`..`6083b2f` |
-| [Review minors](#follow-ups-after-051) the five the Phase 3 final review deferred | Done; merged 2026-10-16 (rebase, five commits); not released | #143 | `9cdb0df`..`513c03d` |
-| [HP-12](#hp-12-design--suite) `suite` holds each test's container hierarchy | Done; merged 2026-10-16 (rebase, four commits); not released | #144 | `04fe3c9`..`c793e51` |
+| [0.5.2 streaming JSON](#052-design--streaming-json) The JSON code streams both ways; a rerun reads only the old report's `runId`; heap guard | Done; merged 2026-10-16 (rebase, five commits); released in 0.5.2 | #142 | `67f33d5`..`6083b2f` |
+| [Review minors](#follow-ups-after-051) the five the Phase 3 final review deferred | Done; merged 2026-10-16 (rebase, five commits); released in 0.5.2 | #143 | `9cdb0df`..`513c03d` |
+| [HP-12](#hp-12-design--suite) `suite` holds each test's container hierarchy | Done; merged 2026-10-16 (rebase, four commits); released in 0.5.2 | #144 | `04fe3c9`..`c793e51` |
 | [DI-3](#di-3-fix-incorrect-documentation) Incorrect documentation | Done: `CLAUDE.md`'s single-test commands and stale class names; its six original points were already fixed | #145 | `3984760` |
 | [TI-2](#ti-2-add-file-system-error-tests) File system error tests | Done: permission errors, an empty report, odd paths, a directory as the path, an interrupted thread | #147 | `ad4756c` |
-| [MP-4](#mp-4-add-comprehensive-input-validation) Input validation, re-scoped to the report path | Done: a blank, invalid or directory `ctrf.report.path` warns and still gets a report; not released | #148 | `3fa6e30` |
-| Extension: an aborted class isn't a failure (not a plan item; found by TI-1) | Done: an aborted setup is one skipped `initializationError`, an aborted teardown adds nothing; not released | #149 | `bdf424b` |
+| [MP-4](#mp-4-add-comprehensive-input-validation) Input validation, re-scoped to the report path | Done: a blank, invalid or directory `ctrf.report.path` warns and still gets a report; released in 0.5.2 | #148 | `3fa6e30` |
+| Extension: an aborted class isn't a failure (not a plan item; found by TI-1) | Done: an aborted setup is one skipped `initializationError`, an aborted teardown adds nothing; released in 0.5.2 | #149 | `bdf424b` |
 | [TI-1](#ti-1-add-comprehensive-concurrency-tests) Concurrency tests | Done: 4,000 lifecycles and 200 concurrent finishes in-process; JUnit's parallel execution through both entry points | #150 | `811cc4a` |
 | [DI-1](#di-1-add-comprehensive-javadoc) Javadoc | Done: every public class and method documented; checkstyle keeps it so | #151 | `2b9e66e` |
 | [DI-2](#di-2-add-architecture-documentation) Architecture doc | Done: `ARCHITECTURE.md`, imported by `CLAUDE.md` | #151 | `c292639` |
-| Deprecate `CtrfExtension` (not a plan item; decided 2026-10-16) | Done: `@Deprecated(since = "0.5.2")` with a warning once per run; removal is #152, for 0.6.0 | #153 | `2fa65ec` |
+| Deprecate `CtrfExtension` (not a plan item; decided 2026-10-16) | Done: `@Deprecated(since = "0.5.2")` with a warning once per run; released in 0.5.2; removal is #152, for 0.6.0 | #153 | `2fa65ec` |
 
 Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (partially); see the table in the review update below. Each item's **Status** line has the details, and its ticked acceptance criteria are the ones `master` meets.
 
@@ -68,7 +68,7 @@ Done before 2026-10-08: CB-1, CB-3, HP-2 (mostly), HP-4, MP-1, MP-2 and TI-3 (pa
 
 ## HP-12 Design — `suite`
 
-**Status**: Done. Designed 2026-10-16 against `master` @ `513c03d`; merged 2026-10-16 as #144 (`04fe3c9`..`c793e51`, four commits, rebase-merged). Not released yet. Ships in 0.5.2 (decided 2026-10-16).
+**Status**: Done. Designed 2026-10-16 against `master` @ `513c03d`; merged 2026-10-16 as #144 (`04fe3c9`..`c793e51`, four commits, rebase-merged). Released in 0.5.2 on 2026-10-16.
 **Item**: [HP-12](#hp-12-fill-suite-with-each-tests-container-hierarchy). CTRF viewers group and filter tests by `suite`, defined as "Suite hierarchy from top-level to immediate parent", an array of strings with at least one item. This library never sets it, so every test appears ungrouped.
 
 ### The rule
@@ -223,7 +223,7 @@ As for 0.5.2:
 
 ## 0.5.2 Design — streaming JSON
 
-**Status**: Done. Designed 2026-10-16 against `master` @ `6ff69d5`; merged 2026-10-16 as #142 (`67f33d5`..`6083b2f`, five commits, rebase-merged). Ships as **0.5.2**, not released yet.
+**Status**: Done. Designed 2026-10-16 against `master` @ `6ff69d5`; merged 2026-10-16 as #142 (`67f33d5`..`6083b2f`, five commits, rebase-merged). Released as **0.5.2** on 2026-10-16.
 **Implementation plan**: [`docs/plans/2026-10-16-streaming-json-0.5.2.md`](docs/plans/2026-10-16-streaming-json-0.5.2.md)
 **Fixes**: the streaming follow-up in [Follow-ups after 0.5.1](#follow-ups-after-051). 0.5.1's JSON code holds whole-text copies and trees in memory, so it needs about twice the heap of 0.5.0 to write a large report.
 
@@ -417,7 +417,7 @@ The text below is corrected where implementation proved it wrong.
 
 ### Follow-ups after 0.5.1
 
-- **Streaming JSON (0.5.2): done** (#142, `67f33d5`..`6083b2f`, 2026-10-16; not released). The writer and the reader built the whole report in memory, so a 100,000-test report needed 280 to 328 MB of heap. They now stream, and a rerun reads only the old report's `runId`: 120 to 136 MB. See [0.5.2 Design — streaming JSON](#052-design--streaming-json).
+- **Streaming JSON (0.5.2): done** (#142, `67f33d5`..`6083b2f`, 2026-10-16; released in 0.5.2). The writer and the reader built the whole report in memory, so a 100,000-test report needed 280 to 328 MB of heap. They now stream, and a rerun reads only the old report's `runId`: 120 to 136 MB. See [0.5.2 Design — streaming JSON](#052-design--streaming-json).
 - **Tests on Jackson 3: done** (#141, `6ff69d5`, 2026-10-16). Jackson 2 is gone from the build: no module uses `jackson-databind` or `jackson-core` 2.x. The tests and the integration validator read JSON with Jackson 3 only.
   - **Golden JSON:** `JsonGoldenTest` replaces `JacksonDifferentialTest`. It pins the writer's output to the JSON that 0.5.0 wrote with Jackson 2. Before Jackson 2 was removed, this JSON was checked to be byte-identical to Jackson 2's output. It also checks that the reader reads that JSON as Jackson 3 does.
     - The full report is in `src/test/resources/json/golden-report.json`. It holds every field, all kinds of numbers, nested values and tricky text.
@@ -425,7 +425,7 @@ The text below is corrected where implementation proved it wrong.
   - **Why golden JSON:** Jackson 3 can't be the reference, because it writes differently. For example, it sorts properties alphabetically by default.
   - **Annotations:** the model's Jackson annotations stay compile-only. Jackson 2 and 3 share them (`com.fasterxml.jackson.annotation`), and their version comes from the Jackson 3 BOM.
   - **Compat:** the consumers check that neither Jackson 2 nor Jackson 3 is on their test classpath.
-- **Deferred review minors: done** (#143, `9cdb0df`..`513c03d`, 2026-10-16; not released). Each has one commit with its own test:
+- **Deferred review minors: done** (#143, `9cdb0df`..`513c03d`, 2026-10-16; released in 0.5.2). Each has one commit with its own test:
   - an `Error` thrown from a failure's `toString()` lost the entry. Any `Throwable` is now caught, and the failure is reported by its class name; a `VirtualMachineError` still propagates, as everywhere in the reporter;
   - a capped trace could keep a stray `\r` when the cut fell inside `\r\n`. The cut now moves back one character;
   - `ConfigReader(Map, Map, Map)` didn't document that it rejects nulls. Its Javadoc says so now, and a test pins it;
@@ -701,7 +701,7 @@ Snapshot of 2026-10-08. For the current state, see [Status on `master` — 2026-
 | CB-2 Nested run ends the outer run (was: race in `finishTestRun()`) | Re-scoped, lowered to Medium | The thread race isn't reachable; a nested JUnit run ending the outer run is (verified) |
 | CB-3 Multiple `ConfigReader`s | Done | `030842d` |
 | HP-1 Singleton | Open | Simplified by HP-10 |
-| HP-2 God class | Mostly done | `c6b2650`; `CtrfReportManager` is still ~190 lines and kept the name-based flaky logic (CB-7) |
+| HP-2 God class | Done, superseded (2026-10-19) | `c6b2650`, then HP-6, CB-6 and HP-1 split it up; 155 lines of code; CB-7 fixed the name-based flaky logic |
 | HP-3 Logging | Open, approach changed | Use `java.util.logging`, not SLF4J (MP-9) |
 | HP-4 `TestDetailsUtil` duplication | Done | `b49d2c1` (adapters), `16e61f3` (record) |
 | MP-1 Single-pass `SummaryUtil` | Done | `64f5bdd` |
@@ -710,11 +710,11 @@ Snapshot of 2026-10-08. For the current state, see [Status on `master` — 2026-
 | MP-4 Input validation | Done (#148), re-scoped to the report path | Must never throw into JUnit callbacks (MP-7) |
 | CQ-1 Feature envy | Superseded | Extracted as `FlakyTestDetector`; the name-based design shown there is the CB-7 bug |
 | CQ-2 Value objects | Not planned | Don't call the value object `TestIdentifier` (clashes with JUnit's class) |
-| CQ-3 Long parameter lists | Stale | The referenced path and method don't exist on `master` |
+| CQ-3 Long parameter lists | Superseded (2026-10-19) | CB-5 removed `SuiteExecutionErrorHandler`, the class it was about |
 | CQ-4 Magic constants | Not planned, mostly done | `"initializationError"` is defined in four places |
 | TI-1 Concurrency tests | Done (#150) | Sample code uses removed APIs; real data loss is across JVMs (TI-5). It found the extension's aborted-class bug, fixed in #149 |
 | TI-2 File-system error tests | Done (#147) | The MP-5 cases are superseded with MP-5; CB-6 added the atomic-write and unparsable-report cases, #147 the rest |
-| TI-3 Health-test isolation | Partially done | Reset hook in `@BeforeEach`/`@AfterEach`; still a shared singleton |
+| TI-3 Health-test isolation | In review (2026-10-19) | Each test gets its own manager; the reset hook is removed from the library |
 | DI-1 Javadoc | Done (#151) | Sample Javadoc repeats the wrong flaky rule |
 | DI-2 Architecture doc | Done (#151) | Should describe the target architecture below |
 | SP-1 Path validation | Re-evaluated: not recommended | Not a trust boundary; rejecting `..` breaks multi-module setups |
@@ -822,12 +822,12 @@ public List<Test> getExistingTests() {
 ```
 
 #### Acceptance Criteria
-- [ ] Method returns empty list when report is null
-- [ ] Method returns empty list when results is null
-- [ ] Method returns empty list when tests is null
-- [ ] Method returns actual tests list when all values are present
-- [ ] Unit tests cover all four scenarios
-- [ ] No NullPointerExceptions in any scenario
+- [ ] Method returns empty list when report is null (not applicable: CB-6 replaced `getExistingTests`)
+- [ ] Method returns empty list when results is null (not applicable: CB-6 replaced `getExistingTests`)
+- [ ] Method returns empty list when tests is null (not applicable: CB-6 replaced `getExistingTests`)
+- [ ] Method returns actual tests list when all values are present (not applicable: CB-6 replaced `getExistingTests`)
+- [ ] Unit tests cover all four scenarios (not applicable: CB-6 replaced `getExistingTests`)
+- [x] No NullPointerExceptions in any scenario
 
 ---
 
@@ -923,12 +923,12 @@ Verify that:
 ```
 
 #### Acceptance Criteria
-- [ ] ConfigReader created only once per CtrfReportManager instance
-- [ ] Stored as final field
-- [ ] Reused in all methods that need configuration
-- [ ] All tests pass
-- [ ] No configuration inconsistencies possible
-- [ ] Code is cleaner and more maintainable
+- [x] ConfigReader created only once per CtrfReportManager instance
+- [ ] Stored as final field (not applicable: since HP-1 the collaborators hold the configuration, not the manager)
+- [ ] Reused in all methods that need configuration (not applicable: since HP-1 the collaborators hold the configuration, not the manager)
+- [x] All tests pass
+- [x] No configuration inconsistencies possible
+- [x] Code is cleaner and more maintainable
 
 ---
 
@@ -1059,7 +1059,7 @@ Requirements:
 - [x] Every FAILED container in the test plan produces exactly one failed CTRF entry (with the listener; the extension's limits are listed in its Javadoc)
 - [x] CTRF `summary.failed > 0` whenever JUnit reports a failed test or container (with the listener; see above)
 - [x] `@AfterAll` failures are captured for every class, not only the first one
-- [ ] The integration validator cross-checks counts with JUnit's own results (open; the scenario tests do this, the validator doesn't yet: TI-4)
+- [x] The integration validator cross-checks counts with JUnit's own results (TI-4, #135: `JunitCrossCheckTest`)
 
 ---
 
@@ -1396,9 +1396,9 @@ Implement proper singleton with:
 - [x] Tests use dependency injection
 - [x] No global mutable state accessed from constructors
 - [x] CtrfExtension and CtrfListener both work correctly
-- [ ] All existing tests pass
-- [ ] New unit tests verify isolation between instances
-- [ ] Documentation updated
+- [x] All existing tests pass
+- [x] New unit tests verify isolation between instances
+- [x] Documentation updated
 
 ---
 
@@ -1407,7 +1407,7 @@ Implement proper singleton with:
 **Priority**: High
 **Complexity**: Complex
 **Files**: `src/main/java/io/github/alexshamrai/CtrfReportManager.java` + new files
-**Status**: Mostly done on `master` (`c6b2650`)
+**Status**: Done, superseded (2026-10-19). Later changes broke the class up: `TestStateTracker` and `TestRun` hold the state, `AttemptFolder` folds attempts (HP-6), `ReportMerger` merges a run's JVMs and `RunIdResolver` names the run (CB-6), the collaborators are injected (HP-1), and `FlakyTestDetector`, `TestRerunHandler` and `ReportOrchestrator` are gone. `CtrfReportManager` is 155 lines of code, plus Javadoc; the under-100-lines target is dropped. Removing `CtrfExtension` (#152) shrinks it further.
 
 #### Review Note (2026-10-08)
 `TestStateTracker`, `FlakyTestDetector`, `TestRerunHandler` and `ReportOrchestrator` exist on `master`. `CtrfReportManager` is still ~190 lines (the criterion was under 100). The extraction kept the name-based flaky detection, which is the CB-7 defect.
@@ -1468,14 +1468,14 @@ Each new class should be:
 ```
 
 #### Acceptance Criteria
-- [ ] CtrfReportManager reduced to <100 lines
-- [ ] Each new class has single, clear responsibility
-- [ ] All existing functionality preserved
-- [ ] Thread safety maintained or improved
-- [ ] Each class has comprehensive unit tests
-- [ ] Integration tests pass
-- [ ] Code coverage maintained or improved
-- [ ] Documentation updated in CLAUDE.md
+- [ ] CtrfReportManager reduced to <100 lines (dropped: 155 lines of code, see the status)
+- [x] Each new class has single, clear responsibility
+- [x] All existing functionality preserved
+- [x] Thread safety maintained or improved
+- [x] Each class has comprehensive unit tests
+- [x] Integration tests pass
+- [ ] Code coverage maintained or improved (not measured; the build has no coverage report)
+- [x] Documentation updated in CLAUDE.md
 
 ---
 
@@ -1539,12 +1539,12 @@ Files to update:
 - [x] No System.out.println() or System.err.println() in production code
 - [ ] SLF4J Logger added to relevant classes (not applicable: `java.util.logging`)
 - [x] Appropriate log levels used
-- [ ] Exceptions logged with full stack traces
+- [ ] Exceptions logged with full stack traces (partly: the extension's guard logs an unexpected error with its stack trace; expected I/O failures log only their message)
 - [ ] Parameterized logging used for performance (not applicable: `java.util.logging`)
 - [ ] logback-test.xml provides reasonable defaults for tests (not applicable: `java.util.logging`)
 - [x] Documentation explains logging configuration
 - [ ] Library users can provide their own SLF4J implementation (not applicable: `java.util.logging`)
-- [ ] All tests pass with logging enabled
+- [x] All tests pass with logging enabled
 
 ---
 
@@ -1628,13 +1628,13 @@ Benefits:
 ```
 
 #### Acceptance Criteria
-- [ ] Only one implementation of createTestDetails logic exists
-- [ ] Both CtrfExtension and CtrfListener use shared utility
-- [ ] No code duplication between entry points
-- [ ] All tests pass
-- [ ] New tests cover adapter pattern
-- [ ] Behavior identical to previous implementation
-- [ ] Code is cleaner and more maintainable
+- [x] Only one implementation of createTestDetails logic exists
+- [x] Both CtrfExtension and CtrfListener use shared utility
+- [x] No code duplication between entry points
+- [x] All tests pass
+- [x] New tests cover adapter pattern
+- [x] Behavior identical to previous implementation
+- [x] Code is cleaner and more maintainable
 
 ---
 
@@ -2101,7 +2101,7 @@ Reproduced through both entry points: `@BeforeAll` fails in round 1 and passes i
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `launcher/CtrfListener.java`, `jupiter/CtrfExtension.java`, `model/TestDetails.java`, `TestProcessor.java`, `adapter/*`, scenario tests
-**Status**: Done (#144, `04fe3c9`..`c793e51`), 2026-10-16; not released. Designed 2026-10-16; see [HP-12 Design — `suite`](#hp-12-design--suite), which settles the questions below. Split from HP-5 on 2026-10-15; HP-5 types `suite` as a list but leaves it unset.
+**Status**: Done (#144, `04fe3c9`..`c793e51`), 2026-10-16; released in 0.5.2. Designed 2026-10-16; see [HP-12 Design — `suite`](#hp-12-design--suite), which settles the questions below. Split from HP-5 on 2026-10-15; HP-5 types `suite` as a list but leaves it unset.
 
 #### Why
 
@@ -2117,9 +2117,9 @@ CTRF consumers group and filter tests by `suite`. The spec defines it as "Suite 
 - **Class-level failure entries:** what `suite` an `initializationError` or `teardownError` entry gets, and how a retry round folds it.
 
 #### Acceptance Criteria
-- [ ] Every test entry has a `suite` that matches the official schema
-- [ ] The listener and the extension produce the same `suite` for the same test
-- [ ] Scenario tests cover nested classes, parameterized tests and class-level failures
+- [x] Every test entry has a `suite` that matches the official schema, except a test known only by its ID
+- [x] The listener and the extension produce the same `suite` for the same test; under `@Suite`, only the listener has the `@Suite` class first
+- [x] Scenario tests cover nested classes, parameterized tests and class-level failures
 
 ---
 
@@ -2192,12 +2192,12 @@ Requirements:
 ```
 
 #### Acceptance Criteria
-- [ ] Single stream operation counts all statuses
-- [ ] Behavior identical to previous implementation
-- [ ] All unit tests pass
-- [ ] Performance benchmark shows improvement
-- [ ] Edge cases handled (empty list, all same status, etc.)
-- [ ] Code is more readable and maintainable
+- [x] Single stream operation counts all statuses
+- [x] Behavior identical to previous implementation
+- [x] All unit tests pass
+- [ ] Performance benchmark shows improvement (not measured; SP-2 is not planned)
+- [x] Edge cases handled (empty list, all same status, etc.)
+- [x] Code is more readable and maintainable
 
 ---
 
@@ -2282,13 +2282,13 @@ Read the report once in constructor or in a single initialization method called 
 ```
 
 #### Acceptance Criteria
-- [ ] Report file read only once per service instance
-- [ ] All three getter methods use cached value
-- [ ] Behavior identical to previous implementation
-- [ ] Thread safety maintained if needed
-- [ ] Tests verify caching works correctly
-- [ ] Performance improvement measurable for large reports
-- [ ] No stale data issues
+- [ ] Report file read only once per service instance (not applicable: CB-6 removed the cache, which caused CB-6c; the report is read once per update, under the lock)
+- [ ] All three getter methods use cached value (not applicable: CB-6 removed the cache, which caused CB-6c; the report is read once per update, under the lock)
+- [ ] Behavior identical to previous implementation (not applicable: CB-6 removed the cache, which caused CB-6c; the report is read once per update, under the lock)
+- [ ] Thread safety maintained if needed (not applicable: CB-6 removed the cache, which caused CB-6c; the report is read once per update, under the lock)
+- [ ] Tests verify caching works correctly (not applicable: CB-6 removed the cache, which caused CB-6c; the report is read once per update, under the lock)
+- [ ] Performance improvement measurable for large reports (not applicable: CB-6 removed the cache, which caused CB-6c; the report is read once per update, under the lock)
+- [ ] No stale data issues (not applicable: CB-6 removed the cache, which caused CB-6c; the report is read once per update, under the lock)
 
 ---
 
@@ -2391,13 +2391,13 @@ If order doesn't matter: `ConcurrentLinkedQueue` (fastest for concurrent writes)
 ```
 
 #### Acceptance Criteria
-- [ ] Performance benchmarks completed for multiple collection types
-- [ ] Data-driven decision made based on benchmarks
-- [ ] Implementation replaced with better alternative
-- [ ] Thread safety maintained or improved
-- [ ] All tests pass, including parallel integration tests
-- [ ] Performance improvement measurable
-- [ ] Documentation updated with rationale
+- [ ] Performance benchmarks completed for multiple collection types (not done: HP-6 chose a `ConcurrentLinkedQueue` folded once at the end)
+- [ ] Data-driven decision made based on benchmarks (not done: see above; MP-3 records the before and after timings)
+- [x] Implementation replaced with better alternative
+- [x] Thread safety maintained or improved
+- [x] All tests pass, including parallel integration tests
+- [x] Performance improvement measurable
+- [x] Documentation updated with rationale
 
 ---
 
@@ -2406,7 +2406,7 @@ If order doesn't matter: `ConcurrentLinkedQueue` (fastest for concurrent writes)
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: Multiple (ConfigReader, CtrfReportManager, model classes)
-**Status**: Done, re-scoped (#148, `3fa6e30`), 2026-10-16; not released. Of the five points below, only the report path still needed work:
+**Status**: Done, re-scoped (#148, `3fa6e30`), 2026-10-16; released in 0.5.2. Of the five points below, only the report path still needed work:
 - **Configuration values** have been checked since MP-9: a number or boolean that can't be read, or a negative length, warns and gives the default.
 - **The report path** is the fix. A blank one, also after expanding references, or one that `Paths.get` rejects, warns in `ConfigReader` and gives the default. One that names a directory gets `ctrf-report.json` inside it, with a warning. The file service resolves the path inside its error guard, and a warning whose exception message is only a path adds the exception's type.
 - **Not needed:** null test names, which JUnit never gives; validating public parameters and model objects, which only the library builds; a `Validators` class; a check when the run starts, since the warnings come once, at the write.
@@ -3056,7 +3056,7 @@ This is a significant refactoring - consider if the benefits outweigh the change
 **Priority**: Low
 **Complexity**: Simple
 **Files**: `src/main/java/io/github/alexshamrai/suite/SuiteExecutionErrorHandler.java`
-**Status**: Stale
+**Status**: Superseded (2026-10-19). It was about `SuiteExecutionErrorHandler`, which CB-5 (#125) removed: container failures are handled by the entry points, through `CtrfReportManager`.
 
 #### Review Note (2026-10-08)
 On `master` the class is `src/main/java/io/github/alexshamrai/SuiteExecutionErrorHandler.java` and has only `handleInitializationError(...)`; `handleExecutionError(...)` doesn't exist. If CB-5 and HP-10 move container-failure handling into the listener, this class will probably be removed. Revisit after those items.
@@ -4100,9 +4100,9 @@ a fresh manager (HP-1), or run each scenario in a forked JVM.
 ````
 
 #### Acceptance Criteria
-- [ ] Every scenario above has an automated test
-- [ ] The tests fail on today's `master` and pass after the corresponding fixes
-- [ ] The scenario suite runs in CI in under a minute
+- [x] Every scenario above has an automated test, except MP-5's tolerant read, superseded with MP-5
+- [x] The tests fail on today's `master` and pass after the corresponding fixes: each was written with its fix
+- [ ] The scenario suite runs in CI in under a minute (not met: its 56 tests take about 70 seconds)
 
 ---
 
@@ -5047,7 +5047,7 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 
 ### Phase 3: Architecture and robustness
 
-**Released as 0.5.1** on 2026-10-16 (release PR #139). Designed 2026-10-15; see [Phase 3 Design — 0.5.1](#phase-3-design--051). Its follow-ups are in [Follow-ups after 0.5.1](#follow-ups-after-051): the Jackson 3 one is done (#141), and so are streaming JSON (#142) and the deferred minors (#143), both for 0.5.2, not released.
+**Released as 0.5.1** on 2026-10-16 (release PR #139). Designed 2026-10-15; see [Phase 3 Design — 0.5.1](#phase-3-design--051). Its follow-ups are in [Follow-ups after 0.5.1](#follow-ups-after-051): the Jackson 3 one is done (#141), and so are streaming JSON (#142) and the deferred minors (#143), both released in 0.5.2.
 
 13. HP-10: Listener as the single core integration point, then revisit HP-1. **Done** (#138)
 14. CB-2: Only the run that started reporting may end it (nested JUnit runs). **Done** (#138)
@@ -5058,24 +5058,24 @@ Since 2026-10-08: Phase 1 except TI-5, which is partially done, plus HP-6, MP-3,
 
 ### Phase 4: Polish
 
-**Done** on 2026-10-16. What it changes for users ships in 0.5.2, together with 0.5.2's own changes.
+**Done** on 2026-10-16, and released in 0.5.2 together with 0.5.2's own changes.
 
-19. HP-12: Fill `suite` with each test's container hierarchy. **Done** (#144), 2026-10-16; not released
+19. HP-12: Fill `suite` with each test's container hierarchy. **Done** (#144), 2026-10-16; released in 0.5.2
 20. DI-3: Fix incorrect documentation. **Done** (#145), 2026-10-16
 21. TI-5: Check every scenario's report against the official schema. **Done** (#146), 2026-10-16; checking them against JUnit's event log is not planned
 22. DI-1, DI-2: Documentation. **Done** (#151), 2026-10-16
 23. TI-2: File system error tests. **Done** (#147), 2026-10-16
-24. MP-4: Input validation, re-scoped to the report path. **Done** (#148), 2026-10-16; not released
-25. TI-1: Concurrency tests. **Done** (#150), 2026-10-16; it found the extension's aborted-class bug, fixed in #149, not released
+24. MP-4: Input validation, re-scoped to the report path. **Done** (#148), 2026-10-16; released in 0.5.2
+25. TI-1: Concurrency tests. **Done** (#150), 2026-10-16; it found the extension's aborted-class bug, fixed in #149; released in 0.5.2
 26. CQ-2, CQ-4, SP-2: **Not planned** (2026-10-16); see below
-27. Deprecate `CtrfExtension` in favour of `CtrfListener`. **Done** (#153), 2026-10-16; ships in 0.5.2. Decided after Phase 4: the extension can't see what the listener sees, it had bugs the listener never had, and every feature needed two implementations
+27. Deprecate `CtrfExtension` in favour of `CtrfListener`. **Done** (#153), 2026-10-16; released in 0.5.2. Decided after Phase 4: the extension can't see what the listener sees, it had bugs the listener never had, and every feature needed two implementations
 
 ### Phase 5: One entry point (0.6.0)
 28. Remove `CtrfExtension` and `TestRunExtension`, their tests, the extension integration module and its workflow, and the extension compat consumer (#152). Then decide whether the jar registers the listener itself, behind a `ctrf.enabled` switch
 
 ### Not planned
 - CQ-1: superseded by CB-7 and HP-6
-- CQ-3: stale; revisit after CB-5 and HP-10
+- CQ-3: superseded; CB-5 removed `SuiteExecutionErrorHandler`, the class it was about
 - SP-1: not recommended as specified
 - CQ-2: value objects would rework internal code for no change a user sees
 - CQ-4: mostly done; the three literals left would need a public constant in an internal class
