@@ -105,10 +105,6 @@ public final class CtrfReportManager {
         return isEnvironmentHealthy.get();
     }
 
-    void resetEnvironmentHealthForTesting() {
-        isEnvironmentHealthy.set(true);
-    }
-
     /**
      * Records that a test started, keeping its identity until it finishes. Ignored when no run is active.
      *

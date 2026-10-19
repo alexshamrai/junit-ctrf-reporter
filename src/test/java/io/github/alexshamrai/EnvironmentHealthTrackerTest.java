@@ -1,81 +1,81 @@
 package io.github.alexshamrai;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.MockedStatic;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 
+/**
+ * Each test uses a manager of its own, never the JVM's default one, which reports this test run: the tests share no
+ * state, need no cleanup, and can run in any order or in parallel.
+ */
 class EnvironmentHealthTrackerTest {
 
-    @BeforeEach
-    void setUp() {
-        // Reset health state before each test to ensure clean state
-        CtrfReportManager.getInstance().resetEnvironmentHealthForTesting();
-    }
+    @Test
+    @DisplayName("A manager created healthy stays healthy until a test marks it unhealthy")
+    void environmentIsHealthyUntilMarkedUnhealthy() {
+        var manager = manager(true);
 
-    @AfterEach
-    void cleanup() {
-        // Reset health state after each test to avoid test interference
-        CtrfReportManager.getInstance().resetEnvironmentHealthForTesting();
+        assertThat(manager.isEnvironmentHealthyInternal()).isTrue();
+        manager.markEnvironmentUnhealthyInternal();
+        assertThat(manager.isEnvironmentHealthyInternal()).isFalse();
     }
 
     @Test
-    @DisplayName("isEnvironmentHealthy should return true by default")
-    void isEnvironmentHealthy_defaultsToTrue() {
-        assertThat(EnvironmentHealthTracker.isEnvironmentHealthy())
-            .as("Environment should be healthy by default")
-            .isTrue();
+    @DisplayName("A manager created unhealthy, as with ENV_HEALTHY=false, is unhealthy from the start")
+    void environmentCanStartUnhealthy() {
+        assertThat(manager(false).isEnvironmentHealthyInternal()).isFalse();
     }
 
     @Test
-    @DisplayName("markEnvironmentUnhealthy should set environment to unhealthy")
-    void markEnvironmentUnhealthy_setsToFalse() {
-        assertThat(EnvironmentHealthTracker.isEnvironmentHealthy())
-            .as("Environment should start healthy")
-            .isTrue();
+    @DisplayName("Marking the environment unhealthy again keeps it unhealthy")
+    void markingUnhealthyIsIdempotent() {
+        var manager = manager(true);
 
-        EnvironmentHealthTracker.markEnvironmentUnhealthy();
+        manager.markEnvironmentUnhealthyInternal();
+        manager.markEnvironmentUnhealthyInternal();
 
-        assertThat(EnvironmentHealthTracker.isEnvironmentHealthy())
-            .as("Environment should be unhealthy after marking")
-            .isFalse();
+        assertThat(manager.isEnvironmentHealthyInternal()).isFalse();
     }
 
     @Test
-    @DisplayName("markEnvironmentUnhealthy should be idempotent")
-    void markEnvironmentUnhealthy_isIdempotent() {
-        EnvironmentHealthTracker.markEnvironmentUnhealthy();
-        assertThat(EnvironmentHealthTracker.isEnvironmentHealthy()).isFalse();
+    @DisplayName("The static methods mark and read the health of the JVM's default manager")
+    void staticMethodsUseTheDefaultManager() {
+        var manager = manager(true);
+        try (MockedStatic<CtrfReportManager> defaultManager = mockStatic(CtrfReportManager.class)) {
+            defaultManager.when(CtrfReportManager::getInstance).thenReturn(manager);
 
-        // Call again - should still be unhealthy
-        EnvironmentHealthTracker.markEnvironmentUnhealthy();
-        assertThat(EnvironmentHealthTracker.isEnvironmentHealthy()).isFalse();
-    }
+            assertThat(EnvironmentHealthTracker.isEnvironmentHealthy()).isTrue();
+            EnvironmentHealthTracker.markEnvironmentUnhealthy();
 
-    @Test
-    @DisplayName("isEnvironmentVariableUnhealthy should check ENV_HEALTHY environment variable")
-    void isEnvironmentVariableUnhealthy_checksEnvVariable() {
-        var result = EnvironmentHealthTracker.isEnvironmentVariableUnhealthy();
-
-        var envHealthy = System.getenv("ENV_HEALTHY");
-        var expected = envHealthy != null && "false".equalsIgnoreCase(envHealthy);
-
-        assertThat(result)
-            .as("isEnvironmentVariableUnhealthy should match ENV_HEALTHY environment variable")
-            .isEqualTo(expected);
-    }
-
-    @Test
-    @DisplayName("isEnvironmentVariableUnhealthy should return false when ENV_HEALTHY is not set")
-    void isEnvironmentVariableUnhealthy_returnsFalseWhenNotSet() {
-        var envHealthy = System.getenv("ENV_HEALTHY");
-
-        if (envHealthy == null || !"false".equalsIgnoreCase(envHealthy)) {
-            assertThat(EnvironmentHealthTracker.isEnvironmentVariableUnhealthy())
-                .as("isEnvironmentVariableUnhealthy should return false when ENV_HEALTHY is not 'false'")
-                .isFalse();
+            assertThat(EnvironmentHealthTracker.isEnvironmentHealthy()).isFalse();
+            assertThat(manager.isEnvironmentHealthyInternal()).isFalse();
         }
+    }
+
+    @ParameterizedTest(name = "\"{0}\"")
+    @ValueSource(strings = {"false", "FALSE", "False"})
+    @DisplayName("ENV_HEALTHY=false, in any case, means unhealthy")
+    void falseMeansUnhealthy(String value) {
+        assertThat(EnvironmentHealthTracker.isUnhealthy(value)).isTrue();
+    }
+
+    @ParameterizedTest(name = "\"{0}\"")
+    @NullAndEmptySource
+    @ValueSource(strings = {"true", "no", " false"})
+    @DisplayName("ENV_HEALTHY unset, or set to anything but false, means healthy")
+    void anythingElseMeansHealthy(String value) {
+        assertThat(EnvironmentHealthTracker.isUnhealthy(value)).isFalse();
+    }
+
+    private static CtrfReportManager manager(boolean healthy) {
+        return new CtrfReportManager(mock(TestProcessor.class), mock(CtrfReportFileService.class), generator -> null,
+            "run-1", healthy);
     }
 }
