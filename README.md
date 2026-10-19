@@ -31,7 +31,7 @@ CTRF is a universal JSON test report schema that addresses the lack of a standar
 
 ### Add Dependency
 
-To use the JUnit CTRF Extension in your project, add the following test dependency:
+To use the JUnit CTRF Reporter in your project, add the following test dependency:
 
 #### Gradle
 
@@ -72,11 +72,9 @@ dependencies {
 }
 ```
 
-## Choosing a setup
+## Setup
 
-Register `CtrfListener`, the JUnit Platform listener. The JUnit Jupiter extension, `CtrfExtension`, is deprecated and will be removed in 0.6.0; [Deprecated: CtrfExtension](#deprecated-ctrfextension) shows how to move from it. **Never register both**: only the listener would report, and the extension's registration would silently do nothing.
-
-### Recommended: CtrfListener
+<a id="recommended-ctrflistener"></a>
 
 `CtrfListener` is a JUnit Platform `TestExecutionListener`. It sees everything the JUnit Platform runs, so besides your tests it also reports:
 
@@ -105,29 +103,22 @@ launcher.registerTestExecutionListeners(new CtrfListener());
 launcher.execute(request);
 ```
 
-**Why the jar doesn't register the listener itself.** It could, with the same `META-INF/services` file inside the jar. Then every project with the reporter on its test classpath would get a report whether it wanted one or not, and in projects that use `CtrfExtension` the listener would silently take over the reporting. So the listener stays opt-in.
+**Why the jar doesn't register the listener itself.** It could, with the same `META-INF/services` file inside the jar. Then every project with the reporter on its test classpath would get a report whether it wanted one or not. So the listener stays opt-in.
 
-### Deprecated: CtrfExtension
+### Upgrading from CtrfExtension
 
-`CtrfExtension`, the JUnit Jupiter extension, is deprecated since 0.5.2 and will be removed in 0.6.0. It logs a warning when a run starts. To move to the listener:
+`CtrfExtension`, deprecated in 0.5.2, is removed in 0.6.0. To move to the listener:
 
 1. Add the file `src/test/resources/META-INF/services/org.junit.platform.launcher.TestExecutionListener`, containing the line `io.github.alexshamrai.launcher.CtrfListener`.
 2. Remove `@ExtendWith(CtrfExtension.class)` from your test classes.
 
-The report can gain entries after the move. The extension reports only the classes it is registered on, and it can't see:
-
-- the tests of a class that JUnit skips as a whole, such as a `@Disabled` class: they are missing from the report;
-- the tests of a class whose `@BeforeAll` aborts with a failed assumption: the class appears as one skipped `initializationError` entry instead;
-- a class that can't be created, for example when its Spring context fails to load under `@TestInstance(Lifecycle.PER_CLASS)`;
-- failures of containers below class level, such as a `@MethodSource` that throws;
-- teardown failures of extensions registered before it;
-- tests that don't run on JUnit Jupiter, such as JUnit 4 tests.
+The report can gain entries after the move. The listener also reports what the extension couldn't see: the tests of classes that JUnit skips as a whole, failures of containers below class level, dynamic tests, and tests of other engines.
 
 ### Tests that run JUnit themselves
 
 A test that starts the JUnit Platform itself, for example through `LauncherFactory.create()`, starts a nested run in the same JVM. Only the run that started reporting is reported: the nested run's tests are left out, and the run around it goes on.
 
-With `CtrfExtension`, the run starts at the first class that has the extension, so a nested run that starts earlier, from a class without it, becomes the reported run and its tests reach the report. `CtrfListener` starts the run when the test plan starts, so it has no such gap. Register a `CtrfListener` instance with one launcher only: an instance shared by an outer and a nested launcher loses track of the outer run.
+`CtrfListener` starts the run when the test plan starts. Register a `CtrfListener` instance with one launcher only: an instance shared by an outer and a nested launcher loses track of the outer run.
 
 ## Configuration
 
@@ -333,7 +324,7 @@ Each test's `suite` lists the display names of its containers, outermost first: 
 
 A class's `initializationError` or `teardownError` is grouped under that class, with its tests: its `suite` ends with the class's name.
 
-Under a `@Suite` class, no engine is part of `suite` either. With `CtrfListener`, the `@Suite` class's name comes first: `["PaymentsSuite", "Payments", "Refunds"]`. `CtrfExtension` sees only what Jupiter runs, so its suites start at the test class.
+Under a `@Suite` class, no engine is part of `suite` either, and the `@Suite` class's name comes first: `["PaymentsSuite", "Payments", "Refunds"]`.
 
 ## Retries and Flaky Tests
 

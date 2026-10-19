@@ -1,21 +1,20 @@
-# Integration Tests for JUnit CTRF Extension
+# Integration Tests for JUnit CTRF Reporter
 
-This document provides a comprehensive explanation of the integration tests for the JUnit CTRF Extension project. These tests validate that the extension correctly generates CTRF-compliant reports and handles various test scenarios properly.
+This document explains the integration tests of the JUnit CTRF Reporter. They validate that the reporter generates CTRF-compliant reports and handles various test scenarios properly.
 
 ## Overview
 
 The integration tests serve several key purposes:
 
-1. **Validate CTRF Report Generation**: Ensure the extension generates valid CTRF-compliant JSON reports
+1. **Validate CTRF Report Generation**: Ensure the reporter generates valid CTRF-compliant JSON reports
 2. **Verify Report Schema Compliance**: Check that the generated reports adhere to the CTRF schema specification
 3. **Test Logical Correctness**: Confirm that test statuses, durations, and other metadata are correctly captured
-4. **Simulate Real-World Scenarios**: Test various test outcomes (success, failure, skipped) and configurations(parallel execution, dynamic parameters, etc.)
-5. **Enable reporter both Listener and as Extension**: Verify that the extension can be used both as a Listener and as an Extension
+4. **Simulate Real-World Scenarios**: Test various test outcomes (success, failure, skipped) and configurations (parallel execution, dynamic parameters, etc.)
 
 
 ## Integration Test Structure
 
-The integration tests are organized in separate modules (`integration-ctrf-validator`, `integration-tests-extension`, `integration-tests-listener` ).  The `integration-tests-extension` and `integration-tests-listener` modules contain fakes tests to generate CTRF report with required structure and test outcomes. Their structure is identical, the only difference is the way that CTRF reporter is enabled.
+The integration tests are organized in two modules. `integration-tests-listener` contains fake tests that generate a CTRF report with the required structure and test outcomes, reported by `CtrfListener`, which the module registers in `src/test/resources/META-INF/services/org.junit.platform.launcher.TestExecutionListener`. `integration-ctrf-validator` checks that report.
 ```
 integration-tests-listener/
 ├── build.gradle                 
@@ -39,14 +38,12 @@ The fake test classes are designed to simulate various test scenarios:
 #### BaseFakeTest
 
 ```java
-@ExtendWith(CtrfExtension.class) //only for extension
 public abstract class BaseFakeTest {
     // Common lifecycle methods
 }
 ```
 
 - Base class for all fake tests
-- Applies the CTRF extension to all subclasses
 - Tagged with "fake" for selective execution
 - Provides common lifecycle methods
 
@@ -56,7 +53,7 @@ public abstract class BaseFakeTest {
 - **AssumptionTest**: Contains a test aborted by a failed assumption; it is reported as skipped with `rawStatus` "aborted"
 - **DummyFailedTest**: Contains tests that intentionally fail
 - **DummyDisabledTest**: Contains tests marked with `@Disabled`
-- **DisabledClassTest** and **ConditionallySkippedClassTest** (listener module only): whole classes that JUnit skips, one with `@Disabled` and one with a class-level condition. Each of their tests is reported as skipped with the class's reason. The extension never sees tests of a skipped class, so the extension module has no such tests
+- **DisabledClassTest** and **ConditionallySkippedClassTest**: whole classes that JUnit skips, one with `@Disabled` and one with a class-level condition. Each of their tests is reported as skipped with the class's reason
 
 #### Test Duration Verification
 
@@ -67,7 +64,7 @@ public abstract class BaseFakeTest {
 
 - **InitializationErrorTest** and **AnotherInitializationErrorTest**: fail in `@BeforeAll`; each is reported as an `initializationError` entry
 - **AfterAllFailureTest**: fails in `@AfterAll` after its test passed; reported as a `teardownError` entry
-- **BrokenSourceTest** (listener module only): a `@MethodSource` and a `@TestFactory` that throw; each is reported as a failed entry under its own name. The extension cannot see failures below class level, so the extension module has no such test
+- **BrokenSourceTest**: a `@MethodSource` and a `@TestFactory` that throw; each is reported as a failed entry under its own name
 
 #### Suite Verification
 
@@ -75,11 +72,7 @@ public abstract class BaseFakeTest {
 
 ### Environment Health Testing
 
-The integration tests verify the environment health tracking feature using different approaches for each module:
-
-#### integration-tests-listener
-
-For the listener-based tests, environment health is controlled via the `ENV_HEALTHY` environment variable:
+The integration tests control environment health through the `ENV_HEALTHY` environment variable:
 
 - **CI Environment**: Set in `.github/workflows/integration-listener.yml`:
   ```yaml
@@ -92,30 +85,11 @@ For the listener-based tests, environment health is controlled via the `ENV_HEAL
   ./gradlew clean :integration-tests-listener:test
   ```
 
-This approach demonstrates how environment health can be controlled externally in CI/CD pipelines without modifying test code.
-
-#### integration-tests-extension
-
-For the extension-based tests, environment health is set programmatically within the test:
-
-**File**: `integration-tests-extension/src/test/java/.../FirstLongTest.java`
-
-```java
-import static io.github.alexshamrai.EnvironmentHealthTracker.markEnvironmentUnhealthy;
-
-@Test
-void firstLongOneSecondTest() throws InterruptedException {
-    System.out.println("OneSecondTest");
-    Thread.sleep(1000);
-    markEnvironmentUnhealthy();  // Explicitly mark environment as unhealthy
-}
-```
-
-This approach demonstrates the programmatic API for marking environment health within test code, useful for detecting runtime issues like service unavailability.
+This shows how environment health can be controlled from outside, in CI/CD pipelines, without changing test code. The programmatic API, `EnvironmentHealthTracker.markEnvironmentUnhealthy()`, is covered by the library's own `ParallelExecutionScenarioTest`, whose fixture calls it in a forked JVM.
 
 #### Validation
 
-Both approaches are validated by `integration-ctrf-validator` module:
+It is validated by the `integration-ctrf-validator` module:
 
 **File**: `integration-ctrf-validator/src/test/java/integration/CtrfLogicTest.java`
 
@@ -126,14 +100,14 @@ void verifyEnvironmentHealthMatchesTheRun() {
     assertThat(environment).isNotNull();
 
     assertThat(environment.isHealthy())
-        .as("healthy: false when ENV_HEALTHY=false or for the extension module, whose FirstLongTest marks it unhealthy")
+        .as("healthy: false when ENV_HEALTHY=false")
         .isEqualTo(expected.healthy());
 }
 ```
 
 This test ensures that the `environment.healthy` field in the generated CTRF report matches what the run was set up to produce.
 
-The `integration-ctrf-validator` module contains validation logic for json file that`integration-tests-extension` and `integration-tests-listener` modules create after test execution.
+The `integration-ctrf-validator` module contains the validation of the report that `integration-tests-listener` writes.
 ```
 integration-ctrf-validator/
 ├── build.gradle                 # Validator build configuration
@@ -163,7 +137,7 @@ The integration tests follow a two-phase execution process:
 
 1. **Report Generation Phase**:
    - Executes the fake test classes to generate a CTRF report
-   - Uses the `integration-tests-listener:test` or `integration-tests-extension:test` Gradle task
+   - Uses the `integration-tests-listener:test` Gradle task
    - Ignores test failures (since some tests are designed to fail)
    - Also writes JUnit's own event log (Open Test Reporting) to `build/test-results/junit-platform/<number>/open-test-report.xml`, one file per JVM: each fork and each retry round
    - Gives each run its own `ctrf.run.id`, so a second run without `clean` replaces both the report and the event log
@@ -208,14 +182,7 @@ One command generates the listener's report and validates it:
 ./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test
 ```
 
-With no flags, the validator expects what that run produces: one thread, the build values from the module's `src/test/resources/ctrf.properties`, and a healthy environment (the extension module's `FirstLongTest` always marks it unhealthy, so for it the validator expects `healthy: false`). For the extension module, pass its report:
-
-```bash
-./gradlew clean :integration-tests-extension:test :integration-ctrf-validator:test \
-  -Dctrf.report.path=../integration-tests-extension/build/test-results/ctrf-report.json
-```
-
-`-Dctrf.report.path` also reaches the extension's own test JVM, where `../integration-tests-extension/…` resolved from that module's directory is the same file, so it's harmless.
+With no flags, the validator expects what that run produces: one thread, the build values from the module's `src/test/resources/ctrf.properties`, and a healthy environment.
 
 ### Settings
 
@@ -226,7 +193,7 @@ Pass a setting once to the one command, and both tasks receive it. The validator
 | `-Dthreads=N` | runs tests on N threads | between 2 and N distinct thread names (exactly 1 without it) |
 | `-Dforks=N` | runs N forked JVMs | nothing; the report and JUnit's event log must still agree |
 | `-Dctrf.build.name`, `-Dctrf.build.number`, `-Dctrf.build.url` | override `ctrf.properties` | the same values in `environment`; a non-numeric build number as `buildId` |
-| `ENV_HEALTHY=false` (environment variable) | marks the environment unhealthy | `healthy: false` (the extension module's `FirstLongTest` always marks it unhealthy) |
+| `ENV_HEALTHY=false` (environment variable) | marks the environment unhealthy | `healthy: false` |
 | `-Dctrf.report.path` | where the validator reads the report | default `../integration-tests-listener/build/test-results/ctrf-report.json` |
 | `-Dctrf.junit.events.dir` | where the validator reads JUnit's event log | default `junit-platform` next to the report |
 
@@ -236,8 +203,6 @@ When the two tasks run in separate commands, pass the same settings to both.
 
 CI passes the same flags to the report step and the validator step. Locally, in one command:
 
-### For integration-tests-listener
-
 ```bash
 ENV_HEALTHY=false ./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test \
   -Dforks=2 -Dthreads=2 \
@@ -246,17 +211,7 @@ ENV_HEALTHY=false ./gradlew clean :integration-tests-listener:test :integration-
   -Dctrf.build.url=https://github.com/alexshamrai/junit-ctrf-reporter/actions/runs/12345678
 ```
 
-### For integration-tests-extension
-
-```bash
-./gradlew clean :integration-tests-extension:test :integration-ctrf-validator:test -Dthreads=2 \
-  -Dctrf.build.name=system-build \
-  -Dctrf.build.number=777 \
-  -Dctrf.build.url=https://github.com/alexshamrai/junit-ctrf-reporter/actions/runs/12345678 \
-  -Dctrf.report.path=../integration-tests-extension/build/test-results/ctrf-report.json
-```
-
 ## Conclusion
 
-The integration tests provide comprehensive validation of the JUnit CTRF Extension's functionality. They ensure that the extension generates valid CTRF reports that accurately reflect test execution results across various scenarios, including different test statuses, durations, and parallel execution.
+The integration tests validate the JUnit CTRF Reporter's behaviour. They ensure that the reporter generates valid CTRF reports that accurately reflect test execution results across various scenarios, including different test statuses, durations, and parallel execution.
 

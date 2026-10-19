@@ -116,8 +116,8 @@ mavenPublishing {
     // -PpublishVersion lets compat/run.sh publish a throwaway version without touching the release one
     coordinates("io.github.alexshamrai", "junit-ctrf-reporter", "${findProperty('publishVersion') ?: releaseVersion}")
     pom {
-        name = "Junit CTRF Extension"
-        description = "Junit extension to create test reports that follow the CTRF standard."
+        name = "JUnit CTRF Reporter"
+        description = "A JUnit Platform listener that writes JUnit 5 and 6 test results as a CTRF (Common Test Report Format) report."
         inceptionYear = "2024"
         url = "https://github.com/alexshamrai/junit-ctrf-reporter"
         licenses {

@@ -1,6 +1,6 @@
-# Contributing to JUnit CTRF Extension
+# Contributing to JUnit CTRF Reporter
 
-Thank you for your interest in contributing to JUnit CTRF Extension! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to JUnit CTRF Reporter! This document provides guidelines and instructions for contributing.
 
 ## Code of Conduct
 

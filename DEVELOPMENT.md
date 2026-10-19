@@ -1,6 +1,6 @@
 # Development Setup
 
-This document provides instructions for setting up the JUnit CTRF Extension project for local development.
+This document provides instructions for setting up the JUnit CTRF Reporter project for local development.
 
 ## Prerequisites
 
@@ -42,7 +42,7 @@ For integration tests info refer to [INTEGRATION_TESTS.md](INTEGRATION_TESTS.md)
 
 ### Consumer Compatibility Check
 
-`compat/run.sh` publishes the library to `build/compat-repo`, then builds small consumer projects against each JUnit version you pass: Maven and Gradle, the listener and the extension, and a JUnit 4 project that has no JUnit Jupiter on its classpath. Each consumer must run on exactly the JUnit version it asked for and produce the expected CTRF report:
+`compat/run.sh` publishes the library to `build/compat-repo`, then builds small consumer projects against each JUnit version you pass: Maven and Gradle projects reporting through the listener, among them a JUnit 4 project that has no JUnit Jupiter on its classpath. Each consumer must run on exactly the JUnit version it asked for and produce the expected CTRF report:
 
 ```bash
 compat/run.sh 5.10.5 5.14.4 6.1.3
@@ -89,7 +89,7 @@ The project uses checkstyle for code quality. Run the checks with:
 
 - `src/main/java` - the library
 - `src/test/java` - its unit and scenario tests
-- `integration-tests-listener`, `integration-tests-extension` - fake tests that produce a report through each entry point
+- `integration-tests-listener` - fake tests that produce a report through `CtrfListener`
 - `integration-ctrf-validator` - checks those reports; see [INTEGRATION_TESTS.md](INTEGRATION_TESTS.md)
 - `compat` - consumer projects for the compatibility check above
 - `schema` - the pinned official CTRF schema, a test resource only
