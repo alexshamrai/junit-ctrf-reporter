@@ -140,6 +140,15 @@ class TestIdentifierAdapterTest {
     }
 
     @Test
+    @DisplayName("A nested class groups its children under its containers and its own name")
+    void nestedClassGroupsItsChildrenUnderItsContainersAndItsOwnName() {
+        TestPlan plan = discover(PaymentsFixture.class);
+        TestIdentifier nestedClass = plan.getParent(onlyTest(plan)).orElseThrow();
+
+        assertThat(new TestIdentifierAdapter(nestedClass, plan).getSuiteOfChildren()).containsExactly("Payments", "Refunds");
+    }
+
+    @Test
     @DisplayName("The engine's suite is its own name; a top-level class groups its children under its own name")
     void engineAndTopLevelClass() {
         TestPlan plan = discover(PaymentsFixture.class);

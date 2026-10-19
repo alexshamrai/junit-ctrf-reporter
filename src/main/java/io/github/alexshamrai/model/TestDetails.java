@@ -1,6 +1,6 @@
 package io.github.alexshamrai.model;
 
-import io.github.alexshamrai.adapter.TestContextAdapter;
+import io.github.alexshamrai.adapter.TestIdentifierAdapter;
 
 import java.util.List;
 import java.util.Set;
@@ -56,10 +56,10 @@ public record TestDetails(
      * tags, source location, suite) from the adapter and constructs a TestDetails record with the
      * current timestamp as the start time.
      *
-     * @param adapter the test context adapter
+     * @param adapter the listener's view of the test
      * @return the constructed TestDetails
      */
-    public static TestDetails fromAdapter(TestContextAdapter adapter) {
+    public static TestDetails fromAdapter(TestIdentifierAdapter adapter) {
         return new TestDetails(
             System.currentTimeMillis(),
             adapter.getTags(),
