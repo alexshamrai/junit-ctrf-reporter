@@ -3,7 +3,7 @@ package io.github.alexshamrai;
 /**
  * One run's state: what started it, the entry point that reports it, when it started, and what it recorded so far.
  * <p>
- * The owner is the listener's {@code TestPlan}, compared by identity.
+ * The owner is a token that the listener creates for each test plan it runs, compared by identity.
  * Only the owner can end the run, so a JUnit run started from inside a test can't end the run around it (CB-2).
  */
 final class TestRun {

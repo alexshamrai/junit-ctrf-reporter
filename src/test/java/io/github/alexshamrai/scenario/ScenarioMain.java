@@ -16,9 +16,10 @@ import java.util.List;
 /**
  * Entry point of the JVM that {@link ScenarioRunner} starts: runs fixture classes on the JUnit Platform, reporting
  * through {@link CtrfListener}. In "listener-rerun" mode it then runs the failed tests again in the same JVM, through
- * the same launcher, as Surefire's {@code rerunFailingTestsCount} does.
+ * the same launcher, as Surefire's {@code rerunFailingTestsCount} does. In "listener-twice" mode the launcher has two
+ * {@link CtrfListener}s, as when the jar registers one and the user registers another.
  *
- * <p>Usage: {@code ScenarioMain <listener|listener-rerun> <fixture class name>...}
+ * <p>Usage: {@code ScenarioMain <listener|listener-rerun|listener-twice> <fixture class name>...}
  */
 public final class ScenarioMain {
 
@@ -29,10 +30,13 @@ public final class ScenarioMain {
 
     public static void main(String[] args) {
         String mode = args[0];
-        Launcher launcher = LauncherFactory.create(LauncherConfig.builder()
+        var config = LauncherConfig.builder()
             .enableTestExecutionListenerAutoRegistration(false)
-            .addTestExecutionListeners(new CtrfListener())
-            .build());
+            .addTestExecutionListeners(new CtrfListener());
+        if ("listener-twice".equals(mode)) {
+            config.addTestExecutionListeners(new CtrfListener());
+        }
+        Launcher launcher = LauncherFactory.create(config.build());
 
         var summary = execute(launcher, Arrays.stream(args, 1, args.length).map(DiscoverySelectors::selectClass).toList());
         if ("listener-rerun".equals(mode) && !summary.getFailures().isEmpty()) {

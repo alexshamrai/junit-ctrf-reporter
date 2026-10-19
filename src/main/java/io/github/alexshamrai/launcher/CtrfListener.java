@@ -82,10 +82,16 @@ public class CtrfListener implements TestExecutionListener {
     private final Set<String> reportedIds = ConcurrentHashMap.newKeySet();
 
     /**
-     * Whether this listener's test plan owns the active run. The listener of a JUnit run started from inside a test
-     * doesn't, and reports nothing (CB-2).
+     * Whether this listener owns the active run. The listener of a JUnit run started from inside a test doesn't, and
+     * reports nothing (CB-2); nor does a second listener on the same launcher.
      */
     private volatile boolean ownsRun;
+
+    /**
+     * What owns the run this listener started: a new token for each test plan it runs. Not the {@code TestPlan},
+     * which every listener of the launcher sees, so that of two listeners on one launcher only the first reports.
+     */
+    private volatile Object runOwner;
 
     private volatile TestPlan testPlan;
 
@@ -107,13 +113,15 @@ public class CtrfListener implements TestExecutionListener {
     @Override
     public void testPlanExecutionStarted(TestPlan testPlan) {
         this.testPlan = testPlan;
-        ownsRun = reportManager.startTestRun(testPlan, GENERATED_BY);
+        Object owner = new Object();
+        runOwner = owner;
+        ownsRun = reportManager.startTestRun(owner, GENERATED_BY);
     }
 
     @Override
     public void testPlanExecutionFinished(TestPlan testPlan) {
         if (ownsRun) {
-            reportManager.finishTestRun(testPlan);
+            reportManager.finishTestRun(runOwner);
         }
         ownsRun = false;
         reportedIds.clear();

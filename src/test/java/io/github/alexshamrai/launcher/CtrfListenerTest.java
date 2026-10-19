@@ -20,7 +20,9 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -60,7 +62,7 @@ public class CtrfListenerTest {
 
         ctrfListener = new CtrfListener(reportManager);
 
-        // The listener reports only while its test plan owns the run
+        // The listener reports only while it owns the run
         when(reportManager.startTestRun(any(), anyString())).thenReturn(true);
         ctrfListener.testPlanExecutionStarted(testPlan);
         clearInvocations(reportManager);
@@ -73,21 +75,31 @@ public class CtrfListenerTest {
     }
 
     @Test
-    void testPlanExecutionStarted_shouldDelegateToManager() {
+    void testPlanExecutionStarted_startsARunOwnedByThisListenersOwnToken() {
         ctrfListener.testPlanExecutionStarted(testPlan);
-        verify(reportManager).startTestRun(testPlan, "io.github.alexshamrai.launcher.CtrfListener");
+
+        var owner = ArgumentCaptor.forClass(Object.class);
+        verify(reportManager).startTestRun(owner.capture(), eq("io.github.alexshamrai.launcher.CtrfListener"));
+        // Not the TestPlan, which a second listener on the same launcher sees too
+        assertNotSame(testPlan, owner.getValue());
     }
 
     @Test
-    void testPlanExecutionFinished_shouldDelegateToManager() {
+    void testPlanExecutionFinished_finishesTheRunWithTheOwnerThatStartedIt() {
+        ctrfListener.testPlanExecutionStarted(testPlan);
         ctrfListener.testPlanExecutionFinished(testPlan);
-        verify(reportManager).finishTestRun(testPlan);
+
+        var started = ArgumentCaptor.forClass(Object.class);
+        var finished = ArgumentCaptor.forClass(Object.class);
+        verify(reportManager).startTestRun(started.capture(), anyString());
+        verify(reportManager).finishTestRun(finished.capture());
+        assertSame(started.getValue(), finished.getValue());
     }
 
     @Test
     void listenerWhoseRunStartIsRefused_reportsNothing() {
         TestPlan nestedPlan = mock(TestPlan.class);
-        when(reportManager.startTestRun(eq(nestedPlan), anyString())).thenReturn(false);
+        when(reportManager.startTestRun(any(), anyString())).thenReturn(false);
         when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.SUCCESSFUL);
         var nested = new CtrfListener(reportManager);
 
@@ -97,7 +109,7 @@ public class CtrfListenerTest {
         nested.executionSkipped(testIdentifier, "disabled");
         nested.testPlanExecutionFinished(nestedPlan);
 
-        verify(reportManager).startTestRun(nestedPlan, "io.github.alexshamrai.launcher.CtrfListener");
+        verify(reportManager).startTestRun(notNull(), eq("io.github.alexshamrai.launcher.CtrfListener"));
         verifyNoMoreInteractions(reportManager);
     }
 

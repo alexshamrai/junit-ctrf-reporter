@@ -237,7 +237,7 @@ public final class CtrfReportManager {
      * Starts recording a run owned by {@code owner}, unless another owner's run is active. Reads no file: the report
      * is read only at the end, under the lock.
      *
-     * @param owner     what starts the run, compared by identity: the listener's {@code TestPlan}
+     * @param owner     what starts the run, compared by identity: a token the listener creates for each test plan
      * @param generator the entry point that reports, written as {@code generatedBy}
      * @return whether {@code owner} owns the active run: true if the run was just started or {@code owner} started it
      *     before, false if another owner's run is active, as for a JUnit run started from inside a test
