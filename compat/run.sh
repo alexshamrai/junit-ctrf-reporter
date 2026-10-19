@@ -6,7 +6,7 @@
 #   maven/pom.xml             Maven + CtrfListener, JUnit declared before the reporter
 #   maven/pom-ctrf-first.xml  Maven + CtrfListener, reporter declared before JUnit
 #   (both Maven projects run their two test classes in separate forks and rerun failed tests once)
-#   gradle-jupiter            Gradle + CtrfExtension
+#   gradle-jupiter            Gradle + CtrfListener, JUnit Jupiter tests
 #   gradle-vintage            Gradle + CtrfListener, JUnit 4 tests only (no Jupiter on the classpath)
 # Each consumer runs one passing and one failing test; check_report.py then verifies the CTRF report
 # and that the consumer ran on the JUnit version it asked for.

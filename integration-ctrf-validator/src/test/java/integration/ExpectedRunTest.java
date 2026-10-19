@@ -8,12 +8,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ExpectedRunTest {
 
-    private static final String LISTENER = IntegrationRun.LISTENER_MODULE;
-    private static final String EXTENSION = IntegrationRun.EXTENSION_MODULE;
-
     @Test
     void plainLocalRunExpectsTheModulePropertiesOneThreadAndAHealthyListener() {
-        var expected = ExpectedRun.from(LISTENER, moduleProperties(), new Properties(), null);
+        var expected = ExpectedRun.from(moduleProperties(), new Properties(), null);
 
         assertThat(expected).isEqualTo(new ExpectedRun(1, "feature-branch", 123L, null, "http://ci.example.com/build/123", true,
             ExpectedRun.LISTENER_ENTRY_POINT));
@@ -24,7 +21,7 @@ class ExpectedRunTest {
         var system = properties("threads", "2", "ctrf.build.name", "system-build", "ctrf.build.number", "777",
             "ctrf.build.url", "https://github.com/alexshamrai/junit-ctrf-reporter/actions/runs/1");
 
-        var expected = ExpectedRun.from(LISTENER, moduleProperties(), system, null);
+        var expected = ExpectedRun.from(moduleProperties(), system, null);
 
         assertThat(expected.threads()).isEqualTo(2);
         assertThat(expected.buildName()).isEqualTo("system-build");
@@ -34,21 +31,13 @@ class ExpectedRunTest {
 
     @Test
     void envHealthyFalseInAnyCaseMeansUnhealthy() {
-        assertThat(ExpectedRun.from(LISTENER, moduleProperties(), new Properties(), "FALSE").healthy()).isFalse();
-        assertThat(ExpectedRun.from(LISTENER, moduleProperties(), new Properties(), "true").healthy()).isTrue();
-    }
-
-    @Test
-    void extensionIsAlwaysUnhealthyAndGeneratedByTheExtension() {
-        var expected = ExpectedRun.from(EXTENSION, moduleProperties(), new Properties(), null);
-
-        assertThat(expected.healthy()).isFalse();
-        assertThat(expected.generatedBy()).isEqualTo(ExpectedRun.EXTENSION_ENTRY_POINT);
+        assertThat(ExpectedRun.from(moduleProperties(), new Properties(), "FALSE").healthy()).isFalse();
+        assertThat(ExpectedRun.from(moduleProperties(), new Properties(), "true").healthy()).isTrue();
     }
 
     @Test
     void nonNumericBuildNumberIsExpectedAsBuildId() {
-        var expected = ExpectedRun.from(LISTENER, moduleProperties(), properties("ctrf.build.number", " 2026.10.15-3 "), null);
+        var expected = ExpectedRun.from(moduleProperties(), properties("ctrf.build.number", " 2026.10.15-3 "), null);
 
         assertThat(expected.buildNumber()).isNull();
         assertThat(expected.buildId()).isEqualTo("2026.10.15-3");
@@ -56,7 +45,7 @@ class ExpectedRunTest {
 
     @Test
     void threadsThatArentANumberMeanOne() {
-        assertThat(ExpectedRun.from(LISTENER, moduleProperties(), properties("threads", "many"), null).threads()).isEqualTo(1);
+        assertThat(ExpectedRun.from(moduleProperties(), properties("threads", "many"), null).threads()).isEqualTo(1);
     }
 
     private static Properties moduleProperties() {

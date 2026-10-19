@@ -17,13 +17,11 @@ class IntegrationRunTest {
 
     @Test
     void findsTheModuleAndTheEventLogNextToTheReport() throws IOException {
-        var report = report(tempDir.resolve("integration-tests-extension/build/test-results/ctrf-report.json"));
+        var report = report(tempDir.resolve("integration-tests-listener/build/test-results/ctrf-report.json"));
 
         var run = IntegrationRun.locate(report.toString(), null);
 
-        assertThat(run.module()).isEqualTo(IntegrationRun.EXTENSION_MODULE);
-        assertThat(run.isListener()).isFalse();
-        assertThat(run.moduleDir()).isEqualTo(tempDir.resolve("integration-tests-extension"));
+        assertThat(run.moduleDir()).isEqualTo(tempDir.resolve("integration-tests-listener"));
         assertThat(run.eventsDir()).isEqualTo(report.getParent().resolve("junit-platform"));
         assertThat(run.reportFile().toPath()).isEqualTo(report);
     }
@@ -35,7 +33,6 @@ class IntegrationRunTest {
 
         var run = IntegrationRun.locate(report.toString(), events.toString());
 
-        assertThat(run.isListener()).isTrue();
         assertThat(run.eventsDir()).isEqualTo(events);
     }
 
@@ -57,8 +54,7 @@ class IntegrationRunTest {
         assertThatThrownBy(() -> IntegrationRun.locate(report.toString(), null))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("Can't tell which integration module wrote " + report)
-            .hasMessageContaining("integration-tests-listener/build")
-            .hasMessageContaining("integration-tests-extension/build");
+            .hasMessageContaining("integration-tests-listener/build");
     }
 
     @Test

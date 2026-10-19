@@ -21,18 +21,16 @@ record ExpectedRun(int threads, String buildName, Long buildNumber, String build
                    String generatedBy) {
 
     static final String LISTENER_ENTRY_POINT = "io.github.alexshamrai.launcher.CtrfListener";
-    static final String EXTENSION_ENTRY_POINT = "io.github.alexshamrai.jupiter.CtrfExtension";
 
     static ExpectedRun of(IntegrationRun run) throws IOException {
         var moduleProperties = new Properties();
         try (InputStream in = Files.newInputStream(run.moduleDir().resolve("src/test/resources/ctrf.properties"))) {
             moduleProperties.load(in);
         }
-        return from(run.module(), moduleProperties, System.getProperties(), System.getenv("ENV_HEALTHY"));
+        return from(moduleProperties, System.getProperties(), System.getenv("ENV_HEALTHY"));
     }
 
-    static ExpectedRun from(String module, Properties moduleProperties, Properties systemProperties, String envHealthy) {
-        boolean extension = IntegrationRun.EXTENSION_MODULE.equals(module);
+    static ExpectedRun from(Properties moduleProperties, Properties systemProperties, String envHealthy) {
         String number = setting("ctrf.build.number", moduleProperties, systemProperties);
         String stripped = number == null ? "" : number.strip();
         boolean wholeNumber = stripped.matches("[0-9]+");
@@ -42,9 +40,8 @@ record ExpectedRun(int threads, String buildName, Long buildNumber, String build
             wholeNumber ? Long.valueOf(stripped) : null,
             wholeNumber || stripped.isEmpty() ? null : stripped,
             setting("ctrf.build.url", moduleProperties, systemProperties),
-            // The extension module's FirstLongTest calls markEnvironmentUnhealthy()
-            !("false".equalsIgnoreCase(envHealthy) || extension),
-            extension ? EXTENSION_ENTRY_POINT : LISTENER_ENTRY_POINT);
+            !"false".equalsIgnoreCase(envHealthy),
+            LISTENER_ENTRY_POINT);
     }
 
     // The library's precedence: a system property wins over ctrf.properties
