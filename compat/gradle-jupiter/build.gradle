@@ -1,4 +1,4 @@
-// Consumer-compatibility fixture for compat/run.sh: a Gradle project using CtrfExtension.
+// Consumer-compatibility fixture for compat/run.sh: a Gradle project with JUnit Jupiter tests, reported by CtrfListener.
 plugins {
     id 'java'
 }

@@ -10,7 +10,6 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Checks what JUnit's event log can't: names, messages, durations, threads and the run's settings. Presence, final
@@ -26,21 +25,13 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assertThat(summary).isNotNull();
 
         // Each test appears once, as its final attempt: the test-retry plugin's second round is folded into
-        // retryAttempts. Both modules: the shared fake tests, AfterAllFailureTest's passing test and its
-        // teardownError, and AssumptionTest's aborted test, which counts as skipped, and PaymentsTest's three passing tests. The listener module also
-        // reports BrokenSourceTest's two failed containers, and the four tests of DisabledClassTest and
-        // ConditionallySkippedClassTest as skipped.
-        if (run.isListener()) {
-            assertThat(summary.getTests()).isEqualTo(31);
-            assertThat(summary.getPassed()).isEqualTo(17);
-            assertThat(summary.getFailed()).isEqualTo(7);
-            assertThat(summary.getSkipped()).isEqualTo(7);
-        } else {
-            assertThat(summary.getTests()).isEqualTo(25);
-            assertThat(summary.getPassed()).isEqualTo(17);
-            assertThat(summary.getFailed()).isEqualTo(5);
-            assertThat(summary.getSkipped()).isEqualTo(3);
-        }
+        // retryAttempts. The fake tests, AfterAllFailureTest's passing test and its teardownError, AssumptionTest's
+        // aborted test, which counts as skipped, PaymentsTest's three passing tests, BrokenSourceTest's two failed
+        // containers, and the four tests of DisabledClassTest and ConditionallySkippedClassTest as skipped.
+        assertThat(summary.getTests()).isEqualTo(31);
+        assertThat(summary.getPassed()).isEqualTo(17);
+        assertThat(summary.getFailed()).isEqualTo(7);
+        assertThat(summary.getSkipped()).isEqualTo(7);
         assertThat(summary.getFlaky()).isEqualTo(1);
         assertThat(summary.getPending()).isEqualTo(0);
         assertThat(summary.getOther()).isEqualTo(0);
@@ -118,9 +109,9 @@ public class CtrfLogicTest extends BaseIntegrationTest {
     }
 
     @Test
-    void verifyGeneratedByMatchesTheModule() {
+    void verifyGeneratedByIsTheListener() {
         assertThat(report.getGeneratedBy())
-            .as("generatedBy of a report written by %s", run.module())
+            .as("generatedBy of the listener module's report")
             .isEqualTo(expected.generatedBy());
     }
 
@@ -130,7 +121,7 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assertThat(environment).isNotNull();
 
         assertThat(environment.isHealthy())
-            .as("healthy: false when ENV_HEALTHY=false or for the extension module, whose FirstLongTest marks it unhealthy")
+            .as("healthy: false when ENV_HEALTHY=false")
             .isEqualTo(expected.healthy());
     }
 
@@ -159,8 +150,6 @@ public class CtrfLogicTest extends BaseIntegrationTest {
 
     @Test
     void verifyFailedContainersBelowClassLevelAreReported() {
-        assumeTrue(run.isListener(), "Only the listener sees containers below class level");
-
         assertThat(testWithId("BrokenSourceTest", "[test-template:usesData(int)]").getName()).isEqualTo("usesData(int)");
         assertThat(testWithId("BrokenSourceTest", "[test-factory:factory()]").getName()).isEqualTo("factory()");
     }
@@ -191,8 +180,6 @@ public class CtrfLogicTest extends BaseIntegrationTest {
 
     @Test
     void verifyTestsOfSkippedClassesAreReportedWithTheirReason() {
-        assumeTrue(run.isListener(), "Only the listener sees tests of classes that JUnit skips as a whole");
-
         for (String method : List.of("firstTestOfDisabledClass()", "secondTestOfDisabledClass()")) {
             assertThat(testWithId("DisabledClassTest", "[method:" + method + "]").getMessage())
                 .as("reason for %s", method)

@@ -9,13 +9,11 @@ import java.nio.file.Path;
  *
  * @param reportFile the CTRF report
  * @param moduleDir  the integration module's directory
- * @param module     the module's name: {@link #LISTENER_MODULE} or {@link #EXTENSION_MODULE}
  * @param eventsDir  the directory holding JUnit's event log of the same run
  */
-record IntegrationRun(File reportFile, Path moduleDir, String module, Path eventsDir) {
+record IntegrationRun(File reportFile, Path moduleDir, Path eventsDir) {
 
     static final String LISTENER_MODULE = "integration-tests-listener";
-    static final String EXTENSION_MODULE = "integration-tests-extension";
     // Relative to the validator module, which is the working directory of its tests
     static final String DEFAULT_REPORT_PATH = "../" + LISTENER_MODULE + "/build/test-results/ctrf-report.json";
 
@@ -32,22 +30,18 @@ record IntegrationRun(File reportFile, Path moduleDir, String module, Path event
         Path eventsDir = eventsDirProperty != null
             ? Path.of(eventsDirProperty).toAbsolutePath().normalize()
             : report.getParent().resolve("junit-platform");
-        return new IntegrationRun(report.toFile(), moduleDir, moduleDir.getFileName().toString(), eventsDir);
-    }
-
-    boolean isListener() {
-        return LISTENER_MODULE.equals(module);
+        return new IntegrationRun(report.toFile(), moduleDir, eventsDir);
     }
 
     private static Path moduleDirOf(Path report) {
         for (Path dir = report.getParent(); dir != null && dir.getParent() != null; dir = dir.getParent()) {
             String parentName = dir.getParent().getFileName() == null ? "" : dir.getParent().getFileName().toString();
             if (dir.getFileName().toString().equals("build")
-                && (parentName.equals(LISTENER_MODULE) || parentName.equals(EXTENSION_MODULE))) {
+                && parentName.equals(LISTENER_MODULE)) {
                 return dir.getParent();
             }
         }
         throw new IllegalStateException("Can't tell which integration module wrote " + report + ": expected it under "
-            + LISTENER_MODULE + "/build or " + EXTENSION_MODULE + "/build.");
+            + LISTENER_MODULE + "/build.");
     }
 }
