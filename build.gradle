@@ -31,7 +31,7 @@ ext {
     // The oldest supported JUnit: main code compiles against it. renovate.json keeps it on 5.10.x
     junitMinVersion = '5.10.5'
     lombokVersion = '1.18.48'
-    jacksonVersion = '3.2.1'
+    jacksonVersion = '3.2.4'
     mockitoVersion = '5.24.0'
     assertjVersion = '3.27.7'
 
