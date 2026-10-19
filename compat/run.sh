@@ -8,6 +8,7 @@
 #   (both Maven projects run their two test classes in separate forks and rerun failed tests once)
 #   gradle-jupiter            Gradle + CtrfListener, JUnit Jupiter tests
 #   gradle-vintage            Gradle + CtrfListener, JUnit 4 tests only (no Jupiter on the classpath)
+# None registers CtrfListener itself: the jar does, through META-INF/services.
 # Each consumer runs one passing and one failing test; check_report.py then verifies the CTRF report
 # and that the consumer ran on the JUnit version it asked for.
 #

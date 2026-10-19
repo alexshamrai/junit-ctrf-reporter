@@ -14,7 +14,7 @@ The integration tests serve several key purposes:
 
 ## Integration Test Structure
 
-The integration tests are organized in two modules. `integration-tests-listener` contains fake tests that generate a CTRF report with the required structure and test outcomes, reported by `CtrfListener`, which the module registers in `src/test/resources/META-INF/services/org.junit.platform.launcher.TestExecutionListener`. `integration-ctrf-validator` checks that report.
+The integration tests are organized in two modules. `integration-tests-listener` contains fake tests that generate a CTRF report with the required structure and test outcomes, reported by `CtrfListener`, which the jar registers itself. The module registers it again in `src/test/resources/META-INF/services/org.junit.platform.launcher.TestExecutionListener`, as projects that set it up before 0.6.0 do, so the run also shows that the duplicate is harmless. `integration-ctrf-validator` checks that report.
 ```
 integration-tests-listener/
 ├── build.gradle                 
@@ -144,6 +144,7 @@ The integration tests follow a two-phase execution process:
 
 2. **Validation Phase**:
    - Uses the `integration-ctrf-validator:test` Gradle task
+   - Turns `CtrfListener` off for the validator's own tests, through `junit.platform.execution.listeners.deactivate`: the jar registers it, and its report would otherwise replace the one the validator checks
    - Runs `CtrfSchemaValidationTest`, `JunitCrossCheckTest` and `CtrfLogicTest`, plus unit tests of its helpers
 
 ### Validation Tests

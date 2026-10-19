@@ -6,8 +6,8 @@ How the JUnit CTRF Reporter is put together: its entry point, how a test's resul
 
 `CtrfListener` (`launcher/CtrfListener.java`) is the only entry point. `CtrfExtension`, deprecated in 0.5.2, was removed in 0.6.0.
 
-- JUnit Platform `TestExecutionListener`, registered by the user through `META-INF/services` or programmatically
-- The jar doesn't register it itself: that would switch reporting on for every project with the jar on its test classpath
+- JUnit Platform `TestExecutionListener`, registered by the jar's own `META-INF/services` file, so it is active wherever the jar is on the test classpath; JUnit's `junit.platform.execution.listeners.deactivate` turns it off
+- A user's own registration on top, by a services file or by hand, is harmless: `ServiceLoader` loads a class once, and of two instances on one launcher only the first owns the run
 - Sees classes skipped as a whole, failed containers of every kind, other engines (Vintage) and dynamic tests
 - JUnit's launcher catches and logs exceptions from listener callbacks, so the listener needs no guard of its own
 - `TestIdentifierAdapter` (`adapter/`) is its view of a test: identity, tags, source and `suite`, from the `TestIdentifier` and its `TestPlan`

@@ -17,9 +17,10 @@ import java.util.List;
  * Entry point of the JVM that {@link ScenarioRunner} starts: runs fixture classes on the JUnit Platform, reporting
  * through {@link CtrfListener}. In "listener-rerun" mode it then runs the failed tests again in the same JVM, through
  * the same launcher, as Surefire's {@code rerunFailingTestsCount} does. In "listener-twice" mode the launcher has two
- * {@link CtrfListener}s, as when the jar registers one and the user registers another.
+ * {@link CtrfListener}s. In "auto" mode the launcher registers the listeners that {@code META-INF/services} names, as
+ * Gradle and Maven do, and in "auto-and-registered" mode the listener is registered by hand as well.
  *
- * <p>Usage: {@code ScenarioMain <listener|listener-rerun|listener-twice> <fixture class name>...}
+ * <p>Usage: {@code ScenarioMain <listener|listener-rerun|listener-twice|auto|auto-and-registered> <fixture class name>...}
  */
 public final class ScenarioMain {
 
@@ -30,13 +31,7 @@ public final class ScenarioMain {
 
     public static void main(String[] args) {
         String mode = args[0];
-        var config = LauncherConfig.builder()
-            .enableTestExecutionListenerAutoRegistration(false)
-            .addTestExecutionListeners(new CtrfListener());
-        if ("listener-twice".equals(mode)) {
-            config.addTestExecutionListeners(new CtrfListener());
-        }
-        Launcher launcher = LauncherFactory.create(config.build());
+        Launcher launcher = LauncherFactory.create(config(mode).build());
 
         var summary = execute(launcher, Arrays.stream(args, 1, args.length).map(DiscoverySelectors::selectClass).toList());
         if ("listener-rerun".equals(mode) && !summary.getFailures().isEmpty()) {
@@ -53,6 +48,22 @@ public final class ScenarioMain {
             + " skipped=" + summary.getTestsSkippedCount()
             + " containersFailed=" + summary.getContainersFailedCount()
             + " containersSkipped=" + summary.getContainersSkippedCount());
+    }
+
+    private static LauncherConfig.Builder config(String mode) {
+        if ("auto".equals(mode)) {
+            return LauncherConfig.builder();
+        }
+        if ("auto-and-registered".equals(mode)) {
+            return LauncherConfig.builder().addTestExecutionListeners(new CtrfListener());
+        }
+        var config = LauncherConfig.builder()
+            .enableTestExecutionListenerAutoRegistration(false)
+            .addTestExecutionListeners(new CtrfListener());
+        if ("listener-twice".equals(mode)) {
+            config.addTestExecutionListeners(new CtrfListener());
+        }
+        return config;
     }
 
     private static TestExecutionSummary execute(Launcher launcher, List<? extends DiscoverySelector> selectors) {
