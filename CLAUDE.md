@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-JUnit CTRF Reporter is a Java library that generates test reports following the CTRF (Common Test Report Format) specification. It provides both a JUnit Jupiter Extension and a JUnit Platform TestExecutionListener for JUnit 5 tests.
+JUnit CTRF Reporter is a Java library that generates test reports following the CTRF (Common Test Report Format) specification. It reports through a JUnit Platform `TestExecutionListener`, `CtrfListener`, for JUnit 5 and 6 tests.
 
 **Key Facts:**
 - Requires Java 17+ at run time. The build compiles with JDK 25 and `--release 17` (main and test code), and tests on Java 25, 17 and 21
@@ -35,15 +35,11 @@ JUnit CTRF Reporter is a Java library that generates test reports following the 
 
 ### Integration Tests
 
-Integration tests are split across three modules and must be run sequentially:
+Integration tests are split across two modules and must be run in order:
 
 ```bash
 # Generate the listener's report and validate it (no flags: the validator expects a plain local run)
 ./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test
-
-# The same for the extension
-./gradlew clean :integration-tests-extension:test :integration-ctrf-validator:test \
-  -Dctrf.report.path=../integration-tests-extension/build/test-results/ctrf-report.json
 
 # Exactly as CI: the same flags reach both tasks, and the validator expects them
 ENV_HEALTHY=false ./gradlew clean :integration-tests-listener:test :integration-ctrf-validator:test \
@@ -90,8 +86,8 @@ The architecture and the project structure are in `ARCHITECTURE.md`, for human c
 - Run with: `./gradlew test`
 
 **Integration Tests:**
-- Separated into three modules for isolation
-- `integration-tests-extension` and `integration-tests-listener` contain fake tests that generate reports
+- Separated into two modules for isolation
+- `integration-tests-listener` contains fake tests that generate a report through `CtrfListener`
 - `integration-ctrf-validator` validates generated reports against CTRF schema and logical correctness
 - Fake tests intentionally have different outcomes (success, failure, skipped) to verify report accuracy
 
@@ -123,7 +119,7 @@ Each test appears once in the report, as its final attempt. Earlier attempts wit
 
 ### Suites
 
-Each test's `suite` is the display names of its ancestors, outermost first, without the engine. The listener walks the `TestPlan`, the extension the `ExtensionContext` parents, and `TestContextAdapter`'s default `getSuite()` and `getSuiteOfChildren()` hold the rule. Under `@Suite`, the listener leaves out every engine, the suite engine and the one it runs, by the last unique-ID segment's type, so the `@Suite` class comes first; the extension can't see above Jupiter's engine, so its suites start at the class. With no other container, the suite is the nearest engine's name. A class's `initializationError` or `teardownError` uses `getSuiteOfChildren()`, so it ends with the class's own name and never falls back to the engine. `AttemptFolder` and `ReportMerger` carry it through retries and HP-11 recoveries, and the integration validator checks it against JUnit's own event log.
+Each test's `suite` is the display names of its ancestors, outermost first, without the engine. The listener walks the `TestPlan`, and `TestIdentifierAdapter`'s `getSuite()` and `getSuiteOfChildren()` hold the rule. Under `@Suite`, the listener leaves out every engine, the suite engine and the one it runs, by the last unique-ID segment's type, so the `@Suite` class comes first. With no other container, the suite is the nearest engine's name. A class's `initializationError` or `teardownError` uses `getSuiteOfChildren()`, so it ends with the class's own name and never falls back to the engine. `AttemptFolder` and `ReportMerger` carry it through retries and HP-11 recoveries, and the integration validator checks it against JUnit's own event log.
 
 ### Rerun Support
 
