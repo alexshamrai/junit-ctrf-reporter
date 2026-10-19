@@ -4,7 +4,7 @@ This document provides a detailed, actionable plan for addressing code quality i
 
 > **Updated 2026-10-08** after a second, behaviour-focused review of `master` @ `69fa713` (0.4.5 plus dependency updates). Read [Review Update — 2026-10-08](#review-update--2026-10-08) first. It records which original items are already done on `master`, and adds 18 new items for defects that were reproduced by running them, not just inferred from the code.
 
-> **Progress 2026-10-19:** Phases 1 and 2 are released as 0.5.0, Phase 3 as 0.5.1, and Phase 4 as **0.5.2** on 2026-10-16 (release PR #154, GitHub release v0.5.2). 0.5.2 holds streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), the five deferred review minors (#143), [HP-12](#hp-12-design--suite)'s `suite` (#144), MP-4's report-path handling (#148), the extension's aborted-class fix (#149), and the deprecation of `CtrfExtension` (#153), with tests and docs (#140, #141, #145, #146, #147, #150, #151). Its release notes are on the GitHub release. Left: TI-3 (in review), and Phase 5, the removal of `CtrfExtension` in 0.6.0 (#152). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
+> **Progress 2026-10-19:** Phases 1 and 2 are released as 0.5.0, Phase 3 as 0.5.1, and Phase 4 as **0.5.2** on 2026-10-16 (release PR #154, GitHub release v0.5.2). 0.5.2 holds streaming JSON, the fix for 0.5.1's heap use (#142, [0.5.2 Design — streaming JSON](#052-design--streaming-json)), the five deferred review minors (#143), [HP-12](#hp-12-design--suite)'s `suite` (#144), MP-4's report-path handling (#148), the extension's aborted-class fix (#149), and the deprecation of `CtrfExtension` (#153), with tests and docs (#140, #141, #145, #146, #147, #150, #151). Its release notes are on the GitHub release. TI-3 followed (#156), test code only. Left: Phase 5, the removal of `CtrfExtension` in 0.6.0 (#152). [Status on `master` — 2026-10-14](#status-on-master--2026-10-14) lists what is done.
 
 ## How to Use This Plan
 
@@ -714,7 +714,7 @@ Snapshot of 2026-10-08. For the current state, see [Status on `master` — 2026-
 | CQ-4 Magic constants | Not planned, mostly done | `"initializationError"` is defined in four places |
 | TI-1 Concurrency tests | Done (#150) | Sample code uses removed APIs; real data loss is across JVMs (TI-5). It found the extension's aborted-class bug, fixed in #149 |
 | TI-2 File-system error tests | Done (#147) | The MP-5 cases are superseded with MP-5; CB-6 added the atomic-write and unparsable-report cases, #147 the rest |
-| TI-3 Health-test isolation | In review (2026-10-19) | Each test gets its own manager; the reset hook is removed from the library |
+| TI-3 Health-test isolation | Done (#156) | Each test gets its own manager; the reset hook is removed from the library |
 | DI-1 Javadoc | Done (#151) | Sample Javadoc repeats the wrong flaky rule |
 | DI-2 Architecture doc | Done (#151) | Should describe the target architecture below |
 | SP-1 Path validation | Re-evaluated: not recommended | Not a trust boundary; rejecting `..` breaks multi-module setups |
@@ -3770,7 +3770,7 @@ Requirements:
 **Priority**: Medium
 **Complexity**: Moderate
 **Files**: `src/test/java/io/github/alexshamrai/EnvironmentHealthTrackerTest.java`
-**Status**: Partially done on `master`
+**Status**: Done (#156, `eb762dd`), 2026-10-19; test code, plus one test-only method removed from `CtrfReportManager`. Each test builds its own manager through the package-private constructor. The static methods are checked against a fresh manager through a thread-local `mockStatic` of `CtrfReportManager.getInstance()`. `ENV_HEALTHY`'s parsing moved into `isUnhealthy(String)`, tested with fixed values. `resetEnvironmentHealthForTesting()` is gone. The tracker's Javadoc no longer says an unhealthy state carries over to a later run.
 
 #### Review Note (2026-10-08)
 On `master`, `EnvironmentHealthTrackerTest` calls `CtrfReportManager.getInstance().resetEnvironmentHealthForTesting()` in `@BeforeEach` and `@AfterEach` (approach 2 below). The tests still share the singleton, so the isolation goals remain open.
@@ -3880,13 +3880,13 @@ Benefits:
 ```
 
 #### Acceptance Criteria
-- [ ] Tests use isolated instances
-- [ ] No shared state between tests
-- [ ] Tests can run in parallel
-- [ ] Tests pass in random order
-- [ ] No cleanup code needed
-- [ ] Tests are simpler and more reliable
-- [ ] Documentation explains testing approach
+- [x] Tests use isolated instances
+- [x] No shared state between tests
+- [x] Tests can run in parallel
+- [x] Tests pass in random order
+- [x] No cleanup code needed
+- [x] Tests are simpler and more reliable
+- [x] Documentation explains testing approach
 
 ---
 
