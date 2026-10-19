@@ -61,6 +61,9 @@ test {
 
     // The same -Dctrf.* and -Dthreads flags as the integration run: the expectations come from them (ExpectedRun)
     systemProperties += System.properties.findAll { k, v -> k.toString().startsWith("ctrf") || k == "threads" }
+    // The library's jar registers CtrfListener, and the validator gets the report path it checks: without this, its own
+    // report would replace the one it validated when its tests finish
+    systemProperty 'junit.platform.execution.listeners.deactivate', 'io.github.alexshamrai.launcher.CtrfListener'
 
     // One command can run an integration module and then validate its report
     mustRunAfter ':integration-tests-listener:test'

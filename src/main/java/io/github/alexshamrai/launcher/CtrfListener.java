@@ -25,27 +25,19 @@ import java.util.stream.Stream;
  * This listener tracks test execution, captures test results, and generates a JSON report
  * following the CTRF standard. It handles test statuses, and captures relevant test metadata.
  * <p>
- * To use this listener, register it for the whole test run with a file named
- * {@code META-INF/services/org.junit.platform.launcher.TestExecutionListener} on the test classpath, usually in
- * {@code src/test/resources}, that contains its class name:
+ * The jar registers this listener in {@code META-INF/services/org.junit.platform.launcher.TestExecutionListener}, so the
+ * JUnit Platform loads it whenever the jar is on the test classpath, and {@code LauncherFactory.create()} does too.
+ * Register it by hand only on a launcher whose automatic registration is turned off:
  * <pre>
  * {@code
- * io.github.alexshamrai.launcher.CtrfListener
+ * Launcher launcher = LauncherFactory.create(LauncherConfig.builder()
+ *     .enableTestExecutionListenerAutoRegistration(false)
+ *     .addTestExecutionListeners(new CtrfListener())
+ *     .build());
  * }
  * </pre>
- * <p>
- * Or register it programmatically:
- * <pre>
- * {@code
- * LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
- *     .selectors(selectPackage("com.example"))
- *     .build();
- *
- * Launcher launcher = LauncherFactory.create();
- * launcher.registerTestExecutionListeners(new CtrfListener());
- * launcher.execute(request);
- * }
- * </pre>
+ * Registered twice on one launcher, it reports once. JUnit's
+ * {@code junit.platform.execution.listeners.deactivate=io.github.alexshamrai.launcher.CtrfListener} turns it off.
  * <p>
  * A container that finishes successfully is recorded too, so that its failure in an earlier retry round is
  * reported as recovered: passed and flaky.

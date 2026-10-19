@@ -83,34 +83,30 @@ dependencies {
 - tests of other engines, such as JUnit 4 tests run by the Vintage engine;
 - dynamic tests, such as those of a `@TestFactory`.
 
-Register it for the whole test run with a file named `org.junit.platform.launcher.TestExecutionListener` in `src/test/resources/META-INF/services/`, containing this line:
+There is nothing to register. The jar registers the listener itself, with a `META-INF/services` file, so the JUnit Platform loads it whenever the jar is on the test classpath: under Gradle, Maven and your IDE alike. Adding the dependency is the whole setup.
 
-```
-io.github.alexshamrai.launcher.CtrfListener
-```
-
-That is all Gradle and Maven need: both run tests on the JUnit Platform, which finds the file on the test classpath. Nothing goes in `build.gradle` or `pom.xml`.
-
-If you start the JUnit Platform Launcher yourself, register the listener programmatically:
+If you start the JUnit Platform Launcher yourself, `LauncherFactory.create()` loads the listener the same way. Register it by hand only on a launcher whose automatic registration you turned off:
 
 ```java
-LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
-    .selectors(selectPackage("com.example"))
-    .build();
-
-Launcher launcher = LauncherFactory.create();
-launcher.registerTestExecutionListeners(new CtrfListener());
-launcher.execute(request);
+Launcher launcher = LauncherFactory.create(LauncherConfig.builder()
+    .enableTestExecutionListenerAutoRegistration(false)
+    .addTestExecutionListeners(new CtrfListener())
+    .build());
 ```
 
-**Why the jar doesn't register the listener itself.** It could, with the same `META-INF/services` file inside the jar. Then every project with the reporter on its test classpath would get a report whether it wanted one or not. So the listener stays opt-in.
+A listener registered twice on one launcher, by the jar and by hand, reports once.
+
+### Turning it off
+
+To run tests without a report, for example in one module of a larger build, use JUnit's own setting for listeners that the Platform loads automatically, as a system property of the test JVM or in `junit-platform.properties`:
+
+```properties
+junit.platform.execution.listeners.deactivate=io.github.alexshamrai.launcher.CtrfListener
+```
 
 ### Upgrading from CtrfExtension
 
-`CtrfExtension`, deprecated in 0.5.2, is removed in 0.6.0. To move to the listener:
-
-1. Add the file `src/test/resources/META-INF/services/org.junit.platform.launcher.TestExecutionListener`, containing the line `io.github.alexshamrai.launcher.CtrfListener`.
-2. Remove `@ExtendWith(CtrfExtension.class)` from your test classes.
+`CtrfExtension`, deprecated in 0.5.2, is removed in 0.6.0. To move to the listener, remove `@ExtendWith(CtrfExtension.class)` from your test classes: the jar registers the listener itself. A `META-INF/services` file that you added for it before 0.6.0 can stay or go; the listener is loaded once either way.
 
 The report can gain entries after the move. The listener also reports what the extension couldn't see: the tests of classes that JUnit skips as a whole, failures of containers below class level, dynamic tests, and tests of other engines.
 

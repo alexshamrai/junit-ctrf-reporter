@@ -42,7 +42,7 @@ For integration tests info refer to [INTEGRATION_TESTS.md](INTEGRATION_TESTS.md)
 
 ### Consumer Compatibility Check
 
-`compat/run.sh` publishes the library to `build/compat-repo`, then builds small consumer projects against each JUnit version you pass: Maven and Gradle projects reporting through the listener, among them a JUnit 4 project that has no JUnit Jupiter on its classpath. Each consumer must run on exactly the JUnit version it asked for and produce the expected CTRF report:
+`compat/run.sh` publishes the library to `build/compat-repo`, then builds small consumer projects against each JUnit version you pass: Maven and Gradle projects reporting through the listener, which none of them registers itself, among them a JUnit 4 project that has no JUnit Jupiter on its classpath. Each consumer must run on exactly the JUnit version it asked for and produce the expected CTRF report:
 
 ```bash
 compat/run.sh 5.10.5 5.14.4 6.1.3
