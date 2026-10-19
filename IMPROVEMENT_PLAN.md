@@ -6,6 +6,8 @@ Phases 1 to 4 are done and released: Phases 1 and 2 as 0.5.0, Phase 3 as 0.5.1, 
 
 Remove `CtrfExtension`, deprecated in 0.5.2 (#153), and keep `CtrfListener` as the only entry point. Tracked in #152.
 
+**Status:** prepared in #157 (branch `feat/remove-extension`, four commits, all checks green), held until 0.6.0 is released. The listed removals, the docs and the POM's name and description are done there; the auto-registration decision is still open.
+
 **When:** for 0.6.0, after 0.5.2's deprecation warning has been out for a while. Merge it shortly before that release: once the removal is on `master`, a 0.5.x fix can no longer be released from `master`.
 
 - [ ] Remove the `jupiter` package (`CtrfExtension`, `TestRunExtension`, `ClassState`, `RunEndResource`) and `ExtensionContextAdapter`, and the manager code that only the extension needs
