@@ -14,8 +14,8 @@ package io.github.alexshamrai;
  *   <li>Calling {@link #markEnvironmentUnhealthy()} during test execution</li>
  * </ul>
  * <p>
- * Once marked as unhealthy, the environment remains unhealthy for the entire test run.
- * The unhealthy state is also preserved across test reruns when using the same report file.
+ * Once marked as unhealthy, the environment remains unhealthy for the entire test run. The JVMs of one run, such as
+ * forks and retry rounds, merge their health into one report: unhealthy if any of them was. A later run starts healthy.
  *
  */
 public final class EnvironmentHealthTracker {
@@ -51,7 +51,6 @@ public final class EnvironmentHealthTracker {
      * <ul>
      *   <li>The {@code ENV_HEALTHY=false} environment variable was set</li>
      *   <li>{@link #markEnvironmentUnhealthy()} was called</li>
-     *   <li>A previous test run marked it unhealthy (and the same report file is being reused)</li>
      * </ul>
      *
      * @return {@code true} if the environment is healthy, {@code false} otherwise
@@ -72,7 +71,16 @@ public final class EnvironmentHealthTracker {
      * @return true if ENV_HEALTHY is set to "false", false otherwise
      */
     static boolean isEnvironmentVariableUnhealthy() {
-        String envHealthy = System.getenv("ENV_HEALTHY");
-        return envHealthy != null && "false".equalsIgnoreCase(envHealthy);
+        return isUnhealthy(System.getenv("ENV_HEALTHY"));
+    }
+
+    /**
+     * Whether a value of {@code ENV_HEALTHY} means unhealthy: {@code false} in any case, and nothing else.
+     *
+     * @param envHealthy the variable's value, or {@code null} if it isn't set
+     * @return true if the value is "false", ignoring case
+     */
+    static boolean isUnhealthy(String envHealthy) {
+        return "false".equalsIgnoreCase(envHealthy);
     }
 }
