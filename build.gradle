@@ -45,7 +45,6 @@ version = projectVersion
 dependencies {
     // JUnit comes from the consumer's own test runtime: compile against it, never publish it
     compileOnly platform("org.junit:junit-bom:${junitMinVersion}")
-    compileOnly "org.junit.jupiter:junit-jupiter-api"
     compileOnly "org.junit.platform:junit-platform-launcher"
     // For users who read the model with their own Jackson 2 or 3; not needed at run time, so not published
     compileOnly platform("tools.jackson:jackson-bom:${jacksonVersion}")

@@ -8,15 +8,7 @@ import java.util.Set;
 /**
  * Adapter interface for accessing test context information from different JUnit sources.
  * <p>
- * This interface provides a unified way to extract test metadata from both
- * JUnit Jupiter ExtensionContext and JUnit Platform TestIdentifier. It enables
- * code reuse by abstracting away the differences between these two contexts.
- * <p>
- * Implementations:
- * <ul>
- *   <li>{@link ExtensionContextAdapter} - wraps JUnit Jupiter ExtensionContext</li>
- *   <li>{@link TestIdentifierAdapter} - wraps JUnit Platform TestIdentifier</li>
- * </ul>
+ * Implemented by {@link TestIdentifierAdapter}, which wraps a JUnit Platform {@code TestIdentifier}.
  */
 public interface TestContextAdapter {
 

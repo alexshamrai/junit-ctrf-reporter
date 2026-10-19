@@ -40,23 +40,12 @@ final class ScenarioRunner {
         return runOneAfterAnother(Jvm.listener(fixtures));
     }
 
-    static Result runWithExtension(Class<?>... fixtures) throws IOException, InterruptedException {
-        return runOneAfterAnother(Jvm.extension(fixtures));
-    }
-
     /**
      * Runs the fixtures {@code rounds} times through the listener, each round in a new JVM that shares the
      * working directory and the report file with the earlier rounds, as the Gradle test-retry plugin does.
      */
     static Result runRoundsWithListener(int rounds, Class<?>... fixtures) throws IOException, InterruptedException {
         return runOneAfterAnother(repeat(Jvm.listener(fixtures), rounds));
-    }
-
-    /**
-     * Like {@link #runRoundsWithListener}, reporting only through the fixtures' own extensions.
-     */
-    static Result runRoundsWithExtension(int rounds, Class<?>... fixtures) throws IOException, InterruptedException {
-        return runOneAfterAnother(repeat(Jvm.extension(fixtures), rounds));
     }
 
     /**
@@ -137,17 +126,13 @@ final class ScenarioRunner {
     }
 
     /**
-     * One JVM to start: how it reports ("listener", "extension" or "listener-rerun", see {@link ScenarioMain}),
+     * One JVM to start: how it runs ("listener" or "listener-rerun", see {@link ScenarioMain}),
      * the fixtures it runs, and the system properties and environment variables it gets in addition.
      */
     record Jvm(String mode, List<Class<?>> fixtures, Map<String, String> systemProperties, Map<String, String> environment) {
 
         static Jvm listener(Class<?>... fixtures) {
             return new Jvm("listener", List.of(fixtures), Map.of(), Map.of());
-        }
-
-        static Jvm extension(Class<?>... fixtures) {
-            return new Jvm("extension", List.of(fixtures), Map.of(), Map.of());
         }
 
         Jvm withSystemProperty(String key, String value) {

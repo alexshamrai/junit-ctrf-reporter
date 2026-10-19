@@ -105,7 +105,7 @@ class CtrfSchemaConformanceTest {
     }
 
     /**
-     * Attempts as the listener and the extension record them: a test that failed and then passed on retry, and an
+     * Attempts as the listener records them: a test that failed and then passed on retry, and an
      * aborted test, which the report shows as skipped with JUnit's raw status.
      */
     private List<Test> fullRun() {

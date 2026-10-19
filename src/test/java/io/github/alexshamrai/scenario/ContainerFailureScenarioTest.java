@@ -4,11 +4,6 @@ import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.scenario.fixtures.AfterAllFailureFixture;
 import io.github.alexshamrai.scenario.fixtures.AfterAllFailureWithDisabledTestsFixture;
 import io.github.alexshamrai.scenario.fixtures.BrokenSourceFixture;
-import io.github.alexshamrai.scenario.fixtures.ExtAfterAllFailureAfterFailedSetupFixture;
-import io.github.alexshamrai.scenario.fixtures.ExtAfterAllFailureWithDisabledTestsFixture;
-import io.github.alexshamrai.scenario.fixtures.ExtFirstFixture;
-import io.github.alexshamrai.scenario.fixtures.ExtSecondAfterAllFailureFixture;
-import io.github.alexshamrai.scenario.fixtures.ExtThirdCallbackFailureFixture;
 import io.github.alexshamrai.scenario.fixtures.PassingFixture;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
@@ -65,41 +60,5 @@ class ContainerFailureScenarioTest {
         assertThat(result.tests())
             .extracting(Test::getName, Test::getStatus)
             .containsExactlyInAnyOrder(tuple("disabled()", SKIPPED), tuple("teardownError", FAILED));
-    }
-
-    @org.junit.jupiter.api.Test
-    void extensionReportsAfterAllFailureOfAClassWhoseTestsWereSkippedAsTeardownError() throws Exception {
-        var result = ScenarioRunner.runWithExtension(ExtAfterAllFailureWithDisabledTestsFixture.class);
-
-        assertThat(result.tests())
-            .extracting(Test::getName, Test::getStatus)
-            .containsExactlyInAnyOrder(tuple("disabled()", SKIPPED), tuple("teardownError", FAILED));
-    }
-
-    @org.junit.jupiter.api.Test
-    void extensionReportsAfterAllFailureAsTeardownErrorWhenItsBeforeEachDidNotRun() throws Exception {
-        var result = ScenarioRunner.runWithExtension(ExtAfterAllFailureAfterFailedSetupFixture.class);
-
-        assertThat(result.tests())
-            .extracting(Test::getName, Test::getStatus)
-            .containsExactlyInAnyOrder(tuple("ok()", FAILED), tuple("teardownError", FAILED));
-    }
-
-    @org.junit.jupiter.api.Test
-    void extensionReportsAfterAllFailureOfAClassThatIsNotFirst() throws Exception {
-        var result = ScenarioRunner.runWithExtension(ExtFirstFixture.class, ExtSecondAfterAllFailureFixture.class);
-
-        assertThat(result.testsOf(ExtSecondAfterAllFailureFixture.class))
-            .extracting(Test::getName, Test::getStatus)
-            .containsExactlyInAnyOrder(tuple("ok()", PASSED), tuple("teardownError", FAILED));
-    }
-
-    @org.junit.jupiter.api.Test
-    void extensionReportsClassSetupFailedByAnotherExtension() throws Exception {
-        var result = ScenarioRunner.runWithExtension(ExtFirstFixture.class, ExtThirdCallbackFailureFixture.class);
-
-        var entries = result.testsOf(ExtThirdCallbackFailureFixture.class);
-        assertThat(entries).extracting(Test::getName, Test::getStatus).containsExactly(tuple("initializationError", FAILED));
-        assertThat(entries.get(0).getMessage()).contains("callback failed");
     }
 }

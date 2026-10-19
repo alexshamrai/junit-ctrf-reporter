@@ -2,10 +2,6 @@ package io.github.alexshamrai.scenario;
 
 import io.github.alexshamrai.ctrf.model.RetryAttempt;
 import io.github.alexshamrai.ctrf.model.Test;
-import io.github.alexshamrai.scenario.fixtures.ExtSetupAlwaysFailsFixture;
-import io.github.alexshamrai.scenario.fixtures.ExtSetupRecoversFixture;
-import io.github.alexshamrai.scenario.fixtures.ExtTeardownAlwaysFailsFixture;
-import io.github.alexshamrai.scenario.fixtures.ExtTeardownRecoversFixture;
 import io.github.alexshamrai.scenario.fixtures.SetupAlwaysFailsFixture;
 import io.github.alexshamrai.scenario.fixtures.SetupRecoversFixture;
 import io.github.alexshamrai.scenario.fixtures.TeardownAlwaysFailsFixture;
@@ -28,21 +24,9 @@ class ContainerRecoveryScenarioTest {
     }
 
     @org.junit.jupiter.api.Test
-    void extensionReportsASetupFailureThatRecoversAsPassedAndFlaky() throws Exception {
-        assertRecovered(ScenarioRunner.runRoundsWithExtension(2, ExtSetupRecoversFixture.class),
-            "initializationError", "setup fails in the first round", ExtSetupRecoversFixture.class);
-    }
-
-    @org.junit.jupiter.api.Test
     void listenerReportsATeardownFailureThatRecoversAsPassedAndFlaky() throws Exception {
         assertRecovered(ScenarioRunner.runRoundsWithListener(2, TeardownRecoversFixture.class),
             "teardownError", "teardown fails in the first round", TeardownRecoversFixture.class);
-    }
-
-    @org.junit.jupiter.api.Test
-    void extensionReportsATeardownFailureThatRecoversAsPassedAndFlaky() throws Exception {
-        assertRecovered(ScenarioRunner.runRoundsWithExtension(2, ExtTeardownRecoversFixture.class),
-            "teardownError", "teardown fails in the first round", ExtTeardownRecoversFixture.class);
     }
 
     @org.junit.jupiter.api.Test
@@ -52,19 +36,8 @@ class ContainerRecoveryScenarioTest {
     }
 
     @org.junit.jupiter.api.Test
-    void extensionReportsASetupFailureInEveryRoundAsFailed() throws Exception {
-        assertFailedInEveryRound(ScenarioRunner.runRoundsWithExtension(2, ExtSetupAlwaysFailsFixture.class),
-            "initializationError");
-    }
-
-    @org.junit.jupiter.api.Test
     void listenerReportsATeardownFailureInEveryRoundAsFailed() throws Exception {
         assertFailedInEveryRound(ScenarioRunner.runRoundsWithListener(2, TeardownAlwaysFailsFixture.class), "teardownError");
-    }
-
-    @org.junit.jupiter.api.Test
-    void extensionReportsATeardownFailureInEveryRoundAsFailed() throws Exception {
-        assertFailedInEveryRound(ScenarioRunner.runRoundsWithExtension(2, ExtTeardownAlwaysFailsFixture.class), "teardownError");
     }
 
     private static void assertRecovered(ScenarioRunner.Result result, String name, String firstFailure, Class<?> fixture) {

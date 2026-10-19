@@ -2,7 +2,6 @@ package io.github.alexshamrai.scenario;
 
 import io.github.alexshamrai.ctrf.model.RetryAttempt;
 import io.github.alexshamrai.ctrf.model.Test;
-import io.github.alexshamrai.scenario.fixtures.ExtRetryRoundsFixture;
 import io.github.alexshamrai.scenario.fixtures.RetryRoundsFixture;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
@@ -21,19 +20,8 @@ class RetryScenarioTest {
     }
 
     @org.junit.jupiter.api.Test
-    void extensionFoldsRetryRoundsIntoOneEntryPerTest() throws Exception {
-        assertFoldedAfterTwoRounds(ScenarioRunner.runRoundsWithExtension(2, ExtRetryRoundsFixture.class), ExtRetryRoundsFixture.class);
-    }
-
-    @org.junit.jupiter.api.Test
     void listenerExtendsTheHistoryInAThirdRound() throws Exception {
         assertHistoryExtendedAfterThreeRounds(ScenarioRunner.runRoundsWithListener(3, RetryRoundsFixture.class), RetryRoundsFixture.class);
-    }
-
-    @org.junit.jupiter.api.Test
-    void extensionExtendsTheHistoryInAThirdRound() throws Exception {
-        assertHistoryExtendedAfterThreeRounds(
-            ScenarioRunner.runRoundsWithExtension(3, ExtRetryRoundsFixture.class), ExtRetryRoundsFixture.class);
     }
 
     private static void assertHistoryExtendedAfterThreeRounds(ScenarioRunner.Result result, Class<?> fixture) {
