@@ -1,9 +1,6 @@
 package io.github.alexshamrai.scenario;
 
 import io.github.alexshamrai.ctrf.model.Test;
-import io.github.alexshamrai.scenario.fixtures.ExtNestedRunAFixture;
-import io.github.alexshamrai.scenario.fixtures.ExtNestedRunBFixture;
-import io.github.alexshamrai.scenario.fixtures.ExtNestedRunCFixture;
 import io.github.alexshamrai.scenario.fixtures.NestedRunAFixture;
 import io.github.alexshamrai.scenario.fixtures.NestedRunBFixture;
 import io.github.alexshamrai.scenario.fixtures.NestedRunCFixture;
@@ -19,13 +16,6 @@ class NestedRunScenarioTest {
     @org.junit.jupiter.api.Test
     void nestedRunThroughTheListenerNeitherEndsTheRunNorAddsItsTests() throws Exception {
         var result = ScenarioRunner.runWithListener(NestedRunAFixture.class, NestedRunBFixture.class, NestedRunCFixture.class);
-
-        assertOnlyTheOuterRunIsReported(result);
-    }
-
-    @org.junit.jupiter.api.Test
-    void nestedRunThroughTheExtensionNeitherEndsTheRunNorAddsItsTests() throws Exception {
-        var result = ScenarioRunner.runWithExtension(ExtNestedRunAFixture.class, ExtNestedRunBFixture.class, ExtNestedRunCFixture.class);
 
         assertOnlyTheOuterRunIsReported(result);
     }

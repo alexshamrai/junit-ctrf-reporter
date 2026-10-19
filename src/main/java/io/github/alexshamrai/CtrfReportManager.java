@@ -165,16 +165,7 @@ public final class CtrfReportManager {
      * @param uniqueId the test's JUnit unique ID
      */
     public void onTestSuccess(String uniqueId) {
-        onTestSuccess(unknownTest(uniqueId));
-    }
-
-    /**
-     * Records a passed test.
-     *
-     * @param testDetails the test's identity, used when no start was recorded for it
-     */
-    public void onTestSuccess(TestDetails testDetails) {
-        processTestResult(testDetails, PASSED, test -> { });
+        processTestResult(unknownTest(uniqueId), PASSED, test -> { });
     }
 
     /**
@@ -184,17 +175,7 @@ public final class CtrfReportManager {
      * @param cause    the failure, or {@code null}
      */
     public void onTestFailure(String uniqueId, Throwable cause) {
-        onTestFailure(unknownTest(uniqueId), cause);
-    }
-
-    /**
-     * Records a failed test.
-     *
-     * @param testDetails the test's identity, used when no start was recorded for it
-     * @param cause       the failure, or {@code null}
-     */
-    public void onTestFailure(TestDetails testDetails, Throwable cause) {
-        processTestResult(testDetails, FAILED, test -> {
+        processTestResult(unknownTest(uniqueId), FAILED, test -> {
             if (cause != null) {
                 testProcessor.setFailureDetails(test, cause);
             }
@@ -202,25 +183,15 @@ public final class CtrfReportManager {
     }
 
     /**
-     * Records an aborted test known only by its unique ID, as {@link #onTestSuccess(String)} does; see
-     * {@link #onTestAborted(TestDetails, Throwable)}.
+     * Records a test that JUnit aborted, typically because an assumption failed, known only by its unique ID, as
+     * {@link #onTestSuccess(String)} does. Like Gradle and Surefire, the report counts it as skipped; {@code rawStatus}
+     * keeps JUnit's "aborted" and {@code message} the reason.
      *
      * @param uniqueId the test's JUnit unique ID
      * @param cause    the exception that aborted the test, or {@code null}
      */
     public void onTestAborted(String uniqueId, Throwable cause) {
-        onTestAborted(unknownTest(uniqueId), cause);
-    }
-
-    /**
-     * Records a test that JUnit aborted, typically because an assumption failed. Like Gradle and Surefire,
-     * the report counts it as skipped; {@code rawStatus} keeps JUnit's "aborted" and {@code message} the reason.
-     *
-     * @param testDetails the test's identity, used when no start was recorded for it
-     * @param cause       the exception that aborted the test, or {@code null}
-     */
-    public void onTestAborted(TestDetails testDetails, Throwable cause) {
-        processTestResult(testDetails, SKIPPED, test -> {
+        processTestResult(unknownTest(uniqueId), SKIPPED, test -> {
             test.setRawStatus(ABORTED);
             if (cause != null) {
                 test.setMessage(cause.getMessage());
@@ -266,8 +237,7 @@ public final class CtrfReportManager {
      * Starts recording a run owned by {@code owner}, unless another owner's run is active. Reads no file: the report
      * is read only at the end, under the lock.
      *
-     * @param owner     what starts the run, compared by identity: the listener's {@code TestPlan} or the extension's
-     *                  root {@code ExtensionContext}
+     * @param owner     what starts the run, compared by identity: the listener's {@code TestPlan}
      * @param generator the entry point that reports, written as {@code generatedBy}
      * @return whether {@code owner} owns the active run: true if the run was just started or {@code owner} started it
      *     before, false if another owner's run is active, as for a JUnit run started from inside a test

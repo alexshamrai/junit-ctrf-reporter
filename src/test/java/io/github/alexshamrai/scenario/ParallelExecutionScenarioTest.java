@@ -2,7 +2,6 @@ package io.github.alexshamrai.scenario;
 
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.scenario.ScenarioRunner.Jvm;
-import io.github.alexshamrai.scenario.fixtures.ExtParallelFixture;
 import io.github.alexshamrai.scenario.fixtures.ParallelFixture;
 
 import java.util.Map;
@@ -11,7 +10,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * JUnit's parallel execution calls the entry points from many threads at once (TI-1). Each test is reported once,
+ * JUnit's parallel execution calls the listener from many threads at once (TI-1). Each test is reported once,
  * with the counts JUnit itself gives, and the environment health a test set on one of the threads.
  */
 class ParallelExecutionScenarioTest {
@@ -26,11 +25,6 @@ class ParallelExecutionScenarioTest {
     @org.junit.jupiter.api.Test
     void listenerReportsEveryTestOnceUnderParallelExecution() throws Exception {
         assertReportedOnceWithJunitsCounts(ScenarioRunner.runOneAfterAnother(parallel(Jvm.listener(ParallelFixture.class))));
-    }
-
-    @org.junit.jupiter.api.Test
-    void extensionReportsEveryTestOnceUnderParallelExecution() throws Exception {
-        assertReportedOnceWithJunitsCounts(ScenarioRunner.runOneAfterAnother(parallel(Jvm.extension(ExtParallelFixture.class))));
     }
 
     private static Jvm parallel(Jvm jvm) {

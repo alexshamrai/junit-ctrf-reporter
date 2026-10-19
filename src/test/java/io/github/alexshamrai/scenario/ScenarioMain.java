@@ -14,12 +14,11 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Entry point of the JVM that {@link ScenarioRunner} starts: runs fixture classes on the JUnit Platform,
- * reporting through {@link CtrfListener} ("listener") or only through the fixtures' own extensions ("extension").
- * In "listener-rerun" mode it then runs the failed tests again in the same JVM, through the same launcher, as
- * Surefire's {@code rerunFailingTestsCount} does.
+ * Entry point of the JVM that {@link ScenarioRunner} starts: runs fixture classes on the JUnit Platform, reporting
+ * through {@link CtrfListener}. In "listener-rerun" mode it then runs the failed tests again in the same JVM, through
+ * the same launcher, as Surefire's {@code rerunFailingTestsCount} does.
  *
- * <p>Usage: {@code ScenarioMain <listener|extension|listener-rerun> <fixture class name>...}
+ * <p>Usage: {@code ScenarioMain <listener|listener-rerun> <fixture class name>...}
  */
 public final class ScenarioMain {
 
@@ -30,11 +29,10 @@ public final class ScenarioMain {
 
     public static void main(String[] args) {
         String mode = args[0];
-        var config = LauncherConfig.builder().enableTestExecutionListenerAutoRegistration(false);
-        if (mode.startsWith("listener")) {
-            config.addTestExecutionListeners(new CtrfListener());
-        }
-        Launcher launcher = LauncherFactory.create(config.build());
+        Launcher launcher = LauncherFactory.create(LauncherConfig.builder()
+            .enableTestExecutionListenerAutoRegistration(false)
+            .addTestExecutionListeners(new CtrfListener())
+            .build());
 
         var summary = execute(launcher, Arrays.stream(args, 1, args.length).map(DiscoverySelectors::selectClass).toList());
         if ("listener-rerun".equals(mode) && !summary.getFailures().isEmpty()) {

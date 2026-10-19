@@ -8,8 +8,8 @@ import java.util.Set;
 /**
  * Contains metadata about a test during execution.
  * <p>
- * This record holds information extracted from test contexts (JUnit Jupiter ExtensionContext
- * or JUnit Platform TestIdentifier) and is used internally for tracking tests during execution.
+ * This record holds information extracted from a JUnit Platform {@code TestIdentifier} and is used internally for
+ * tracking tests during execution.
  * <p>
  * As a record, this class is immutable - all fields are set during construction.
  *

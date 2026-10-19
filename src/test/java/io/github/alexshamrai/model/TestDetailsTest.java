@@ -1,15 +1,18 @@
 package io.github.alexshamrai.model;
 
-import io.github.alexshamrai.adapter.ExtensionContextAdapter;
+import io.github.alexshamrai.adapter.TestIdentifierAdapter;
 import io.github.alexshamrai.adapter.TestContextAdapter;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.platform.engine.TestTag;
+import org.junit.platform.engine.support.descriptor.ClassSource;
+import org.junit.platform.launcher.TestIdentifier;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -82,18 +85,18 @@ class TestDetailsTest {
 
     @Test
     void fromAdapter_shouldCreateTestDetailsWithAllFields() {
-        var mockContext = mock(ExtensionContext.class);
+        var identifier = mock(TestIdentifier.class);
         var tags = Set.of("unit", "fast");
         var testClassName = "io.github.alexshamrai.model.TestDetailsTest";
         var uniqueId = "[test:unique-id]";
         var displayName = "Test Display Name";
 
-        when(mockContext.getUniqueId()).thenReturn(uniqueId);
-        when(mockContext.getDisplayName()).thenReturn(displayName);
-        when(mockContext.getTags()).thenReturn(tags);
-        when(mockContext.getTestClass()).thenReturn(Optional.of(TestDetailsTest.class));
+        when(identifier.getUniqueId()).thenReturn(uniqueId);
+        when(identifier.getDisplayName()).thenReturn(displayName);
+        when(identifier.getTags()).thenReturn(testTags(tags));
+        when(identifier.getSource()).thenReturn(Optional.of(ClassSource.from(TestDetailsTest.class)));
 
-        var adapter = new ExtensionContextAdapter(mockContext);
+        var adapter = new TestIdentifierAdapter(identifier);
         var testDetails = TestDetails.fromAdapter(adapter);
 
         assertNotNull(testDetails);
@@ -105,17 +108,17 @@ class TestDetailsTest {
 
     @Test
     void fromAdapter_shouldHandleNullFilePath() {
-        var mockContext = mock(ExtensionContext.class);
+        var identifier = mock(TestIdentifier.class);
         var tags = Set.of("integration");
         var uniqueId = "[test:unique-id-2]";
         var displayName = "Integration Test";
 
-        when(mockContext.getUniqueId()).thenReturn(uniqueId);
-        when(mockContext.getDisplayName()).thenReturn(displayName);
-        when(mockContext.getTags()).thenReturn(tags);
-        when(mockContext.getTestClass()).thenReturn(Optional.empty());
+        when(identifier.getUniqueId()).thenReturn(uniqueId);
+        when(identifier.getDisplayName()).thenReturn(displayName);
+        when(identifier.getTags()).thenReturn(testTags(tags));
+        when(identifier.getSource()).thenReturn(Optional.empty());
 
-        var adapter = new ExtensionContextAdapter(mockContext);
+        var adapter = new TestIdentifierAdapter(identifier);
         var testDetails = TestDetails.fromAdapter(adapter);
 
         assertNotNull(testDetails);
@@ -127,16 +130,16 @@ class TestDetailsTest {
 
     @Test
     void fromAdapter_shouldHandleEmptyTags() {
-        var mockContext = mock(ExtensionContext.class);
+        var identifier = mock(TestIdentifier.class);
         var uniqueId = "[test:unique-id-3]";
         var displayName = "Test With No Tags";
 
-        when(mockContext.getUniqueId()).thenReturn(uniqueId);
-        when(mockContext.getDisplayName()).thenReturn(displayName);
-        when(mockContext.getTags()).thenReturn(Set.of());
-        when(mockContext.getTestClass()).thenReturn(Optional.empty());
+        when(identifier.getUniqueId()).thenReturn(uniqueId);
+        when(identifier.getDisplayName()).thenReturn(displayName);
+        when(identifier.getTags()).thenReturn(Set.of());
+        when(identifier.getSource()).thenReturn(Optional.empty());
 
-        var adapter = new ExtensionContextAdapter(mockContext);
+        var adapter = new TestIdentifierAdapter(identifier);
         var testDetails = TestDetails.fromAdapter(adapter);
 
         assertNotNull(testDetails);
@@ -148,17 +151,17 @@ class TestDetailsTest {
 
     @Test
     void fromAdapter_shouldSetStartTimeAutomatically() {
-        var mockContext = mock(ExtensionContext.class);
+        var identifier = mock(TestIdentifier.class);
         var uniqueId = "[test:unique-id-4]";
         var displayName = "Test Start Time";
 
-        when(mockContext.getUniqueId()).thenReturn(uniqueId);
-        when(mockContext.getDisplayName()).thenReturn(displayName);
-        when(mockContext.getTags()).thenReturn(Set.of());
-        when(mockContext.getTestClass()).thenReturn(Optional.empty());
+        when(identifier.getUniqueId()).thenReturn(uniqueId);
+        when(identifier.getDisplayName()).thenReturn(displayName);
+        when(identifier.getTags()).thenReturn(Set.of());
+        when(identifier.getSource()).thenReturn(Optional.empty());
 
         var beforeTime = System.currentTimeMillis();
-        var adapter = new ExtensionContextAdapter(mockContext);
+        var adapter = new TestIdentifierAdapter(identifier);
         var testDetails = TestDetails.fromAdapter(adapter);
         var afterTime = System.currentTimeMillis();
 
@@ -214,5 +217,9 @@ class TestDetailsTest {
         };
 
         assertEquals(List.of("Payments", "Refunds"), TestDetails.fromAdapter(adapter).suite());
+    }
+
+    private static Set<TestTag> testTags(Set<String> names) {
+        return names.stream().map(TestTag::create).collect(Collectors.toSet());
     }
 }
