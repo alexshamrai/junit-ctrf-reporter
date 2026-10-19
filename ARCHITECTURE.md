@@ -17,7 +17,7 @@ It reports through `CtrfReportManager`, and has a package-private constructor th
 ## Run Ownership
 
 `CtrfReportManager` keeps at most one active `TestRun`: its owner, generator, start time and recorded state.
-- The owner is the listener's `TestPlan`, compared by identity.
+- The owner is a token that the listener creates for each test plan it runs, compared by identity. Not the `TestPlan` itself: every listener of a launcher sees the same plan, so of two `CtrfListener`s on one launcher both would own the run, and each test would be recorded twice.
 - `startTestRun(owner, generator)` returns false while another owner's run is active. The listener then ignores all its events, so a JUnit run started from inside a test (CB-2) neither ends the outer run nor adds its tests.
 - `finishTestRun(owner)` acts only for the owner. Results recorded while no run is active are dropped.
 - `startTestRun(String)` and `finishTestRun()` remain, with an owner of their own.
@@ -56,7 +56,7 @@ CtrfReportFileService.update (under a JVM lock and a lock on <report>.lock)
 | Component                       | Responsibility                                                                                        |
 |---------------------------------|-------------------------------------------------------------------------------------------------------|
 | **CtrfReportManager**           | Coordinator: keeps the active `TestRun` and writes it at the end; `getInstance()` is the default instance, built in `createDefault()` |
-| **TestRun**                     | One run: owner (the listener's `TestPlan`), generator, start time and its `TestStateTracker` |
+| **TestRun**                     | One run: owner (the listener's token for that test plan), generator, start time and its `TestStateTracker` |
 | **TestStateTracker**            | One run's attempts (ConcurrentLinkedQueue), container successes and in-progress test details (ConcurrentHashMap)            |
 | **AttemptFolder**               | Stateless; folds attempts into one test per testId (retries, retryAttempts, flaky) and unfolds a report's tests back into attempts |
 | **RunIdResolver**               | Resolves the runId: ctrf.run.id, a CI variable, the nearest ancestor JVM, or this JVM                 |
