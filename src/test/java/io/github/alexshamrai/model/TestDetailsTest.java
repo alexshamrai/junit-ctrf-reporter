@@ -1,7 +1,6 @@
 package io.github.alexshamrai.model;
 
 import io.github.alexshamrai.adapter.TestIdentifierAdapter;
-import io.github.alexshamrai.adapter.TestContextAdapter;
 import org.junit.jupiter.api.Test;
 import org.junit.platform.engine.TestTag;
 import org.junit.platform.engine.support.descriptor.ClassSource;
@@ -189,32 +188,12 @@ class TestDetailsTest {
 
     @Test
     void fromAdapter_takesTheAdaptersSuite() {
-        TestContextAdapter adapter = new TestContextAdapter() {
-            @Override
-            public String getUniqueId() {
-                return "id";
-            }
-
-            @Override
-            public String getDisplayName() {
-                return "refundsTheFee()";
-            }
-
-            @Override
-            public Set<String> getTags() {
-                return Set.of();
-            }
-
-            @Override
-            public Optional<String> getSourceLocation() {
-                return Optional.empty();
-            }
-
-            @Override
-            public List<String> getContainerNames() {
-                return List.of("Payments", "Refunds");
-            }
-        };
+        var adapter = mock(TestIdentifierAdapter.class);
+        when(adapter.getUniqueId()).thenReturn("id");
+        when(adapter.getDisplayName()).thenReturn("refundsTheFee()");
+        when(adapter.getTags()).thenReturn(Set.of());
+        when(adapter.getSourceLocation()).thenReturn(Optional.empty());
+        when(adapter.getSuite()).thenReturn(List.of("Payments", "Refunds"));
 
         assertEquals(List.of("Payments", "Refunds"), TestDetails.fromAdapter(adapter).suite());
     }
