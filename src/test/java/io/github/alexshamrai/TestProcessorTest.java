@@ -317,4 +317,73 @@ public class TestProcessorTest {
     private static List<String> causedByLines(List<String> lines) {
         return lines.stream().filter(line -> line.strip().startsWith("Caused by:")).toList();
     }
+
+    @org.junit.jupiter.api.Test
+    void output_isSplitIntoLines() {
+        var test = Test.builder().build();
+        when(configReader.getMaxOutputLength()).thenReturn(20_000);
+
+        testProcessor.setOutput(test, "first\nsecond\n", "only\r\nline\r\n");
+
+        assertEquals(List.of("first", "second"), test.getStdout());
+        assertEquals(List.of("only", "line"), test.getStderr());
+    }
+
+    @org.junit.jupiter.api.Test
+    void output_thatIsMissingOrEmpty_isLeftOut() {
+        var test = Test.builder().build();
+        when(configReader.getMaxOutputLength()).thenReturn(20_000);
+
+        testProcessor.setOutput(test, null, "");
+
+        assertNull(test.getStdout());
+        assertNull(test.getStderr());
+    }
+
+    @org.junit.jupiter.api.Test
+    void output_overTheLimit_keepsAMarkerAndTheLastWholeLinesThatFit() {
+        String output = "line-0001\nline-0002\nline-0003\nline-0004\nline-0005\n";
+
+        // The last two lines take 20 characters; with the third-last, 30 would be over the limit
+        assertEquals(List.of("... 30 characters truncated (ctrf.max.output.length=25)", "line-0004", "line-0005"),
+            TestProcessor.linesOf(output, 25));
+    }
+
+    @org.junit.jupiter.api.Test
+    void output_whoseLastLineIsLongerThanTheLimit_keepsTheEndOfThatLine() {
+        assertEquals(List.of("... 11 characters truncated (ctrf.max.output.length=10)", "0123456789"),
+            TestProcessor.linesOf("start\nxxxxx0123456789", 10));
+    }
+
+    @org.junit.jupiter.api.Test
+    void output_withLimitZero_isNeverCut() {
+        String output = "x".repeat(50_000) + "\nlast\n";
+
+        assertEquals(List.of("x".repeat(50_000), "last"), TestProcessor.linesOf(output, 0));
+    }
+
+    @org.junit.jupiter.api.Test
+    void output_cutInsideACharacterOutsideTheBasicPlane_keepsTheWholeCharacterOut() {
+        // The emoji is two chars; the last 3 chars would start with its second half
+        assertEquals(List.of("... 10 characters truncated (ctrf.max.output.length=3)", "cd"),
+            TestProcessor.linesOf("start\nab" + Character.toString(0x1F600) + "cd", 3));
+    }
+
+    @org.junit.jupiter.api.Test
+    void output_withWindowsLineEndings_isCutAtAWholeLine() {
+        assertEquals(List.of("... 10 characters truncated (ctrf.max.output.length=6)", "ccc"),
+            TestProcessor.linesOf("aaa\r\nbbb\r\nccc\r\n", 6));
+    }
+
+    @org.junit.jupiter.api.Test
+    void output_lineEndingAtTheEnd_doesNotCountAgainstTheLimit() {
+        assertEquals(List.of("ab"), TestProcessor.linesOf("ab\n", 2));
+        assertEquals(List.of("... 1 characters truncated (ctrf.max.output.length=1)", "b"), TestProcessor.linesOf("ab\n", 1));
+    }
+
+    @org.junit.jupiter.api.Test
+    void output_endingInABlankLine_keepsTheEndOfTheLineBefore() {
+        assertEquals(List.of("... 6 characters truncated (ctrf.max.output.length=5)", "xxxx"),
+            TestProcessor.linesOf("x".repeat(10) + "\n\n", 5));
+    }
 }

@@ -45,12 +45,14 @@ public class ConfigReader {
     private static final String REPORT_PATH = "ctrf.report.path";
     private static final String MAX_MESSAGE_LENGTH = "ctrf.max.message.length";
     private static final String MAX_TRACE_LENGTH = "ctrf.max.trace.length";
+    private static final String MAX_OUTPUT_LENGTH = "ctrf.max.output.length";
     private static final String CALCULATE_STARTUP_DURATION = "ctrf.calculate.startup.duration";
     private static final String BYTE_ORDER_MARK = String.valueOf((char) 0xFEFF);
     private static final Map<String, String> DEFAULTS = Map.of(
         REPORT_PATH, "ctrf-report.json",
         MAX_MESSAGE_LENGTH, "500",
         MAX_TRACE_LENGTH, "20000",
+        MAX_OUTPUT_LENGTH, "4000",
         CALCULATE_STARTUP_DURATION, "false");
 
     private final Map<String, String> systemProperties;
@@ -60,6 +62,7 @@ public class ConfigReader {
     private final String reportPath;
     private final int maxMessageLength;
     private final int maxTraceLength;
+    private final int maxOutputLength;
     private final String junitVersion;
     private final String reportName;
     private final String appName;
@@ -102,6 +105,7 @@ public class ConfigReader {
         this.reportPath = reportPath();
         this.maxMessageLength = length(MAX_MESSAGE_LENGTH);
         this.maxTraceLength = length(MAX_TRACE_LENGTH);
+        this.maxOutputLength = length(MAX_OUTPUT_LENGTH);
         this.junitVersion = string("junit.version");
         this.reportName = string("ctrf.report.name");
         this.appName = string("ctrf.app.name");
@@ -146,6 +150,16 @@ public class ConfigReader {
      */
     public int getMaxTraceLength() {
         return maxTraceLength;
+    }
+
+    /**
+     * Returns the longest captured output, {@code stdout} or {@code stderr}, that an attempt holds, in characters; 0
+     * means no limit.
+     *
+     * @return {@code ctrf.max.output.length}, 4000 by default
+     */
+    public int getMaxOutputLength() {
+        return maxOutputLength;
     }
 
     /**

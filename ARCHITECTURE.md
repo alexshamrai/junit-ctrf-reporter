@@ -58,7 +58,7 @@ CtrfReportFileService.update (under a JVM lock and a lock on <report>.lock)
 |---------------------------------|-------------------------------------------------------------------------------------------------------|
 | **CtrfReportManager**           | Coordinator: keeps the active `TestRun` and writes it at the end; `getInstance()` is the default instance, built in `createDefault()` |
 | **TestRun**                     | One run: owner (the listener's token for that test plan), generator, start time and its `TestStateTracker` |
-| **TestStateTracker**            | One run's attempts (ConcurrentLinkedQueue), container successes and in-progress test details (ConcurrentHashMap)            |
+| **TestStateTracker**            | One run's attempts (ConcurrentLinkedQueue), container successes, in-progress test details and captured output (ConcurrentHashMap) |
 | **AttemptFolder**               | Stateless; folds attempts into one test per testId (retries, retryAttempts, flaky) and unfolds a report's tests back into attempts |
 | **RunIdResolver**               | Resolves the runId: ctrf.run.id, a CI variable, the nearest ancestor JVM, or this JVM                 |
 | **ReportMerger**                | Pure; merges an execution into the report of the same run, replaces another run's report; HP-11 recoveries |
@@ -120,6 +120,7 @@ Configuration priority (highest to lowest):
 - `ctrf.report.path` - Output file location (default: `ctrf-report.json`; a blank or invalid value warns and uses it, and a directory gets `ctrf-report.json` inside it)
 - `ctrf.max.message.length` - Max error message length (default: 500)
 - `ctrf.max.trace.length` - Max stack trace length; keeps whole lines and every `Caused by:` line (default: 20000, 0 = no limit)
+- `ctrf.max.output.length` - Max length of a failed attempt's captured `stdout` and `stderr`; keeps the end (default: 4000, 0 = no limit)
 - `ctrf.calculate.startup.duration` - Enable startup duration calculation (default: false)
 - `ctrf.run.id` - Run identifier shared by the JVMs of one build (default: a CI variable, the nearest ancestor JVM, or this JVM)
 - `junit.version` - JUnit version for metadata

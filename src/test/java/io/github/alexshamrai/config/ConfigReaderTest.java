@@ -441,4 +441,20 @@ class ConfigReaderTest {
         assertEquals(20_000, new ConfigReader(Map.of(), Map.of(), Map.of("ctrf.max.trace.length", "-1")).getMaxTraceLength());
         assertTrue(logs.text().contains("ctrf.max.trace.length"), logs.text());
     }
+
+    @Test
+    @DisplayName("ctrf.max.output.length defaults to 4000, and 0 means no limit")
+    void maxOutputLengthDefaultsTo4000AndAcceptsZero() {
+        assertEquals(4_000, new ConfigReader(Map.of(), Map.of(), Map.of()).getMaxOutputLength());
+        assertEquals(0, new ConfigReader(Map.of(), Map.of(), Map.of("ctrf.max.output.length", "0")).getMaxOutputLength());
+        assertEquals(50_000, new ConfigReader(Map.of(), Map.of("CTRF_MAX_OUTPUT_LENGTH", " 50000 "), Map.of()).getMaxOutputLength());
+        assertEquals(List.of(), logs.messages());
+    }
+
+    @Test
+    @DisplayName("A negative ctrf.max.output.length warns, and the default is used")
+    void negativeMaxOutputLengthWarnsAndUsesTheDefault() {
+        assertEquals(4_000, new ConfigReader(Map.of(), Map.of(), Map.of("ctrf.max.output.length", "-1")).getMaxOutputLength());
+        assertTrue(logs.text().contains("ctrf.max.output.length"), logs.text());
+    }
 }

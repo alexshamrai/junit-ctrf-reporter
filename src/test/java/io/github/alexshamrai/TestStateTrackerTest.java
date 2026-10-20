@@ -63,6 +63,17 @@ class TestStateTrackerTest {
     }
 
     @org.junit.jupiter.api.Test
+    @DisplayName("Captured output is kept until it's removed, once")
+    void outputIsKeptUntilRemovedOnce() {
+        var output = new CapturedOutput("out", "err");
+
+        tracker.putOutput("id-1", output);
+
+        assertThat(tracker.removeOutput("id-1")).isEqualTo(output);
+        assertThat(tracker.removeOutput("id-1")).isNull();
+    }
+
+    @org.junit.jupiter.api.Test
     @DisplayName("Should return null for non-existent test details")
     void shouldReturnNullForNonExistentDetails() {
         assertThat(tracker.removeTestDetails("non-existent")).isNull();

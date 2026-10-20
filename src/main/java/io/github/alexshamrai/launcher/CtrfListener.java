@@ -5,8 +5,10 @@ import io.github.alexshamrai.adapter.TestIdentifierAdapter;
 import io.github.alexshamrai.model.TestDetails;
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.TestSource;
+import org.junit.platform.engine.reporting.ReportEntry;
 import org.junit.platform.engine.support.descriptor.ClassSource;
 import org.junit.platform.engine.support.descriptor.MethodSource;
+import org.junit.platform.launcher.LauncherConstants;
 import org.junit.platform.launcher.TestExecutionListener;
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.TestPlan;
@@ -159,6 +161,11 @@ public class CtrfListener implements TestExecutionListener {
         whileRecording(() -> skipped(testIdentifier, reason));
     }
 
+    @Override
+    public void reportingEntryPublished(TestIdentifier testIdentifier, ReportEntry entry) {
+        whileRecording(() -> published(testIdentifier, entry));
+    }
+
     private void whileRecording(Runnable callback) {
         Lock lock = exitLock.readLock();
         lock.lock();
@@ -298,6 +305,9 @@ public class CtrfListener implements TestExecutionListener {
             // recovery of another fork's engine failure
             reportManager.onContainerSuccess(uniqueId, startTime);
         }
+        if (testExecutionResult.getStatus() != TestExecutionResult.Status.FAILED) {
+            reportManager.dropOutput(uniqueId);
+        }
         // It ran: an enclosing container aborted later must not report it as skipped
         reportedIds.add(uniqueId);
     }
@@ -367,6 +377,22 @@ public class CtrfListener implements TestExecutionListener {
             return ((MethodSource) source).getClassName();
         }
         return null;
+    }
+
+    /**
+     * Passes on the output that JUnit captured for a test or container. With its output capture on, JUnit publishes it
+     * as a report entry with the key {@code stdout}, {@code stderr} or both (HP-13). Other entries are ignored.
+     */
+    private void published(TestIdentifier testIdentifier, ReportEntry entry) {
+        if (!ownsRun) {
+            return;
+        }
+        Map<String, String> pairs = entry.getKeyValuePairs();
+        String stdout = pairs.get(LauncherConstants.STDOUT_REPORT_ENTRY_KEY);
+        String stderr = pairs.get(LauncherConstants.STDERR_REPORT_ENTRY_KEY);
+        if (stdout != null || stderr != null) {
+            reportManager.onTestOutput(testIdentifier.getUniqueId(), stdout, stderr);
+        }
     }
 
     private void skipped(TestIdentifier testIdentifier, String reason) {

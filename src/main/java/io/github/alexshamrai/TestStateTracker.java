@@ -28,6 +28,7 @@ final class TestStateTracker {
     private final Queue<Test> attempts = new ConcurrentLinkedQueue<>();
     private final Queue<ContainerSuccess> containerSuccesses = new ConcurrentLinkedQueue<>();
     private final ConcurrentHashMap<String, TestDetails> testDetailsMap = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CapturedOutput> outputs = new ConcurrentHashMap<>();
 
     /**
      * Records a finished attempt of a test.
@@ -83,6 +84,26 @@ final class TestStateTracker {
      */
     TestDetails removeTestDetails(String uniqueId) {
         return testDetailsMap.remove(uniqueId);
+    }
+
+    /**
+     * Keeps the output that JUnit captured for a test or container until its result is recorded.
+     *
+     * @param uniqueId the test's or container's unique ID
+     * @param output   the captured output
+     */
+    void putOutput(String uniqueId, CapturedOutput output) {
+        outputs.put(uniqueId, output);
+    }
+
+    /**
+     * Removes and returns the output that JUnit captured for a test or container.
+     *
+     * @param uniqueId the test's or container's unique ID
+     * @return the output, or null if there is none
+     */
+    CapturedOutput removeOutput(String uniqueId) {
+        return outputs.remove(uniqueId);
     }
 
     /**

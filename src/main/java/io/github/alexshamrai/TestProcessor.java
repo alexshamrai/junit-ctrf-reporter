@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Turns a finished test into a CTRF test object: its name, status, timing, tags, suite and, for a failure, its
@@ -34,6 +35,60 @@ public class TestProcessor {
     public void setFailureDetails(Test test, Throwable cause) {
         test.setMessage(truncate(describe(cause), configReader.getMaxMessageLength()));
         test.setTrace(capTrace(stackTraceOf(cause), configReader.getMaxTraceLength()));
+    }
+
+    /**
+     * Sets a test's {@code stdout} and {@code stderr} from the output JUnit captured, as lines. Output longer than
+     * {@code ctrf.max.output.length} characters (0 means no limit) keeps its end, where a failure shows: a line saying
+     * how much was cut, then the whole lines that fit.
+     *
+     * @param test   the test
+     * @param stdout the captured standard output, or {@code null}
+     * @param stderr the captured standard error, or {@code null}
+     */
+    public void setOutput(Test test, String stdout, String stderr) {
+        int maxLength = configReader.getMaxOutputLength();
+        test.setStdout(linesOf(stdout, maxLength));
+        test.setStderr(linesOf(stderr, maxLength));
+    }
+
+    /**
+     * Splits captured output into lines, keeping its last {@code maxLength} characters at most, 0 meaning no limit; a
+     * line ending at the very end doesn't count. The kept part starts at a line, unless the last line alone is longer
+     * than the limit; then its end is kept, without splitting a character.
+     *
+     * @param output    the captured output, or {@code null}
+     * @param maxLength the limit, or 0
+     * @return the lines, after a line saying how much was cut if any was; {@code null} for no output
+     */
+    static List<String> linesOf(String output, int maxLength) {
+        if (output == null || output.isEmpty()) {
+            return null;
+        }
+        String text = withoutFinalLineEnding(output);
+        if (maxLength == 0 || text.length() <= maxLength) {
+            return output.lines().toList();
+        }
+        int newline = text.indexOf('\n', text.length() - maxLength - 1);
+        int keptFrom = newline >= 0 && newline < text.length() - 1 ? newline + 1 : text.length() - maxLength;
+        if (Character.isLowSurrogate(text.charAt(keptFrom))) {
+            keptFrom++;
+        }
+        List<String> lines = new ArrayList<>();
+        lines.add("... " + keptFrom + " characters truncated (ctrf.max.output.length=" + maxLength + ")");
+        text.substring(keptFrom).lines().forEach(lines::add);
+        return lines;
+    }
+
+    private static String withoutFinalLineEnding(String output) {
+        int end = output.length();
+        if (end > 0 && output.charAt(end - 1) == '\n') {
+            end--;
+        }
+        if (end > 0 && output.charAt(end - 1) == '\r') {
+            end--;
+        }
+        return output.substring(0, end);
     }
 
     /**

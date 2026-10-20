@@ -135,6 +135,50 @@ class CtrfReportManagerTest {
     }
 
     @org.junit.jupiter.api.Test
+    @DisplayName("A failed test gets the output JUnit captured for it")
+    void onTestFailure_attachesTheCapturedOutput() {
+        var testResult = new Test();
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(testResult);
+        reportManager.startTestRun("Listener");
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "id-1", "test"));
+
+        reportManager.onTestOutput("id-1", "out", "err");
+        reportManager.onTestFailure("id-1", new RuntimeException("boom"));
+
+        verify(testProcessor).setOutput(testResult, "out", "err");
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A passed or aborted test drops its output")
+    void passedAndAbortedTestsDropTheirOutput() {
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenAnswer(call -> new Test());
+        reportManager.startTestRun("Listener");
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "passed", "passed"));
+        reportManager.onTestOutput("passed", "out", null);
+        reportManager.onTestSuccess("passed");
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "aborted", "aborted"));
+        reportManager.onTestOutput("aborted", "out", null);
+        reportManager.onTestAborted("aborted", null);
+
+        verify(testProcessor, never()).setOutput(any(), any(), any());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Dropped output isn't given to a later entry with the same ID")
+    void droppedOutputIsGone() {
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenAnswer(call -> new Test());
+        reportManager.startTestRun("Listener");
+        reportManager.onTestOutput("class-1", "setup output", null);
+        reportManager.dropOutput("class-1");
+
+        // An entry with the container's ID recorded afterwards doesn't get the output
+        reportManager.onTestStart(new TestDetails(2_000L, Set.of(), null, "class-1", "initializationError"));
+        reportManager.onTestFailure("class-1", new RuntimeException("boom"));
+
+        verify(testProcessor, never()).setOutput(any(), any(), any());
+    }
+
+    @org.junit.jupiter.api.Test
     @DisplayName("onTestSkipped should create a skipped test")
     void onTestSkipped_createsSkippedTest() {
         reportManager.startTestRun("Listener");

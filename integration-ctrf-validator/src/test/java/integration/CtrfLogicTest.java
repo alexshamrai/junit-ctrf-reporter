@@ -235,6 +235,20 @@ public class CtrfLogicTest extends BaseIntegrationTest {
     }
 
     @Test
+    void verifyFailedAttemptsKeepTheirCapturedOutput() {
+        var failing = testWithId("DummyFailedTest", "[method:firstFailedTest()]");
+        var printed = List.of("BaseIntegrationTest beforeEach()", "DummyFailedTest firstFailedTest()",
+            "BaseIntegrationTest afterEach()");
+        assertThat(failing.getStdout()).as("the final, failed attempt").isEqualTo(printed);
+        assertThat(failing.getRetryAttempts()).singleElement().extracting(RetryAttempt::getStdout).isEqualTo(printed);
+
+        var flaky = testWithId("FlakyTest", "[method:flakyTestPassesOnTheSecondRun()]");
+        assertThat(flaky.getStdout()).as("the final, passed attempt drops its output").isNull();
+        assertThat(flaky.getRetryAttempts()).singleElement().extracting(RetryAttempt::getStdout)
+            .isEqualTo(List.of("BaseIntegrationTest beforeEach()", "Running test attempt #1", "BaseIntegrationTest afterEach()"));
+    }
+
+    @Test
     void verifySummaryCountsFlakyTests() {
         long flakyTests = report.getResults().getTests().stream()
             .filter(test -> Boolean.TRUE.equals(test.getFlaky()))

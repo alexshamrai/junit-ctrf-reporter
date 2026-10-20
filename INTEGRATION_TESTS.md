@@ -66,6 +66,12 @@ public abstract class BaseFakeTest {
 - **AfterAllFailureTest**: fails in `@AfterAll` after its test passed; reported as a `teardownError` entry
 - **BrokenSourceTest**: a `@MethodSource` and a `@TestFactory` that throw; each is reported as a failed entry under its own name
 
+#### Output Verification
+
+The module turns JUnit's output capture on. `BaseFakeTest` prints in `@BeforeEach` and `@AfterEach`, and some tests print too:
+- **DummyFailedTest** fails in every round, and each of its attempts keeps what it printed in `stdout`;
+- **FlakyTest** prints its attempt number: its failed first attempt keeps the output, and its passed final attempt has none.
+
 #### Suite Verification
 
 - **PaymentsTest**: a `@Nested` class `Refunds` under `@DisplayName("Payments")`, with a test and a two-value `@ParameterizedTest`, all passing. Their `suite` is `["Payments", "Refunds"]`, and `["Payments", "Refunds", "refundsEachAmount(int)"]` for the parameterized ones. `JunitCrossCheckTest` checks every entry's `suite` against JUnit's own event log
@@ -173,6 +179,7 @@ This test checks what JUnit's event log can't, looking each test up by `testId` 
 
 - Summary counts for the fake test set, and that `summary.duration` spans the run
 - Names, messages, `rawStatus`, `retryAttempts`, durations and the `testId` of class-level failures
+- Captured `stdout` of failed attempts, final and in `retryAttempts`, and none on a passed attempt
 - The run's settings: thread count, build name, number and URL, environment health and `generatedBy`
 
 ## Running Integration Tests

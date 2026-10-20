@@ -156,8 +156,40 @@ public final class CtrfReportManager {
         var newTest = testProcessor.createTest(details.displayName(), details, stopTime);
         newTest.setStatus(status);
         outcomeDetails.accept(newTest);
+        CapturedOutput output = run.state().removeOutput(reported.uniqueId());
+        if (output != null && status == FAILED) {
+            testProcessor.setOutput(newTest, output.stdout(), output.stderr());
+        }
 
         run.state().addAttempt(newTest);
+    }
+
+    /**
+     * Keeps the output that JUnit captured for a test or container, to attach to its entry if it fails: a passed or
+     * skipped test drops it (HP-13). Ignored when no run is active.
+     *
+     * @param uniqueId the test's or container's JUnit unique ID
+     * @param stdout   the captured standard output, or {@code null}
+     * @param stderr   the captured standard error, or {@code null}
+     */
+    public void onTestOutput(String uniqueId, String stdout, String stderr) {
+        TestRun run = activeRun.get();
+        if (run != null) {
+            run.state().putOutput(uniqueId, new CapturedOutput(stdout, stderr));
+        }
+    }
+
+    /**
+     * Drops the output that JUnit captured for a container that didn't fail, such as an aborted class or an engine:
+     * only a failed container gets an entry (HP-13). Ignored when no run is active.
+     *
+     * @param uniqueId the container's JUnit unique ID
+     */
+    public void dropOutput(String uniqueId) {
+        TestRun run = activeRun.get();
+        if (run != null) {
+            run.state().removeOutput(uniqueId);
+        }
     }
 
     /**
