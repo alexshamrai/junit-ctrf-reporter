@@ -105,6 +105,7 @@ final class AttemptFolder {
             .trace(attempt.getTrace())
             .stdout(attempt.getStdout())
             .stderr(attempt.getStderr())
+            .attachments(attempt.getAttachments())
             .build();
     }
 
@@ -123,6 +124,7 @@ final class AttemptFolder {
             .trace(earlier.getTrace())
             .stdout(earlier.getStdout())
             .stderr(earlier.getStderr())
+            .attachments(earlier.getAttachments())
             .build();
     }
 

@@ -1,6 +1,7 @@
 package io.github.alexshamrai;
 
 import io.github.alexshamrai.config.ConfigReader;
+import io.github.alexshamrai.ctrf.model.Attachment;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
 import io.github.alexshamrai.ctrf.model.Environment;
 import io.github.alexshamrai.ctrf.model.Results;
@@ -164,18 +165,59 @@ class CtrfReportManagerTest {
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("Dropped output isn't given to a later entry with the same ID")
-    void droppedOutputIsGone() {
-        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenAnswer(call -> new Test());
+    @DisplayName("Dropped output and attachments aren't given to a later entry with the same ID")
+    void droppedOutputAndAttachmentsAreGone() {
+        var entry = new Test();
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(entry);
         reportManager.startTestRun("Listener");
         reportManager.onTestOutput("class-1", "setup output", null);
-        reportManager.dropOutput("class-1");
+        reportManager.onTestAttachment("class-1", Attachment.builder().name("setup.log").build());
+        reportManager.dropPublished("class-1");
 
         // An entry with the container's ID recorded afterwards doesn't get the output
         reportManager.onTestStart(new TestDetails(2_000L, Set.of(), null, "class-1", "initializationError"));
         reportManager.onTestFailure("class-1", new RuntimeException("boom"));
 
         verify(testProcessor, never()).setOutput(any(), any(), any());
+        assertNull(entry.getAttachments());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A test keeps the files it published, whether it passed or failed, in the order it published them")
+    void testsKeepTheirAttachmentsWhetherTheyPassedOrFailed() {
+        var passed = new Test();
+        var failed = new Test();
+        when(testProcessor.createTest(eq("passed"), any(TestDetails.class), anyLong())).thenReturn(passed);
+        when(testProcessor.createTest(eq("failed"), any(TestDetails.class), anyLong())).thenReturn(failed);
+        var log = Attachment.builder().name("run.log").build();
+        var screenshot = Attachment.builder().name("screen.png").build();
+        reportManager.startTestRun("Listener");
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "passed", "passed"));
+        reportManager.onTestAttachment("passed", log);
+        reportManager.onTestAttachment("passed", screenshot);
+        reportManager.onTestSuccess("passed");
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "failed", "failed"));
+        reportManager.onTestAttachment("failed", screenshot);
+        reportManager.onTestFailure("failed", new RuntimeException("boom"));
+
+        assertEquals(List.of(log, screenshot), passed.getAttachments());
+        assertEquals(List.of(screenshot), failed.getAttachments());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A test that the JVM's exit interrupted keeps the files it published")
+    void testInterruptedByTheJvmsExitKeepsItsAttachments() {
+        Object owner = new Object();
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong()))
+            .thenAnswer(call -> Test.builder().testId(call.<TestDetails>getArgument(1).uniqueId()).name("test").build());
+        var screenshot = Attachment.builder().name("screen.png").build();
+        reportManager.startTestRun(owner, "Listener");
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "running", "running"));
+        reportManager.onTestAttachment("running", screenshot);
+
+        reportManager.finishTestRunOnExit(owner);
+
+        assertEquals(List.of(screenshot), testOnDisk("running").getAttachments());
     }
 
     @org.junit.jupiter.api.Test
@@ -190,6 +232,20 @@ class CtrfReportManagerTest {
 
         assertEquals(Test.TestStatus.SKIPPED, testResult.getStatus());
         assertEquals("reason", testResult.getMessage());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A skipped test keeps the files published for it, as from TestWatcher.testDisabled")
+    void onTestSkipped_keepsThePublishedFiles() {
+        reportManager.startTestRun("Listener");
+        var testResult = new Test();
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong())).thenReturn(testResult);
+        var note = Attachment.builder().name("why-disabled.txt").build();
+
+        reportManager.onTestAttachment("id-1", note);
+        reportManager.onTestSkipped(new TestDetails(1_000L, Set.of(), null, "id-1", "disabled"), Optional.empty());
+
+        assertEquals(List.of(note), testResult.getAttachments());
     }
 
     @org.junit.jupiter.api.Test

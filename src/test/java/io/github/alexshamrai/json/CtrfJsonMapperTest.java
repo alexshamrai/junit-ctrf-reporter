@@ -75,6 +75,20 @@ class CtrfJsonMapperTest {
     }
 
     @org.junit.jupiter.api.Test
+    void attachmentKeepsItsIdAndExtraThroughReadingAndWriting() {
+        String json = "{\"name\":\"t()\",\"duration\":0,\"attachments\":[{\"name\":\"log.txt\",\"contentType\":\"text/plain\","
+            + "\"path\":\"/tmp/log.txt\",\"attachmentId\":\"a-1\",\"extra\":{\"size\":3}}]}";
+
+        var test = CtrfJsonMapper.read(json, Test.class);
+
+        assertThat(test.getAttachments()).singleElement().satisfies(attachment -> {
+            assertThat(attachment.getAttachmentId()).isEqualTo("a-1");
+            assertThat(attachment.getExtra()).isEqualTo(Map.of("size", 3));
+        });
+        assertThat(CtrfJsonMapper.write(test)).isEqualTo(json);
+    }
+
+    @org.junit.jupiter.api.Test
     void unknownFieldsAreIgnored() {
         var report = CtrfJsonMapper.read("{\"runId\":\"run-1\",\"fieldFromTheFuture\":{\"a\":[1,2]},"
             + "\"results\":{\"tests\":[{\"name\":\"t()\",\"status\":\"passed\",\"flagFromTheFuture\":true}]}}", CtrfJson.class);

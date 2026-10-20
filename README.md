@@ -381,6 +381,33 @@ tasks.withType(Test).configureEach {
 - **Entries written when the JVM exits mid-run have no output:** JUnit publishes it only when a test finishes.
 - **The console still shows the output:** JUnit copies it, and Gradle and Maven print it as before.
 
+## Attachments
+
+A file that a test publishes with JUnit's `TestReporter.publishFile`, JUnit 5.12 or later, is attached to it in the report:
+
+```java
+import org.junit.jupiter.api.MediaType; // org.junit.jupiter.api.extension.MediaType on JUnit 5.12 and 5.13
+
+@Test
+void rendersTheInvoice(TestReporter reporter) {
+    reporter.publishFile("invoice.pdf", MediaType.create("application", "pdf"), path -> Files.write(path, render()));
+}
+```
+
+```json
+"attachments": [
+  { "name": "invoice.pdf", "contentType": "application/pdf", "path": "/home/runner/work/app/build/junit-.../invoice.pdf" }
+]
+```
+
+- **Every attempt keeps the files it published,** passed, failed or skipped, including a retried test's earlier attempts in `retryAttempts`. A file that an extension publishes for a test, such as a screenshot from `TestWatcher.testFailed`, belongs to the test too.
+- **A class's files** go to its `initializationError` or `teardownError`, if its `@BeforeAll` or `@AfterAll` failed. A class that doesn't fail has no entry of its own, so the files it published aren't attached. The same goes for files published through a `@TestFactory`'s `TestReporter`, which belong to the factory, not to its dynamic tests.
+- **Retries can overwrite files.** JUnit writes a test's files to the same directory in every attempt, so an attempt that publishes a file under the same name replaces the earlier attempt's, and both entries then refer to the last one. Give each JVM its own directory to keep them all: `junit.platform.reporting.output.dir=build/junit-{uniqueNumber}`. That covers the Gradle test-retry plugin, which runs each round in a new JVM, but not Surefire's reruns, which stay in the same JVM.
+- **The report refers to the file; it doesn't copy it.** `path` is the absolute path that JUnit wrote the file to. JUnit writes it under `build` in a Gradle project and `target` in a Maven one, unless `junit.platform.reporting.output.dir` says otherwise. To keep the files beside the report, for example as CI artifacts, upload them with it.
+- **`contentType`** is the media type the file was published with, or `application/octet-stream` without one.
+- **Directories,** from `publishDirectory`, aren't attached.
+- **On JUnit 5.10 and 5.11,** which can't publish files, there are no attachments.
+
 ## Parallel Forks, Retries and Reruns
 
 A build can run tests in several JVMs that write the same report:

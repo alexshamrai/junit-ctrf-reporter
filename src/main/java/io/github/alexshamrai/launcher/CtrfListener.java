@@ -2,9 +2,11 @@ package io.github.alexshamrai.launcher;
 
 import io.github.alexshamrai.CtrfReportManager;
 import io.github.alexshamrai.adapter.TestIdentifierAdapter;
+import io.github.alexshamrai.ctrf.model.Attachment;
 import io.github.alexshamrai.model.TestDetails;
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.TestSource;
+import org.junit.platform.engine.reporting.FileEntry;
 import org.junit.platform.engine.reporting.ReportEntry;
 import org.junit.platform.engine.support.descriptor.ClassSource;
 import org.junit.platform.engine.support.descriptor.MethodSource;
@@ -13,6 +15,8 @@ import org.junit.platform.launcher.TestExecutionListener;
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.TestPlan;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -65,6 +69,7 @@ public class CtrfListener implements TestExecutionListener {
     private static final String TEARDOWN_ERROR = "teardownError";
     private static final String JVM_EXITED = "The JVM exited before this test started";
     private static final String CONTAINER_INTERRUPTED = "The JVM exited while this container was running";
+    private static final String OCTET_STREAM = "application/octet-stream";
 
     private final ShutdownHooks shutdownHooks;
 
@@ -164,6 +169,21 @@ public class CtrfListener implements TestExecutionListener {
     @Override
     public void reportingEntryPublished(TestIdentifier testIdentifier, ReportEntry entry) {
         whileRecording(() -> published(testIdentifier, entry));
+    }
+
+    /**
+     * Attaches a file that a test or container published with {@code TestReporter.publishFile} (MP-10): its name, its
+     * media type or {@code application/octet-stream}, and its absolute path. A directory, from
+     * {@code publishDirectory}, is left out.
+     * <p>
+     * JUnit 5.12 added this callback. It isn't marked {@code @Override}: the reporter compiles against JUnit 5.10, whose
+     * listener interface doesn't have it, and JUnit 5.10 and 5.11 never call it.
+     *
+     * @param testIdentifier the test or container that published the file
+     * @param file           the file
+     */
+    public void fileEntryPublished(TestIdentifier testIdentifier, FileEntry file) {
+        whileRecording(() -> publishedFile(testIdentifier, file));
     }
 
     private void whileRecording(Runnable callback) {
@@ -306,7 +326,7 @@ public class CtrfListener implements TestExecutionListener {
             reportManager.onContainerSuccess(uniqueId, startTime);
         }
         if (testExecutionResult.getStatus() != TestExecutionResult.Status.FAILED) {
-            reportManager.dropOutput(uniqueId);
+            reportManager.dropPublished(uniqueId);
         }
         // It ran: an enclosing container aborted later must not report it as skipped
         reportedIds.add(uniqueId);
@@ -393,6 +413,21 @@ public class CtrfListener implements TestExecutionListener {
         if (stdout != null || stderr != null) {
             reportManager.onTestOutput(testIdentifier.getUniqueId(), stdout, stderr);
         }
+    }
+
+    private void publishedFile(TestIdentifier testIdentifier, FileEntry file) {
+        if (!ownsRun) {
+            return;
+        }
+        Path path = file.getPath();
+        if (!Files.isRegularFile(path)) {
+            return;
+        }
+        reportManager.onTestAttachment(testIdentifier.getUniqueId(), Attachment.builder()
+            .name(String.valueOf(path.getFileName()))
+            .contentType(file.getMediaType().orElse(OCTET_STREAM))
+            .path(path.toAbsolutePath().toString())
+            .build());
     }
 
     private void skipped(TestIdentifier testIdentifier, String reason) {

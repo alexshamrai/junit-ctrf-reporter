@@ -1,5 +1,6 @@
 package io.github.alexshamrai;
 
+import io.github.alexshamrai.ctrf.model.Attachment;
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.model.TestDetails;
 
@@ -29,6 +30,7 @@ final class TestStateTracker {
     private final Queue<ContainerSuccess> containerSuccesses = new ConcurrentLinkedQueue<>();
     private final ConcurrentHashMap<String, TestDetails> testDetailsMap = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CapturedOutput> outputs = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Queue<Attachment>> attachments = new ConcurrentHashMap<>();
 
     /**
      * Records a finished attempt of a test.
@@ -104,6 +106,27 @@ final class TestStateTracker {
      */
     CapturedOutput removeOutput(String uniqueId) {
         return outputs.remove(uniqueId);
+    }
+
+    /**
+     * Keeps a file that a test or container published until its result is recorded.
+     *
+     * @param uniqueId   the test's or container's unique ID
+     * @param attachment the file
+     */
+    void addAttachment(String uniqueId, Attachment attachment) {
+        attachments.computeIfAbsent(uniqueId, id -> new ConcurrentLinkedQueue<>()).add(attachment);
+    }
+
+    /**
+     * Removes and returns the files that a test or container published, in the order they were published.
+     *
+     * @param uniqueId the test's or container's unique ID
+     * @return the files, or an empty list if there are none
+     */
+    List<Attachment> removeAttachments(String uniqueId) {
+        Queue<Attachment> published = attachments.remove(uniqueId);
+        return published == null ? List.of() : new ArrayList<>(published);
     }
 
     /**

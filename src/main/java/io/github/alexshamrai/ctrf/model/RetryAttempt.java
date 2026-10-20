@@ -32,4 +32,5 @@ public class RetryAttempt {
     private String trace;
     private List<String> stdout;
     private List<String> stderr;
+    private List<Attachment> attachments;
 }

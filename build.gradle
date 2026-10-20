@@ -68,6 +68,9 @@ dependencies {
 }
 
 sourceSets {
+    // Compile-only stand-ins for JUnit API newer than junitMinVersion, such as FileEntry (JUnit 5.12). Main code compiles
+    // against them, JUnit's own classes are used at run time, and the jar never contains them
+    junitStubs
     test {
         resources {
             // The pinned official CTRF schema; see schema/README.md
@@ -75,6 +78,10 @@ sourceSets {
             exclude 'README.md'
         }
     }
+}
+
+dependencies {
+    compileOnly sourceSets.junitStubs.output
 }
 
 tasks.withType(Test).configureEach {

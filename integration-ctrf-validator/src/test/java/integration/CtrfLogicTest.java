@@ -4,6 +4,7 @@ import io.github.alexshamrai.ctrf.model.RetryAttempt;
 import io.github.alexshamrai.ctrf.model.Test.TestStatus;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
@@ -246,6 +247,17 @@ public class CtrfLogicTest extends BaseIntegrationTest {
         assertThat(flaky.getStdout()).as("the final, passed attempt drops its output").isNull();
         assertThat(flaky.getRetryAttempts()).singleElement().extracting(RetryAttempt::getStdout)
             .isEqualTo(List.of("BaseIntegrationTest beforeEach()", "Running test attempt #1", "BaseIntegrationTest afterEach()"));
+    }
+
+    @Test
+    void verifyPublishedFileIsAttached() {
+        var test = testWithId("DummySuccessTest", "[method:firstSuccessTest(org.junit.jupiter.api.TestReporter)]");
+
+        assertThat(test.getAttachments()).singleElement().satisfies(attachment -> {
+            assertThat(attachment.getName()).isEqualTo("dummy-success.txt");
+            assertThat(attachment.getContentType()).isEqualTo("text/plain; charset=UTF-8");
+            assertThat(Path.of(attachment.getPath())).isAbsolute().exists().hasFileName("dummy-success.txt");
+        });
     }
 
     @Test

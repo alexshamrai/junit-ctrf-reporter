@@ -1,5 +1,6 @@
 package io.github.alexshamrai.json;
 
+import io.github.alexshamrai.ctrf.model.Attachment;
 import io.github.alexshamrai.ctrf.model.CtrfJson;
 import io.github.alexshamrai.ctrf.model.Environment;
 import io.github.alexshamrai.ctrf.model.Extra;
@@ -181,7 +182,7 @@ class JsonGoldenTest {
             .browser("chrome")
             .device("pixel")
             .screenshot("c2NyZWVu")
-            .attachments(Arrays.asList("a", 1, null, Map.of("name", "log.txt")))
+            .attachments(List.of(Attachment.builder().name("log.txt").contentType("text/plain").path("/tmp/log.txt").build()))
             .threadId("main")
             .parameters(numbers())
             .steps(List.of(Step.builder().name("step").status("passed").extra(extra).build()))
