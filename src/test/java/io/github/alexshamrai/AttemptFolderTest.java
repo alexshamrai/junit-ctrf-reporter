@@ -331,4 +331,23 @@ class AttemptFolderTest {
         assertThat(attempts).extracting(Test::getSuite).containsExactly(suite, suite);
         assertThat(AttemptFolder.fold(attempts)).singleElement().extracting(Test::getSuite).isEqualTo(suite);
     }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Each attempt keeps its own output through folding and unfolding")
+    void outputSurvivesFoldAndUnfold() {
+        var failed = attempt(TEST_1, "test1()", FAILED, 100L).toBuilder()
+            .stdout(List.of("first try")).stderr(List.of("oops")).build();
+        var passed = attempt(TEST_1, "test1()", PASSED, 200L);
+
+        var folded = AttemptFolder.fold(List.of(failed, passed));
+
+        assertThat(folded).singleElement().satisfies(test -> {
+            assertThat(test.getStdout()).isNull();
+            assertThat(test.getRetryAttempts()).singleElement().satisfies(earlier -> {
+                assertThat(earlier.getStdout()).containsExactly("first try");
+                assertThat(earlier.getStderr()).containsExactly("oops");
+            });
+        });
+        assertThat(AttemptFolder.unfold(folded)).extracting(Test::getStdout).containsExactly(List.of("first try"), null);
+    }
 }

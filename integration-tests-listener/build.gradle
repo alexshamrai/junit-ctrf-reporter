@@ -69,6 +69,10 @@ tasks.withType(Test).configureEach {
     configureThreads(it)
     configureForks(it)
 
+    // JUnit's output capture, which the report's stdout and stderr come from
+    systemProperty 'junit.platform.output.capture.stdout', 'true'
+    systemProperty 'junit.platform.output.capture.stderr', 'true'
+
     // JUnit's event log: one open-test-report.xml per JVM (each fork and each retry round)
     def junitEvents = layout.buildDirectory.dir('test-results/junit-platform').get().asFile
     systemProperty 'junit.platform.reporting.open.xml.enabled', 'true'

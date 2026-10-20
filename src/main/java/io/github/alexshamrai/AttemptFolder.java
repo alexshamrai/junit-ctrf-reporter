@@ -103,6 +103,8 @@ final class AttemptFolder {
             .stop(attempt.getStop())
             .message(attempt.getMessage())
             .trace(attempt.getTrace())
+            .stdout(attempt.getStdout())
+            .stderr(attempt.getStderr())
             .build();
     }
 
@@ -119,6 +121,8 @@ final class AttemptFolder {
             .stop(earlier.getStop())
             .message(earlier.getMessage())
             .trace(earlier.getTrace())
+            .stdout(earlier.getStdout())
+            .stderr(earlier.getStderr())
             .build();
     }
 

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.TestSource;
 import org.junit.platform.engine.TestTag;
+import org.junit.platform.engine.reporting.ReportEntry;
 import org.junit.platform.engine.support.descriptor.ClassSource;
 import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.TestIdentifier;
@@ -19,6 +20,7 @@ import org.mockito.MockitoAnnotations;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.ConcurrentModificationException;
@@ -778,5 +780,53 @@ public class CtrfListenerTest {
         ctrfListener.executionFinished(testIdentifier, testExecutionResult);
 
         verify(reportManager, never()).onContainerSuccess(anyString(), any());
+    }
+
+    @Test
+    void reportingEntryPublished_passesCapturedOutputOn() {
+        ctrfListener.reportingEntryPublished(testIdentifier, ReportEntry.from(Map.of("stdout", "out", "stderr", "err")));
+
+        verify(reportManager).onTestOutput(TEST_UNIQUE_ID, "out", "err");
+    }
+
+    @Test
+    void reportingEntryPublished_ignoresOtherEntries() {
+        ctrfListener.reportingEntryPublished(testIdentifier, ReportEntry.from("owner", "payments"));
+
+        verify(reportManager, never()).onTestOutput(any(), any(), any());
+    }
+
+    @Test
+    void reportingEntryPublished_afterItsRunFinished_isIgnored() {
+        ctrfListener.testPlanExecutionFinished(testPlan);
+
+        ctrfListener.reportingEntryPublished(testIdentifier, ReportEntry.from("stdout", "out"));
+
+        verify(reportManager, never()).onTestOutput(any(), any(), any());
+    }
+
+    @Test
+    void containerThatDoesNotFail_dropsItsOutput() {
+        TestIdentifier aborted = container("[engine:junit-jupiter]/[class:Aborted]", "[engine:junit-jupiter]");
+        TestIdentifier engine = container("[engine:junit-jupiter]", null);
+        TestExecutionResult abortedResult = mock(TestExecutionResult.class);
+        when(abortedResult.getStatus()).thenReturn(TestExecutionResult.Status.ABORTED);
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.SUCCESSFUL);
+
+        ctrfListener.executionFinished(aborted, abortedResult);
+        ctrfListener.executionFinished(engine, testExecutionResult);
+
+        verify(reportManager).dropOutput("[engine:junit-jupiter]/[class:Aborted]");
+        verify(reportManager).dropOutput("[engine:junit-jupiter]");
+    }
+
+    @Test
+    void containerThatFails_keepsItsOutputForItsEntry() {
+        TestIdentifier failed = container("[engine:junit-jupiter]/[class:Failed]", "[engine:junit-jupiter]");
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.FAILED);
+
+        ctrfListener.executionFinished(failed, testExecutionResult);
+
+        verify(reportManager, never()).dropOutput(any());
     }
 }

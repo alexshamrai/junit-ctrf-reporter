@@ -137,6 +137,7 @@ Up to 0.5.0, `CTRF_*` environment variables were ignored. They are now read, so 
 ctrf.report.path=build/test-results/test/ctrf-report.json
 ctrf.max.message.length=300
 ctrf.max.trace.length=20000
+ctrf.max.output.length=4000
 
 junit.version=5.11.3
 
@@ -187,6 +188,7 @@ The following parameters can be configured in the `ctrf.properties` file:
 | `ctrf.report.path`                | The file path where the CTRF report will be saved. A directory gets `ctrf-report.json` inside it, with a warning | `ctrf-report.json` |
 | `ctrf.max.message.length`         | Maximum length of a failure's `message`, which is the exception's class and message; a longer one is cut and ends with `...` | `500`              |
 | `ctrf.max.trace.length`           | Maximum length of a failure's `trace`, its stack trace; `0` means no limit. A longer trace keeps the lines that fit, a line saying how much was cut, and every `Caused by:` line | `20000`            |
+| `ctrf.max.output.length`          | How much of a failed attempt's captured `stdout`, and of its `stderr`, the report keeps, in characters; `0` means no limit. Longer output keeps its end: a line saying how much was cut, then the last lines that fit. See [Test Output](#test-output) | `4000`             |
 | `ctrf.calculate.startup.duration` | Whether to calculate and include test suite startup duration | `false`            |
 | `ctrf.run.id`                     | Run identifier shared by the JVMs of one build; see [Parallel Forks, Retries and Reruns](#parallel-forks-retries-and-reruns) | detected |
 | `junit.version`                   | The version of JUnit used in your project                    |                    |
@@ -347,6 +349,37 @@ Gradle's console output counts every attempt, so its numbers are higher than the
 Retries that JUnit runs as separate tests with their own unique IDs, such as JUnit Pioneer's `@RetryingTest`, appear as separate tests.
 
 A test class whose setup (`@BeforeAll`) or teardown (`@AfterAll`) fails in one round and succeeds in a later one is reported the same way: its `initializationError` or `teardownError` entry becomes `passed`, with `flaky: true` and the failure in `retryAttempts`. If the JVM exited during that setup or teardown instead, the entry becomes `passed` too, but not flaky.
+
+## Test Output
+
+JUnit can capture what each test prints, and the report then keeps the output of failed tests in `stdout` and `stderr`, one string per line. Turn JUnit's capture on, as a system property of the test JVM or in `junit-platform.properties`:
+
+```groovy
+// Gradle
+tasks.withType(Test).configureEach {
+    systemProperty 'junit.platform.output.capture.stdout', 'true'
+    systemProperty 'junit.platform.output.capture.stderr', 'true'
+}
+```
+
+```xml
+<!-- Maven Surefire -->
+<configuration>
+    <properties>
+        <configurationParameters>
+            junit.platform.output.capture.stdout=true
+            junit.platform.output.capture.stderr=true
+        </configurationParameters>
+    </properties>
+</configuration>
+```
+
+- **Only failed attempts keep their output,** including a retried test's failed attempts in `retryAttempts`, and a class's `initializationError` or `teardownError` with what the class printed outside its tests, in `@BeforeAll` and `@AfterAll`. A passed or skipped test drops its output, so that a suite whose tests log a lot doesn't make the report huge.
+- **Each stream keeps its end,** up to `ctrf.max.output.length` characters, 4,000 by default: usually the last lines before the failure. Raise it for more context; in a run where many tests fail, each of them adds up to that much to the report.
+- **JUnit captures the thread that runs the test.** Since JUnit 5.12, it gives output of other threads, such as an asynchronous logger's, to the test that printed last, which under parallel execution can be another test.
+- **JUnit keeps the first 4 MB of each stream** (`junit.platform.output.capture.maxBuffer`) and drops the rest before the report sees it.
+- **Entries written when the JVM exits mid-run have no output:** JUnit publishes it only when a test finishes.
+- **The console still shows the output:** JUnit copies it, and Gradle and Maven print it as before.
 
 ## Parallel Forks, Retries and Reruns
 
