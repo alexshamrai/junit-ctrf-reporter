@@ -1,5 +1,6 @@
 package io.github.alexshamrai;
 
+import io.github.alexshamrai.ctrf.model.Attachment;
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.model.TestDetails;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,6 +72,19 @@ class TestStateTrackerTest {
 
         assertThat(tracker.removeOutput("id-1")).isEqualTo(output);
         assertThat(tracker.removeOutput("id-1")).isNull();
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Attachments are kept in the order they were added, until they're removed, once")
+    void attachmentsAreKeptInOrderUntilRemovedOnce() {
+        var first = Attachment.builder().name("first.txt").build();
+        var second = Attachment.builder().name("second.png").build();
+
+        tracker.addAttachment("id-1", first);
+        tracker.addAttachment("id-1", second);
+
+        assertThat(tracker.removeAttachments("id-1")).containsExactly(first, second);
+        assertThat(tracker.removeAttachments("id-1")).isEmpty();
     }
 
     @org.junit.jupiter.api.Test

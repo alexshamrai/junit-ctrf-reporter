@@ -58,7 +58,7 @@ CtrfReportFileService.update (under a JVM lock and a lock on <report>.lock)
 |---------------------------------|-------------------------------------------------------------------------------------------------------|
 | **CtrfReportManager**           | Coordinator: keeps the active `TestRun` and writes it at the end; `getInstance()` is the default instance, built in `createDefault()` |
 | **TestRun**                     | One run: owner (the listener's token for that test plan), generator, start time and its `TestStateTracker` |
-| **TestStateTracker**            | One run's attempts (ConcurrentLinkedQueue), container successes, in-progress test details and captured output (ConcurrentHashMap) |
+| **TestStateTracker**            | One run's attempts (ConcurrentLinkedQueue), container successes, in-progress test details, captured output and published files (ConcurrentHashMap) |
 | **AttemptFolder**               | Stateless; folds attempts into one test per testId (retries, retryAttempts, flaky) and unfolds a report's tests back into attempts |
 | **RunIdResolver**               | Resolves the runId: ctrf.run.id, a CI variable, the nearest ancestor JVM, or this JVM                 |
 | **ReportMerger**                | Pure; merges an execution into the report of the same run, replaces another run's report; HP-11 recoveries |
@@ -159,6 +159,7 @@ src/main/java/io/github/alexshamrai/
 ├── TestProcessor.java             # Test result processing
 └── StartupDurationProcessor.java  # Optional startup duration calculation
 
+src/junitStubs/java/               # Compile-only stand-ins for JUnit API newer than 5.10, such as FileEntry; not in the jar
 schema/                            # Pinned official CTRF schema (test resource only)
 integration-tests-listener/        # Integration tests using CtrfListener
 integration-ctrf-validator/        # Schema and logic validation tests

@@ -63,7 +63,7 @@ public class Test {
     private String browser;
     private String device;
     private String screenshot;
-    private List<Object> attachments;
+    private List<Attachment> attachments;
     private String threadId;
     private Map<String, Object> parameters;
     private List<Step> steps;

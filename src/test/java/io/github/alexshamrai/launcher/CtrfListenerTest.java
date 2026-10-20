@@ -1,12 +1,15 @@
 package io.github.alexshamrai.launcher;
 
 import io.github.alexshamrai.CtrfReportManager;
+import io.github.alexshamrai.ctrf.model.Attachment;
 import io.github.alexshamrai.model.TestDetails;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.TestSource;
 import org.junit.platform.engine.TestTag;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.platform.engine.reporting.FileEntry;
 import org.junit.platform.engine.reporting.ReportEntry;
 import org.junit.platform.engine.support.descriptor.ClassSource;
 import org.junit.platform.engine.support.descriptor.MethodSource;
@@ -17,6 +20,9 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -806,7 +812,7 @@ public class CtrfListenerTest {
     }
 
     @Test
-    void containerThatDoesNotFail_dropsItsOutput() {
+    void containerThatDoesNotFail_dropsWhatItPublished() {
         TestIdentifier aborted = container("[engine:junit-jupiter]/[class:Aborted]", "[engine:junit-jupiter]");
         TestIdentifier engine = container("[engine:junit-jupiter]", null);
         TestExecutionResult abortedResult = mock(TestExecutionResult.class);
@@ -816,17 +822,55 @@ public class CtrfListenerTest {
         ctrfListener.executionFinished(aborted, abortedResult);
         ctrfListener.executionFinished(engine, testExecutionResult);
 
-        verify(reportManager).dropOutput("[engine:junit-jupiter]/[class:Aborted]");
-        verify(reportManager).dropOutput("[engine:junit-jupiter]");
+        verify(reportManager).dropPublished("[engine:junit-jupiter]/[class:Aborted]");
+        verify(reportManager).dropPublished("[engine:junit-jupiter]");
     }
 
     @Test
-    void containerThatFails_keepsItsOutputForItsEntry() {
+    void containerThatFails_keepsWhatItPublishedForItsEntry() {
         TestIdentifier failed = container("[engine:junit-jupiter]/[class:Failed]", "[engine:junit-jupiter]");
         when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.FAILED);
 
         ctrfListener.executionFinished(failed, testExecutionResult);
 
-        verify(reportManager, never()).dropOutput(any());
+        verify(reportManager, never()).dropPublished(any());
+    }
+
+    @Test
+    void fileEntryPublished_passesAPublishedFileOnAsAnAttachment(@TempDir Path directory) throws IOException {
+        Path screenshot = Files.write(directory.resolve("screen.png"), new byte[] {1});
+
+        ctrfListener.fileEntryPublished(testIdentifier, FileEntry.from(screenshot, "image/png"));
+
+        verify(reportManager).onTestAttachment(TEST_UNIQUE_ID, Attachment.builder()
+            .name("screen.png").contentType("image/png").path(screenshot.toAbsolutePath().toString()).build());
+    }
+
+    @Test
+    void fileEntryPublished_withoutAMediaType_isAnOctetStream(@TempDir Path directory) throws IOException {
+        Path data = Files.write(directory.resolve("data.bin"), new byte[] {1});
+
+        ctrfListener.fileEntryPublished(testIdentifier, FileEntry.from(data, null));
+
+        var attachment = ArgumentCaptor.forClass(Attachment.class);
+        verify(reportManager).onTestAttachment(eq(TEST_UNIQUE_ID), attachment.capture());
+        assertEquals("application/octet-stream", attachment.getValue().getContentType());
+    }
+
+    @Test
+    void fileEntryPublished_ofADirectory_isIgnored(@TempDir Path directory) {
+        ctrfListener.fileEntryPublished(testIdentifier, FileEntry.from(directory, null));
+
+        verify(reportManager, never()).onTestAttachment(any(), any());
+    }
+
+    @Test
+    void fileEntryPublished_afterItsRunFinished_isIgnored(@TempDir Path directory) throws IOException {
+        Path log = Files.writeString(directory.resolve("run.log"), "log");
+        ctrfListener.testPlanExecutionFinished(testPlan);
+
+        ctrfListener.fileEntryPublished(testIdentifier, FileEntry.from(log, "text/plain"));
+
+        verify(reportManager, never()).onTestAttachment(any(), any());
     }
 }

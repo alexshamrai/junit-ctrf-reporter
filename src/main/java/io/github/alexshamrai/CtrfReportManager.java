@@ -1,6 +1,7 @@
 package io.github.alexshamrai;
 
 import io.github.alexshamrai.config.ConfigReader;
+import io.github.alexshamrai.ctrf.model.Attachment;
 import io.github.alexshamrai.ctrf.model.Test;
 import io.github.alexshamrai.model.TestDetails;
 import io.github.alexshamrai.util.SummaryUtil;
@@ -133,6 +134,7 @@ public final class CtrfReportManager {
         var test = testProcessor.createTest(testDetails.displayName(), testDetails, testDetails.startTime());
         test.setStatus(SKIPPED);
         reason.ifPresent(test::setMessage);
+        attachPublishedFiles(run, testDetails.uniqueId(), test);
         run.state().addAttempt(test);
     }
 
@@ -160,6 +162,7 @@ public final class CtrfReportManager {
         if (output != null && status == FAILED) {
             testProcessor.setOutput(newTest, output.stdout(), output.stderr());
         }
+        attachPublishedFiles(run, reported.uniqueId(), newTest);
 
         run.state().addAttempt(newTest);
     }
@@ -180,15 +183,37 @@ public final class CtrfReportManager {
     }
 
     /**
-     * Drops the output that JUnit captured for a container that didn't fail, such as an aborted class or an engine:
-     * only a failed container gets an entry (HP-13). Ignored when no run is active.
+     * Keeps a file that a test or container published, to attach to its entry, whatever its status (MP-10). Ignored
+     * when no run is active.
+     *
+     * @param uniqueId   the test's or container's JUnit unique ID
+     * @param attachment the file
+     */
+    public void onTestAttachment(String uniqueId, Attachment attachment) {
+        TestRun run = activeRun.get();
+        if (run != null) {
+            run.state().addAttachment(uniqueId, attachment);
+        }
+    }
+
+    /**
+     * Drops the output and the files that JUnit published for a container that didn't fail, such as an aborted class
+     * or an engine: only a failed container gets an entry. Ignored when no run is active.
      *
      * @param uniqueId the container's JUnit unique ID
      */
-    public void dropOutput(String uniqueId) {
+    public void dropPublished(String uniqueId) {
         TestRun run = activeRun.get();
         if (run != null) {
             run.state().removeOutput(uniqueId);
+            run.state().removeAttachments(uniqueId);
+        }
+    }
+
+    private static void attachPublishedFiles(TestRun run, String uniqueId, Test test) {
+        List<Attachment> published = run.state().removeAttachments(uniqueId);
+        if (!published.isEmpty()) {
+            test.setAttachments(published);
         }
     }
 
@@ -248,6 +273,7 @@ public final class CtrfReportManager {
         var test = testProcessor.createTest(details.displayName(), details, System.currentTimeMillis());
         test.setStatus(OTHER);
         test.setMessage(message);
+        attachPublishedFiles(run, details.uniqueId(), test);
         run.state().addAttempt(test);
     }
 
@@ -347,6 +373,7 @@ public final class CtrfReportManager {
             var test = testProcessor.createTest(details.displayName(), details, stopTime);
             test.setStatus(OTHER);
             test.setMessage(JVM_EXITED);
+            attachPublishedFiles(run, details.uniqueId(), test);
             run.state().addAttempt(test);
         }
         write(run, stopTime);

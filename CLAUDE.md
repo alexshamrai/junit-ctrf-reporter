@@ -27,7 +27,7 @@ JUnit CTRF Reporter is a Java library that generates test reports following the 
 ./gradlew :testOnJava17 :testOnJava21
 
 # Run checkstyle
-./gradlew checkstyleMain checkstyleTest
+./gradlew checkstyleMain checkstyleTest checkstyleJunitStubs
 
 # Clean build
 ./gradlew clean build

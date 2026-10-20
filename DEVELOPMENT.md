@@ -50,6 +50,8 @@ compat/run.sh 5.10.5 5.14.4 6.1.3
 
 It needs Maven and Python 3. CI runs it on every pull request (`.github/workflows/compat.yml`).
 
+Main code compiles against the oldest JUnit it supports, `junitMinVersion` in `build.gradle`, so that it can't use newer JUnit API by accident. For newer API that it uses on purpose, such as the `FileEntry` of published files (JUnit 5.12), it compiles against a stand-in in `src/junitStubs/java` with the same methods. The jar doesn't contain the stand-ins: at run time, a newer JUnit brings its own class, and an older one never calls the code that uses it. compat on JUnit 5.10.5 shows that the listener still loads there.
+
 ### Publishing to Local Maven Repository
 
 To test local changes in another project, publish the SNAPSHOT version to your local Maven repository:

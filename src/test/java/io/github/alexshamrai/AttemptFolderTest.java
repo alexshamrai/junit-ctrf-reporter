@@ -1,5 +1,6 @@
 package io.github.alexshamrai;
 
+import io.github.alexshamrai.ctrf.model.Attachment;
 import io.github.alexshamrai.ctrf.model.RetryAttempt;
 import io.github.alexshamrai.ctrf.model.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -349,5 +350,24 @@ class AttemptFolderTest {
             });
         });
         assertThat(AttemptFolder.unfold(folded)).extracting(Test::getStdout).containsExactly(List.of("first try"), null);
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Each attempt keeps its own attachments through folding and unfolding")
+    void attachmentsSurviveFoldAndUnfold() {
+        var firstScreenshot = Attachment.builder().name("first.png").contentType("image/png").path("/tmp/first.png").build();
+        var secondScreenshot = Attachment.builder().name("second.png").contentType("image/png").path("/tmp/second.png").build();
+        var failed = attempt(TEST_1, "test1()", FAILED, 100L).toBuilder().attachments(List.of(firstScreenshot)).build();
+        var passed = attempt(TEST_1, "test1()", PASSED, 200L).toBuilder().attachments(List.of(secondScreenshot)).build();
+
+        var folded = AttemptFolder.fold(List.of(failed, passed));
+
+        assertThat(folded).singleElement().satisfies(test -> {
+            assertThat(test.getAttachments()).containsExactly(secondScreenshot);
+            assertThat(test.getRetryAttempts()).singleElement()
+                .satisfies(earlier -> assertThat(earlier.getAttachments()).containsExactly(firstScreenshot));
+        });
+        assertThat(AttemptFolder.unfold(folded)).extracting(Test::getAttachments)
+            .containsExactly(List.of(firstScreenshot), List.of(secondScreenshot));
     }
 }
