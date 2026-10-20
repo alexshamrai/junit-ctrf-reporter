@@ -81,7 +81,7 @@ public class Test {
         SKIPPED,
         /** The test is pending; the reporter doesn't write it. */
         PENDING,
-        /** Any other outcome; the reporter doesn't write it. */
+        /** Any other outcome: a test or container that was running when the JVM exited. */
         OTHER;
 
         /**

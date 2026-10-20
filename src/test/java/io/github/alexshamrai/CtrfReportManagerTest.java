@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.UnaryOperator;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
+import static io.github.alexshamrai.ctrf.model.Test.TestStatus.OTHER;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -403,6 +404,58 @@ class CtrfReportManagerTest {
     }
 
     @org.junit.jupiter.api.Test
+    @DisplayName("When the JVM exits mid-run, the run is written, with each test still running as other")
+    void finishTestRunOnExit_writesTheRunWithTheTestsStillRunningAsOther() {
+        Object owner = new Object();
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong()))
+            .thenAnswer(call -> Test.builder().testId(call.<TestDetails>getArgument(1).uniqueId()).name("test").build());
+        reportManager.startTestRun(owner, "Listener");
+        reportManager.onTestStart(new TestDetails(1_000L, Set.of(), null, "finished", "finished"));
+        reportManager.onTestSuccess("finished");
+        reportManager.onTestStart(new TestDetails(2_000L, Set.of(), null, "running", "running"));
+
+        reportManager.finishTestRunOnExit(owner);
+
+        verify(ctrfReportFileService).update(eq(RUN_ID), any());
+        assertEquals(PASSED, testOnDisk("finished").getStatus());
+        assertEquals(OTHER, testOnDisk("running").getStatus());
+        assertEquals("The JVM exited while this test was running", testOnDisk("running").getMessage());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("An entry interrupted by the JVM's exit is recorded as other, from its start until now")
+    void onTestInterrupted_recordsTheEntryAsOther() {
+        Object owner = new Object();
+        when(testProcessor.createTest(anyString(), any(TestDetails.class), anyLong()))
+            .thenAnswer(call -> Test.builder().testId(call.<TestDetails>getArgument(1).uniqueId()).name("test").build());
+        reportManager.startTestRun(owner, "Listener");
+
+        reportManager.onTestInterrupted(new TestDetails(1_000L, Set.of(), null, "class-1", "initializationError"),
+            "The JVM exited while this container was running");
+        reportManager.finishTestRunOnExit(owner);
+
+        assertEquals(OTHER, testOnDisk("class-1").getStatus());
+        assertEquals("The JVM exited while this container was running", testOnDisk("class-1").getMessage());
+        var start = ArgumentCaptor.forClass(TestDetails.class);
+        verify(testProcessor).createTest(eq("initializationError"), start.capture(), anyLong());
+        assertEquals(1_000L, start.getValue().startTime());
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Only the owner of the active run finishes it on exit, and the run is over then")
+    void finishTestRunOnExit_actsOnlyForTheOwnerAndEndsTheRun() {
+        Object owner = new Object();
+        reportManager.startTestRun(owner, "Listener");
+
+        reportManager.finishTestRunOnExit(new Object());
+        verifyNoInteractions(ctrfReportFileService);
+
+        reportManager.finishTestRunOnExit(owner);
+        reportManager.finishTestRun(owner);
+        verify(ctrfReportFileService).update(eq(RUN_ID), any());
+    }
+
+    @org.junit.jupiter.api.Test
     @DisplayName("Once the active run has finished, another owner starts the next one")
     void anotherOwnerStartsTheNextRunOnceTheActiveOneFinished() {
         Object first = new Object();
@@ -510,6 +563,10 @@ class CtrfReportManagerTest {
 
     private List<Test> testsOnDisk() {
         return reportOnDisk.getResults().getTests();
+    }
+
+    private Test testOnDisk(String testId) {
+        return testsOnDisk().stream().filter(test -> testId.equals(test.getTestId())).findFirst().orElseThrow();
     }
 
     private List<String> testIdsOnDisk() {
