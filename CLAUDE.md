@@ -115,7 +115,7 @@ The project uses GitHub Actions for automated releases to Maven Central:
 
 ### Retries and Flaky Tests
 
-Each test appears once in the report, as its final attempt. Earlier attempts with the same `testId` (the JUnit unique ID) go into `retryAttempts`, numbered from 1, and `retries` is their count. A test is marked as `flaky: true` only if its final attempt passed after at least one failed attempt; `summary.flaky` counts such tests. Entries from older reports without a `testId` are grouped by file path and name among themselves, never by name alone, and never joined to entries that have a `testId`. A class failure (initializationError/teardownError) followed by the class's success in a later round becomes a passed, flaky entry (HP-11).
+Each test appears once in the report, as its final attempt. Earlier attempts with the same `testId` (the JUnit unique ID) go into `retryAttempts`, numbered from 1, and `retries` is their count. A test is marked as `flaky: true` only if its final attempt passed after at least one failed attempt; `summary.flaky` counts such tests. Entries from older reports without a `testId` are grouped by file path and name among themselves, never by name alone, and never joined to entries that have a `testId`. A class failure (initializationError/teardownError) followed by the class's success in a later round becomes a passed, flaky entry (HP-11); a class entry that a JVM exit interrupted (`other`, CB-8) becomes passed, not flaky.
 
 ### Suites
 

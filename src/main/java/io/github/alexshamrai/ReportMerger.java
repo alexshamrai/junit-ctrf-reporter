@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.logging.Logger;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
+import static io.github.alexshamrai.ctrf.model.Test.TestStatus.OTHER;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
 
 /**
@@ -77,7 +78,8 @@ final class ReportMerger {
 
     /**
      * Appends a final passed attempt for each container that finished without failing and already has a failed
-     * attempt. Only containers with a failed attempt are recovered: a skipped container stays skipped. The new
+     * attempt, or one that the JVM's exit interrupted ({@code other}). Only those are recovered: a skipped container
+     * stays skipped. The new
      * attempt keeps the identity of the container's latest attempt, including its name: "initializationError"
      * or "teardownError".
      */
@@ -90,7 +92,7 @@ final class ReportMerger {
         for (Test attempt : attempts) {
             if (attempt.getTestId() != null) {
                 latestAttempts.put(attempt.getTestId(), attempt);
-                if (attempt.getStatus() == FAILED) {
+                if (attempt.getStatus() == FAILED || attempt.getStatus() == OTHER) {
                     failedIds.add(attempt.getTestId());
                 }
             }

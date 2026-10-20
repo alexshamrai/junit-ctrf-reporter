@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
+import static io.github.alexshamrai.ctrf.model.Test.TestStatus.OTHER;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.SKIPPED;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -132,6 +133,23 @@ class ReportMergerTest {
             assertThat(test.getRetryAttempts())
                 .extracting(RetryAttempt::getStatus, RetryAttempt::getMessage)
                 .containsExactly(tuple(FAILED, "Connection refused"));
+        });
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("A class that the JVM's exit interrupted, followed by the class's success, is passed, but not flaky")
+    void containerInterruptedByTheJvmsExitIsRecoveredButNotFlaky() {
+        var interrupted = attempt(CLASS_ID, OTHER, 60L).toBuilder().name("initializationError")
+            .message("The JVM exited while this container was running").build();
+        var existing = report(RUN, 50L, 90L, true, interrupted);
+
+        var run = ReportMerger.merge(existing, RUN, List.of(), List.of(new ContainerSuccess(CLASS_ID, 300L, 310L)), 100L, 400L, true);
+
+        assertThat(run.tests()).singleElement().satisfies(test -> {
+            assertThat(test.getStatus()).isEqualTo(PASSED);
+            assertThat(test.getRetries()).isEqualTo(1);
+            assertThat(test.getFlaky()).as("flaky needs a failed attempt").isNull();
+            assertThat(test.getRetryAttempts()).extracting(RetryAttempt::getStatus).containsExactly(OTHER);
         });
     }
 

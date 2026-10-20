@@ -16,6 +16,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -45,6 +48,10 @@ import java.util.stream.Stream;
  * Only one run is reported at a time. A listener whose test plan starts while another run is active, such as the
  * listener of a JUnit run that a test starts itself, reports nothing, and the run around it goes on.
  * <p>
+ * If the JVM exits before the test plan finishes, as after {@code System.exit} in a test or a SIGTERM, a shutdown hook
+ * still writes the run: the tests still running, and a container running code outside any test, as {@code other}, and the
+ * tests that never started as skipped.
+ * <p>
  * The listener can be configured through a {@code ctrf.properties} file placed in the classpath.
  * See the README for all available configuration options.
  */
@@ -54,11 +61,21 @@ public class CtrfListener implements TestExecutionListener {
     private static final String GENERATED_BY = "io.github.alexshamrai.launcher.CtrfListener";
     private static final String INITIALIZATION_ERROR = "initializationError";
     private static final String TEARDOWN_ERROR = "teardownError";
+    private static final String JVM_EXITED = "The JVM exited before this test started";
+    private static final String CONTAINER_INTERRUPTED = "The JVM exited while this container was running";
+
+    private final ShutdownHooks shutdownHooks;
 
     /**
-     * Tracks container start times for accurate duration calculation of container failures.
+     * The containers that started and haven't finished, with their start times, for the duration of a container
+     * failure and for the exit hook.
      */
-    private final Map<String, Long> containerStartTimes = new ConcurrentHashMap<>();
+    private final Map<String, RunningContainer> runningContainers = new ConcurrentHashMap<>();
+
+    /**
+     * The tests that started and haven't finished, so that the exit hook knows which containers had none running.
+     */
+    private final Set<String> testsInProgress = ConcurrentHashMap.newKeySet();
 
     /**
      * Containers whose tests or child containers have started or were skipped. JUnit gets to a class's
@@ -88,62 +105,187 @@ public class CtrfListener implements TestExecutionListener {
     private volatile TestPlan testPlan;
 
     /**
+     * Writes the run if the JVM exits before its test plan finishes (CB-8). Added for each test plan whose run this
+     * listener owns, and removed when the plan finishes.
+     */
+    private volatile Thread exitHook;
+
+    /**
+     * The event callbacks hold its read lock, and the exit hook its write lock. The hook waits for the callbacks in
+     * progress, such as a JUnit thread that is still recording under SIGTERM, or the run's normal write, and the
+     * callbacks after it record nothing.
+     */
+    private final ReadWriteLock exitLock = new ReentrantReadWriteLock();
+
+    /**
      * Creates the listener, reporting through the JVM's report manager. JUnit calls this constructor when it loads the
      * listener from {@code META-INF/services}.
      */
     public CtrfListener() {
-        this(CtrfReportManager.getInstance());
+        this(CtrfReportManager.getInstance(), ShutdownHooks.RUNTIME);
     }
 
     /**
-     * Creates the listener with the report manager it reports through, for tests.
+     * Creates the listener with the report manager it reports through and the shutdown hooks it adds its own to, for
+     * tests.
      */
-    CtrfListener(CtrfReportManager reportManager) {
+    CtrfListener(CtrfReportManager reportManager, ShutdownHooks shutdownHooks) {
         this.reportManager = reportManager;
+        this.shutdownHooks = shutdownHooks;
     }
 
     @Override
     public void testPlanExecutionStarted(TestPlan testPlan) {
-        this.testPlan = testPlan;
-        Object owner = new Object();
-        runOwner = owner;
-        ownsRun = reportManager.startTestRun(owner, GENERATED_BY);
+        whileRecording(() -> startRun(testPlan));
     }
 
     @Override
     public void testPlanExecutionFinished(TestPlan testPlan) {
-        if (ownsRun) {
-            reportManager.finishTestRun(runOwner);
-        }
-        ownsRun = false;
-        reportedIds.clear();
+        whileRecording(this::finishRun);
     }
 
     @Override
     public void executionStarted(TestIdentifier testIdentifier) {
+        whileRecording(() -> started(testIdentifier));
+    }
+
+    @Override
+    public void executionFinished(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
+        whileRecording(() -> finished(testIdentifier, testExecutionResult));
+    }
+
+    @Override
+    public void executionSkipped(TestIdentifier testIdentifier, String reason) {
+        whileRecording(() -> skipped(testIdentifier, reason));
+    }
+
+    private void whileRecording(Runnable callback) {
+        Lock lock = exitLock.readLock();
+        lock.lock();
+        try {
+            callback.run();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void startRun(TestPlan plan) {
+        testPlan = plan;
+        Object owner = new Object();
+        runOwner = owner;
+        ownsRun = reportManager.startTestRun(owner, GENERATED_BY);
+        if (ownsRun) {
+            exitHook = new Thread(this::onJvmExit, "ctrf-jvm-exit");
+            shutdownHooks.add(exitHook);
+        }
+    }
+
+    private void finishRun() {
+        boolean owned = ownsRun;
+        ownsRun = false;
+        try {
+            if (owned) {
+                reportManager.finishTestRun(runOwner);
+            }
+        } finally {
+            if (owned) {
+                shutdownHooks.remove(exitHook);
+            }
+            reportedIds.clear();
+        }
+    }
+
+    /**
+     * Runs when the JVM exits before the test plan finished: reports each test that never started as skipped, then
+     * has the manager write the run, with the tests still running as failed. The run is written even if finding the
+     * tests that never started fails.
+     */
+    void onJvmExit() {
+        Lock lock = exitLock.writeLock();
+        lock.lock();
+        try {
+            TestPlan plan = testPlan;
+            if (!ownsRun || plan == null) {
+                return;
+            }
+            ownsRun = false;
+            try {
+                plan.getRoots().forEach(root -> reportNotStartedAsSkipped(plan, root));
+                reportInterruptedContainers();
+            } finally {
+                reportManager.finishTestRunOnExit(runOwner);
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Reports the tests below {@code node} that never started as skipped. The tests of a container that finished are
+     * left out: they ran, were skipped with it, or, under a class whose setup failed, aren't reported in any run. A test
+     * method whose tests JUnit creates only while running it counts as one test, as for a skipped class, unless it
+     * started.
+     */
+    private void reportNotStartedAsSkipped(TestPlan plan, TestIdentifier node) {
+        for (TestIdentifier child : plan.getChildren(node)) {
+            String id = child.getUniqueId();
+            if (reportedIds.contains(id)) {
+                continue;
+            }
+            if (child.isTest() || isTestMethodWithoutTests(plan, child) && !runningContainers.containsKey(id)) {
+                reportSkipped(child, JVM_EXITED);
+            } else {
+                reportNotStartedAsSkipped(plan, child);
+            }
+        }
+    }
+
+    /**
+     * Adds an entry for each container that was running with no test or container running below it, such as a class
+     * in its {@code @BeforeAll} or a parameterized test in its {@code @MethodSource}: where the JVM was. It's named as
+     * if the container had failed. Engines are left out.
+     */
+    private void reportInterruptedContainers() {
+        for (RunningContainer container : runningContainers.values()) {
+            TestIdentifier identifier = container.identifier();
+            String below = identifier.getUniqueId() + "/";
+            boolean busyBelow = testsInProgress.stream().anyMatch(id -> id.startsWith(below))
+                || runningContainers.keySet().stream().anyMatch(id -> id.startsWith(below));
+            if (identifier.getParentId().isPresent() && !busyBelow) {
+                boolean childrenStarted = containersWithStartedChildren.contains(identifier.getUniqueId());
+                reportManager.onTestInterrupted(containerEntry(identifier, container.startTime(), childrenStarted),
+                    CONTAINER_INTERRUPTED);
+            }
+        }
+    }
+
+    private void started(TestIdentifier testIdentifier) {
         if (!ownsRun) {
             return;
         }
         testIdentifier.getParentId().ifPresent(containersWithStartedChildren::add);
         if (testIdentifier.isTest()) {
             reportedIds.add(testIdentifier.getUniqueId());
+            testsInProgress.add(testIdentifier.getUniqueId());
             reportManager.onTestStart(createTestDetails(testIdentifier));
         } else if (testIdentifier.isContainer()) {
-            containerStartTimes.put(testIdentifier.getUniqueId(), System.currentTimeMillis());
+            runningContainers.put(testIdentifier.getUniqueId(),
+                new RunningContainer(testIdentifier, System.currentTimeMillis()));
         }
     }
 
-    @Override
-    public void executionFinished(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
+    private void finished(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
         if (!ownsRun) {
             return;
         }
         if (testIdentifier.isTest()) {
+            testsInProgress.remove(testIdentifier.getUniqueId());
             handleTestFinished(testIdentifier, testExecutionResult);
             return;
         }
         String uniqueId = testIdentifier.getUniqueId();
-        Long startTime = containerStartTimes.remove(uniqueId);
+        RunningContainer running = runningContainers.remove(uniqueId);
+        Long startTime = running != null ? running.startTime() : null;
         boolean childrenStarted = containersWithStartedChildren.remove(uniqueId);
         if (testIdentifier.isContainer() && testExecutionResult.getStatus() == TestExecutionResult.Status.FAILED) {
             handleContainerFailure(testIdentifier, testExecutionResult, startTime, childrenStarted);
@@ -179,15 +321,23 @@ public class CtrfListener implements TestExecutionListener {
      * Reports a failed container as a failed entry, so that failures outside tests are not lost:
      * a class whose setup or teardown failed, a {@code @MethodSource} or {@code @TestFactory} that threw,
      * a failing engine.
-     * <p>
-     * A failed class is named "initializationError" when it failed before any of its tests or nested
-     * classes started or were skipped (for example in {@code @BeforeAll}), matching JUnit's XML reporter, and
-     * "teardownError" when it failed afterwards (for example in {@code @AfterAll}). Any other container keeps
-     * its display name.
-     * Every entry is identified by the container's own unique ID.
      */
     private void handleContainerFailure(TestIdentifier container, TestExecutionResult testExecutionResult,
                                         Long startTime, boolean childrenStarted) {
+        TestDetails details = containerEntry(container, startTime, childrenStarted);
+        reportManager.onTestStart(details);
+        reportManager.onTestFailure(details.uniqueId(), testExecutionResult.getThrowable().orElse(null));
+    }
+
+    /**
+     * The entry of a container that failed, or that was running when the JVM exited.
+     * <p>
+     * A class is named "initializationError" before any of its tests or nested classes started or were skipped (for
+     * example in {@code @BeforeAll}), matching JUnit's XML reporter, and "teardownError" afterwards (for example in
+     * {@code @AfterAll}). Any other container keeps its display name.
+     * Every entry is identified by the container's own unique ID.
+     */
+    private TestDetails containerEntry(TestIdentifier container, Long startTime, boolean childrenStarted) {
         boolean isClass = container.getSource().filter(ClassSource.class::isInstance).isPresent();
         String name = container.getDisplayName();
         if (isClass) {
@@ -207,10 +357,7 @@ public class CtrfListener implements TestExecutionListener {
             .collect(Collectors.toSet());
 
         long start = startTime != null ? startTime : System.currentTimeMillis();
-        TestDetails details = new TestDetails(start, tags, className, uniqueId, name, suite);
-
-        reportManager.onTestStart(details);
-        reportManager.onTestFailure(uniqueId, testExecutionResult.getThrowable().orElse(null));
+        return new TestDetails(start, tags, className, uniqueId, name, suite);
     }
 
     private static String classNameOf(TestSource source) {
@@ -222,8 +369,7 @@ public class CtrfListener implements TestExecutionListener {
         return null;
     }
 
-    @Override
-    public void executionSkipped(TestIdentifier testIdentifier, String reason) {
+    private void skipped(TestIdentifier testIdentifier, String reason) {
         if (!ownsRun) {
             return;
         }
@@ -265,5 +411,11 @@ public class CtrfListener implements TestExecutionListener {
 
     private TestDetails createTestDetails(TestIdentifier testIdentifier) {
         return TestDetails.fromAdapter(new TestIdentifierAdapter(testIdentifier, testPlan));
+    }
+
+    /**
+     * A container that started and hasn't finished.
+     */
+    private record RunningContainer(TestIdentifier identifier, long startTime) {
     }
 }

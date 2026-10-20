@@ -64,9 +64,9 @@ final class ScenarioRunner {
         Workspace workspace = Workspace.create();
         String log = "";
         for (int i = 0; i < jvms.length; i++) {
-            log = workspace.await(workspace.start(jvms[i], i), i);
+            log = workspace.await(workspace.start(jvms[i], i), i, jvms[i].exitCode());
         }
-        return workspace.result(junitCounts(log), log);
+        return workspace.result(junitCountsOf(jvms[jvms.length - 1], log), log);
     }
 
     /**
@@ -82,11 +82,28 @@ final class ScenarioRunner {
         Map<String, Long> counts = new HashMap<>();
         StringBuilder logs = new StringBuilder();
         for (int i = 0; i < processes.size(); i++) {
-            String log = workspace.await(processes.get(i), i);
-            junitCounts(log).forEach((key, value) -> counts.merge(key, value, Long::sum));
+            String log = workspace.await(processes.get(i), i, jvms[i].exitCode());
+            junitCountsOf(jvms[i], log).forEach((key, value) -> counts.merge(key, value, Long::sum));
             logs.append(log);
         }
         return workspace.result(counts, logs.toString());
+    }
+
+    /**
+     * Starts the JVM, waits until its output contains {@code marker}, and then terminates it, as a build tool
+     * terminates a fork that timed out: with SIGTERM on Linux and macOS. The JVM ends before JUnit's summary, so the
+     * result has no JUnit counts.
+     */
+    static Result runAndTerminate(Jvm jvm, String marker) throws IOException, InterruptedException {
+        Workspace workspace = Workspace.create();
+        Process process = workspace.start(jvm, 0);
+        workspace.awaitOutput(process, 0, marker);
+        process.destroy();
+        if (!process.waitFor(2, TimeUnit.MINUTES)) {
+            process.destroyForcibly();
+            throw new IllegalStateException("Scenario JVM 0 didn't end when terminated:\n" + workspace.log(0));
+        }
+        return workspace.result(Map.of(), workspace.log(0));
     }
 
     /**
@@ -112,6 +129,13 @@ final class ScenarioRunner {
         return jvms;
     }
 
+    /**
+     * JUnit's counts from the JVM's output; none for a JVM that is expected to exit before JUnit's summary.
+     */
+    private static Map<String, Long> junitCountsOf(Jvm jvm, String log) {
+        return jvm.exitCode() == 0 ? junitCounts(log) : Map.of();
+    }
+
     private static Map<String, Long> junitCounts(String log) {
         String summaryLine = log.lines()
             .filter(line -> line.startsWith(ScenarioMain.SUMMARY_PREFIX))
@@ -127,9 +151,15 @@ final class ScenarioRunner {
 
     /**
      * One JVM to start: how it runs ("listener" or "listener-rerun", see {@link ScenarioMain}),
-     * the fixtures it runs, and the system properties and environment variables it gets in addition.
+     * the fixtures it runs, the system properties and environment variables it gets in addition, and the exit code
+     * it is expected to end with: 0, unless a fixture ends the JVM itself.
      */
-    record Jvm(String mode, List<Class<?>> fixtures, Map<String, String> systemProperties, Map<String, String> environment) {
+    record Jvm(String mode, List<Class<?>> fixtures, Map<String, String> systemProperties, Map<String, String> environment,
+               int exitCode) {
+
+        Jvm(String mode, List<Class<?>> fixtures, Map<String, String> systemProperties, Map<String, String> environment) {
+            this(mode, fixtures, systemProperties, environment, 0);
+        }
 
         static Jvm listener(Class<?>... fixtures) {
             return new Jvm("listener", List.of(fixtures), Map.of(), Map.of());
@@ -138,13 +168,20 @@ final class ScenarioRunner {
         Jvm withSystemProperty(String key, String value) {
             Map<String, String> properties = new LinkedHashMap<>(systemProperties);
             properties.put(key, value);
-            return new Jvm(mode, fixtures, properties, environment);
+            return new Jvm(mode, fixtures, properties, environment, exitCode);
         }
 
         Jvm withEnvironment(String key, String value) {
             Map<String, String> variables = new LinkedHashMap<>(environment);
             variables.put(key, value);
-            return new Jvm(mode, fixtures, systemProperties, variables);
+            return new Jvm(mode, fixtures, systemProperties, variables, exitCode);
+        }
+
+        /**
+         * The same JVM, expected to end with {@code code}, as a fixture that calls {@code System.exit(code)} makes it.
+         */
+        Jvm exitingWith(int code) {
+            return new Jvm(mode, fixtures, systemProperties, environment, code);
         }
     }
 
@@ -179,16 +216,33 @@ final class ScenarioRunner {
             return processBuilder.start();
         }
 
-        String await(Process process, int index) throws IOException, InterruptedException {
+        String await(Process process, int index, int expectedExitCode) throws IOException, InterruptedException {
             if (!process.waitFor(2, TimeUnit.MINUTES)) {
                 process.destroyForcibly();
-                throw new IllegalStateException("Scenario JVM " + index + " timed out:\n" + Files.readString(output(index)));
+                throw new IllegalStateException("Scenario JVM " + index + " timed out:\n" + log(index));
             }
-            String log = Files.readString(output(index));
-            if (process.exitValue() != 0) {
-                throw new IllegalStateException("Scenario JVM " + index + " exited with " + process.exitValue() + ":\n" + log);
+            String log = log(index);
+            if (process.exitValue() != expectedExitCode) {
+                throw new IllegalStateException("Scenario JVM " + index + " exited with " + process.exitValue()
+                    + " instead of " + expectedExitCode + ":\n" + log);
             }
             return log;
+        }
+
+        void awaitOutput(Process process, int index, String marker) throws IOException, InterruptedException {
+            long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(2);
+            while (!log(index).contains(marker)) {
+                if (!process.isAlive() || System.nanoTime() > deadline) {
+                    process.destroyForcibly();
+                    throw new IllegalStateException("Scenario JVM " + index + " never printed \"" + marker + "\":\n"
+                        + log(index));
+                }
+                Thread.sleep(50);
+            }
+        }
+
+        String log(int index) throws IOException {
+            return Files.readString(output(index));
         }
 
         Result result(Map<String, Long> junitCounts, String log) throws IOException {

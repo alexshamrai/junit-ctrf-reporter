@@ -346,7 +346,7 @@ Gradle's console output counts every attempt, so its numbers are higher than the
 
 Retries that JUnit runs as separate tests with their own unique IDs, such as JUnit Pioneer's `@RetryingTest`, appear as separate tests.
 
-A test class whose setup (`@BeforeAll`) or teardown (`@AfterAll`) fails in one round and succeeds in a later one is reported the same way: its `initializationError` or `teardownError` entry becomes `passed`, with `flaky: true` and the failure in `retryAttempts`.
+A test class whose setup (`@BeforeAll`) or teardown (`@AfterAll`) fails in one round and succeeds in a later one is reported the same way: its `initializationError` or `teardownError` entry becomes `passed`, with `flaky: true` and the failure in `retryAttempts`. If the JVM exited during that setup or teardown instead, the entry becomes `passed` too, but not flaky.
 
 ## Parallel Forks, Retries and Reruns
 
@@ -363,6 +363,16 @@ The report stays one file at `ctrf.report.path`, and each JVM merges its results
 - **If the lock can't be taken**, the report is still written, atomically but without the lock. That happens when another JVM holds it for more than 60 seconds, or on a file system that doesn't support locks, such as some network mounts. JVMs that finish at the same moment can then overwrite each other's results. A JVM killed while writing can leave a hidden `.ctrf-report.json.<id>.tmp` file, which is safe to delete.
 
 Each JVM reads and rewrites the whole report when it finishes. With a large suite and a new JVM per test class (Gradle `forkEvery = 1`, Surefire `reuseForks=false`), this adds about a second per JVM at 80,000 tests.
+
+### When a JVM Exits Mid-Run
+
+A JVM can end before its tests finish: a test calls `System.exit`, or the build tool terminates a fork that timed out, or all forks after a failure with Gradle's `failFast`. It still merges its results into the report, from a shutdown hook:
+- the tests that finished, as usual;
+- the tests that were running, as `other`: "The JVM exited while this test was running". Not `failed`: the JVM interrupted them, and with `failFast` most of them did nothing wrong;
+- a class or parameterized test that was running code outside any test, such as `@BeforeAll` or a `@MethodSource`, as `other` too: an `initializationError` or `teardownError` entry, or one named after the parameterized test, with "The JVM exited while this container was running";
+- the tests that never started, as skipped: "The JVM exited before this test started".
+
+This needs the JVM to run its shutdown hooks, as it does on `System.exit` and SIGTERM. A JVM that crashes, or is killed outright, with `kill -9` or on Windows, writes nothing.
 
 ### How the Run Is Identified
 

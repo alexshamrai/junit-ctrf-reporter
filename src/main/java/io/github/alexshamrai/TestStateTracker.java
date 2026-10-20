@@ -84,4 +84,20 @@ final class TestStateTracker {
     TestDetails removeTestDetails(String uniqueId) {
         return testDetailsMap.remove(uniqueId);
     }
+
+    /**
+     * Removes and returns the details of every test in progress, each once, even while tests finish on other threads.
+     *
+     * @return the tests that started and haven't finished
+     */
+    List<TestDetails> removeTestsInProgress() {
+        List<TestDetails> inProgress = new ArrayList<>();
+        for (String uniqueId : testDetailsMap.keySet()) {
+            TestDetails details = testDetailsMap.remove(uniqueId);
+            if (details != null) {
+                inProgress.add(details);
+            }
+        }
+        return inProgress;
+    }
 }

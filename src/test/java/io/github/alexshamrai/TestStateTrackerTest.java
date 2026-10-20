@@ -50,6 +50,19 @@ class TestStateTrackerTest {
     }
 
     @org.junit.jupiter.api.Test
+    @DisplayName("Removing the tests in progress returns each of them once")
+    void removeTestsInProgressReturnsEachOnce() {
+        var first = new TestDetails(1_000L, Set.of(), null, "id-1", "Test 1");
+        var second = new TestDetails(2_000L, Set.of(), null, "id-2", "Test 2");
+        tracker.putTestDetails("id-1", first);
+        tracker.putTestDetails("id-2", second);
+
+        assertThat(tracker.removeTestsInProgress()).containsExactlyInAnyOrder(first, second);
+        assertThat(tracker.removeTestsInProgress()).isEmpty();
+        assertThat(tracker.removeTestDetails("id-1")).isNull();
+    }
+
+    @org.junit.jupiter.api.Test
     @DisplayName("Should return null for non-existent test details")
     void shouldReturnNullForNonExistentDetails() {
         assertThat(tracker.removeTestDetails("non-existent")).isNull();

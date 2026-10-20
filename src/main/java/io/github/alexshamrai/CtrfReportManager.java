@@ -15,6 +15,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.FAILED;
+import static io.github.alexshamrai.ctrf.model.Test.TestStatus.OTHER;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.PASSED;
 import static io.github.alexshamrai.ctrf.model.Test.TestStatus.SKIPPED;
 
@@ -37,6 +38,7 @@ import static io.github.alexshamrai.ctrf.model.Test.TestStatus.SKIPPED;
 public final class CtrfReportManager {
 
     private static final String ABORTED = "aborted";
+    private static final String JVM_EXITED = "The JVM exited while this test was running";
 
     /**
      * The owner of the runs started through {@link #startTestRun(String)}, which names none.
@@ -200,6 +202,24 @@ public final class CtrfReportManager {
     }
 
     /**
+     * Records an entry that the JVM's exit interrupted, such as a class whose {@code @BeforeAll} was running, as
+     * {@code other}, from its start until now. Ignored when no run is active.
+     *
+     * @param details the entry's identity and start time
+     * @param message what happened, written as its {@code message}
+     */
+    public void onTestInterrupted(TestDetails details, String message) {
+        TestRun run = activeRun.get();
+        if (run == null) {
+            return;
+        }
+        var test = testProcessor.createTest(details.displayName(), details, System.currentTimeMillis());
+        test.setStatus(OTHER);
+        test.setMessage(message);
+        run.state().addAttempt(test);
+    }
+
+    /**
      * Records a container that finished without failing, such as a test class whose {@code @BeforeAll} and
      * {@code @AfterAll} methods passed. If the same container failed in an earlier retry round, its failure is
      * then reported as recovered. Does nothing when no run is active.
@@ -271,12 +291,49 @@ public final class CtrfReportManager {
      * @param owner the owner given to {@link #startTestRun(Object, String)}
      */
     public void finishTestRun(Object owner) {
-        TestRun run = activeRun.get();
-        if (run == null || run.owner() != owner || !activeRun.compareAndSet(run, null)) {
+        TestRun run = claim(owner);
+        if (run != null) {
+            write(run, System.currentTimeMillis());
+        }
+    }
+
+    /**
+     * Writes the results of the run {@code owner} owns, and ends it, when the JVM exits before the run finished, as
+     * after {@code System.exit} in a test or a SIGTERM. Each test still running is recorded as {@code other}, as the JVM
+     * interrupted it. Does nothing if
+     * {@code owner} doesn't own the active run, as after the run finished (CB-8).
+     *
+     * @param owner the owner given to {@link #startTestRun(Object, String)}
+     */
+    public void finishTestRunOnExit(Object owner) {
+        TestRun run = claim(owner);
+        if (run == null) {
             return;
         }
+        long stopTime = System.currentTimeMillis();
+        for (TestDetails details : run.state().removeTestsInProgress()) {
+            var test = testProcessor.createTest(details.displayName(), details, stopTime);
+            test.setStatus(OTHER);
+            test.setMessage(JVM_EXITED);
+            run.state().addAttempt(test);
+        }
+        write(run, stopTime);
+    }
 
-        long testRunStopTime = System.currentTimeMillis();
+    /**
+     * Ends the active run if {@code owner} owns it.
+     *
+     * @return the run that ended, or {@code null} if {@code owner} didn't own the active run
+     */
+    private TestRun claim(Object owner) {
+        TestRun run = activeRun.get();
+        return run != null && run.owner() == owner && activeRun.compareAndSet(run, null) ? run : null;
+    }
+
+    /**
+     * Merges the run into the report on disk, under its lock.
+     */
+    private void write(TestRun run, long testRunStopTime) {
         refreshEnvironmentHealthFromEnvVar();
 
         List<Test> attempts = run.state().getAllAttempts();

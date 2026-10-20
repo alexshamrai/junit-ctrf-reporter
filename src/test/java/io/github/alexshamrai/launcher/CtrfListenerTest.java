@@ -12,25 +12,37 @@ import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.TestPlan;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.ConcurrentModificationException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -54,17 +66,42 @@ public class CtrfListenerTest {
     @Mock
     private TestExecutionResult testExecutionResult;
 
+    /**
+     * The shutdown hooks the listeners added and haven't removed, in place of the JVM's.
+     */
+    private final List<Thread> exitHooks = new ArrayList<>();
+
+    private final ShutdownHooks shutdownHooks = new ShutdownHooks() {
+        @Override
+        public void add(Thread hook) {
+            exitHooks.add(hook);
+        }
+
+        @Override
+        public void remove(Thread hook) {
+            exitHooks.remove(hook);
+        }
+    };
+
     private CtrfListener ctrfListener;
+
+    /**
+     * The owner of the run that {@link #setUp()} started.
+     */
+    private Object runOwner;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
 
-        ctrfListener = new CtrfListener(reportManager);
+        ctrfListener = new CtrfListener(reportManager, shutdownHooks);
 
         // The listener reports only while it owns the run
         when(reportManager.startTestRun(any(), anyString())).thenReturn(true);
         ctrfListener.testPlanExecutionStarted(testPlan);
+        var owner = ArgumentCaptor.forClass(Object.class);
+        verify(reportManager).startTestRun(owner.capture(), anyString());
+        runOwner = owner.getValue();
         clearInvocations(reportManager);
 
         // Configure the mock TestIdentifier with predictable data
@@ -101,9 +138,10 @@ public class CtrfListenerTest {
         TestPlan nestedPlan = mock(TestPlan.class);
         when(reportManager.startTestRun(any(), anyString())).thenReturn(false);
         when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.SUCCESSFUL);
-        var nested = new CtrfListener(reportManager);
+        var nested = new CtrfListener(reportManager, shutdownHooks);
 
         nested.testPlanExecutionStarted(nestedPlan);
+        assertEquals(1, exitHooks.size(), "only the run's owner adds an exit hook");
         nested.executionStarted(testIdentifier);
         nested.executionFinished(testIdentifier, testExecutionResult);
         nested.executionSkipped(testIdentifier, "disabled");
@@ -111,6 +149,40 @@ public class CtrfListenerTest {
 
         verify(reportManager).startTestRun(notNull(), eq("io.github.alexshamrai.launcher.CtrfListener"));
         verifyNoMoreInteractions(reportManager);
+    }
+
+    @Test
+    void owningARun_addsAnExitHookThatTheRunsFinishRemoves() {
+        assertEquals(1, exitHooks.size(), "the run that setUp started added one");
+
+        ctrfListener.testPlanExecutionFinished(testPlan);
+
+        assertTrue(exitHooks.isEmpty());
+    }
+
+    @Test
+    void exitHook_reportsTheTestsThatNeverStartedAsSkippedThenFinishesTheRunOnExit() {
+        TestIdentifier engine = mock(TestIdentifier.class);
+        TestIdentifier started = childTest("started()");
+        TestIdentifier notStarted = childTest("notStarted()");
+        TestIdentifier templateNotStarted = templateMethod("notStartedTemplate(int)");
+        TestIdentifier templateRunning = templateMethod("runningTemplate(int)");
+        when(testPlan.getRoots()).thenReturn(Set.of(engine));
+        when(testPlan.getChildren(engine)).thenReturn(Set.of(started, notStarted, templateNotStarted, templateRunning));
+        when(testPlan.getDescendants(templateNotStarted)).thenReturn(Set.of());
+        when(testPlan.getDescendants(templateRunning)).thenReturn(Set.of());
+        ctrfListener.executionStarted(started);
+        ctrfListener.executionStarted(templateRunning);
+
+        exitHooks.get(0).run();
+
+        var skipped = ArgumentCaptor.forClass(TestDetails.class);
+        InOrder inOrder = inOrder(reportManager);
+        inOrder.verify(reportManager, times(2))
+            .onTestSkipped(skipped.capture(), eq(Optional.of("The JVM exited before this test started")));
+        inOrder.verify(reportManager).finishTestRunOnExit(runOwner);
+        assertEquals(Set.of("notStarted()", "notStartedTemplate(int)"),
+            skipped.getAllValues().stream().map(TestDetails::displayName).collect(Collectors.toSet()));
     }
 
     @Test
@@ -422,6 +494,170 @@ public class CtrfListenerTest {
         ctrfListener.executionFinished(testIdentifier, testExecutionResult);
 
         verify(reportManager, never()).onTestSkipped(any(), any());
+    }
+
+    @Test
+    void exitHook_waitsForTheCallbackInProgressAndTheCallbacksAfterItRecordNothing() throws Exception {
+        TestIdentifier first = childTest("first()");
+        TestIdentifier second = childTest("second()");
+        var recording = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        doAnswer(call -> {
+            recording.countDown();
+            release.await(10, TimeUnit.SECONDS);
+            return null;
+        }).when(reportManager).onTestStart(any());
+        var callback = new Thread(() -> ctrfListener.executionStarted(first));
+        callback.start();
+        recording.await(10, TimeUnit.SECONDS);
+
+        var hook = exitHooks.get(0);
+        hook.start();
+
+        // As under SIGTERM, a JUnit thread is still recording when the hook starts
+        verify(reportManager, after(200).never()).finishTestRunOnExit(any());
+        release.countDown();
+        verify(reportManager, timeout(10_000)).finishTestRunOnExit(runOwner);
+        hook.join(10_000);
+        callback.join(10_000);
+        ctrfListener.executionStarted(second);
+        verify(reportManager, times(1)).onTestStart(any());
+    }
+
+    @Test
+    void exitHook_writesTheRunEvenIfFindingTheTestsThatNeverStartedFails() {
+        when(testPlan.getRoots()).thenThrow(new ConcurrentModificationException());
+
+        assertThrows(ConcurrentModificationException.class, () -> exitHooks.get(0).run());
+
+        verify(reportManager).finishTestRunOnExit(runOwner);
+    }
+
+    @Test
+    void exitHook_afterTheRunFinished_doesNothing() {
+        var hook = exitHooks.get(0);
+        ctrfListener.testPlanExecutionFinished(testPlan);
+        clearInvocations(reportManager);
+
+        // The JVM runs a hook that it was shutting down too late to remove
+        hook.run();
+
+        verifyNoMoreInteractions(reportManager);
+    }
+
+    @Test
+    void exitHook_addsAnEntryForTheInnermostContainerThatWasRunningWithoutATest() {
+        TestIdentifier engine = container("[engine:junit-jupiter]", null);
+        TestIdentifier outer = container("[engine:junit-jupiter]/[class:Outer]", "[engine:junit-jupiter]");
+        TestIdentifier inner = container("[engine:junit-jupiter]/[class:Outer]/[nested-class:Inner]",
+            "[engine:junit-jupiter]/[class:Outer]");
+        when(testPlan.getRoots()).thenReturn(Set.of(engine));
+        ctrfListener.executionStarted(engine);
+        ctrfListener.executionStarted(outer);
+        ctrfListener.executionStarted(inner);
+
+        exitHooks.get(0).run();
+
+        // As in Inner's @BeforeAll: it's where the JVM was, and its tests hadn't started
+        var entry = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestInterrupted(entry.capture(), eq("The JVM exited while this container was running"));
+        assertEquals("[engine:junit-jupiter]/[class:Outer]/[nested-class:Inner]", entry.getValue().uniqueId());
+        assertEquals("initializationError", entry.getValue().displayName());
+    }
+
+    @Test
+    void exitHook_addsNoEntryForAnEngine() {
+        TestIdentifier engine = container("[engine:junit-jupiter]", null);
+        when(testPlan.getRoots()).thenReturn(Set.of(engine));
+        ctrfListener.executionStarted(engine);
+
+        // As between two classes: every fork runs the engine, which isn't where the JVM was
+        exitHooks.get(0).run();
+
+        verify(reportManager, never()).onTestInterrupted(any(), any());
+    }
+
+    @Test
+    void exitHook_addsNoEntryForAContainerWithATestRunningBelowIt() {
+        TestIdentifier running = childTest("running()");
+        TestIdentifier finished = childTest("finished()");
+        TestIdentifier theClass = container(TEST_UNIQUE_ID, "[engine:junit-jupiter]");
+        when(testPlan.getRoots()).thenReturn(Set.of());
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.SUCCESSFUL);
+        ctrfListener.executionStarted(theClass);
+        ctrfListener.executionStarted(finished);
+        ctrfListener.executionFinished(finished, testExecutionResult);
+        ctrfListener.executionStarted(running);
+
+        exitHooks.get(0).run();
+
+        verify(reportManager, never()).onTestInterrupted(any(), any());
+    }
+
+    @Test
+    void exitHook_addsAnEntryForAClassWhoseTestsAllFinished() {
+        TestIdentifier finished = childTest("finished()");
+        when(finished.getParentId()).thenReturn(Optional.of(TEST_UNIQUE_ID));
+        TestIdentifier theClass = container(TEST_UNIQUE_ID, "[engine:junit-jupiter]");
+        when(testPlan.getRoots()).thenReturn(Set.of());
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.SUCCESSFUL);
+        ctrfListener.executionStarted(theClass);
+        ctrfListener.executionStarted(finished);
+        ctrfListener.executionFinished(finished, testExecutionResult);
+
+        exitHooks.get(0).run();
+
+        // As in the class's @AfterAll
+        var entry = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestInterrupted(entry.capture(), any());
+        assertEquals("teardownError", entry.getValue().displayName());
+    }
+
+    @Test
+    void exitHook_leavesOutTheTestsOfAClassThatAlreadyFailed() {
+        TestIdentifier engine = mock(TestIdentifier.class);
+        TestIdentifier failedClass = mock(TestIdentifier.class);
+        TestIdentifier testOfTheFailedClass = childTest("neverRunByJUnit()");
+        when(failedClass.isContainer()).thenReturn(true);
+        when(failedClass.getUniqueId()).thenReturn("[class:Failed]");
+        when(failedClass.getDisplayName()).thenReturn("Failed");
+        when(failedClass.getSource()).thenReturn(Optional.of(ClassSource.from(TEST_CLASS_NAME)));
+        when(testPlan.getRoots()).thenReturn(Set.of(engine));
+        when(testPlan.getChildren(engine)).thenReturn(Set.of(failedClass));
+        when(testPlan.getChildren(failedClass)).thenReturn(Set.of(testOfTheFailedClass));
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.FAILED);
+        ctrfListener.executionStarted(failedClass);
+        ctrfListener.executionFinished(failedClass, testExecutionResult);
+
+        exitHooks.get(0).run();
+
+        // As in a run that finishes, JUnit reports only the class's initializationError
+        verify(reportManager, never()).onTestSkipped(any(), any());
+        verify(reportManager).finishTestRunOnExit(runOwner);
+    }
+
+    /**
+     * A test class, or an engine when it has no parent.
+     */
+    private static TestIdentifier container(String uniqueId, String parentId) {
+        TestIdentifier container = mock(TestIdentifier.class);
+        when(container.isContainer()).thenReturn(true);
+        when(container.getUniqueId()).thenReturn(uniqueId);
+        when(container.getParentId()).thenReturn(Optional.ofNullable(parentId));
+        when(container.getDisplayName()).thenReturn(uniqueId);
+        when(container.getTags()).thenReturn(Set.of());
+        when(container.getSource()).thenReturn(parentId == null ? Optional.empty() : Optional.of(ClassSource.from(TEST_CLASS_NAME)));
+        return container;
+    }
+
+    private static TestIdentifier templateMethod(String displayName) {
+        TestIdentifier template = mock(TestIdentifier.class);
+        when(template.isContainer()).thenReturn(true);
+        when(template.getUniqueId()).thenReturn(TEST_UNIQUE_ID + "/[test-template:" + displayName + "]");
+        when(template.getDisplayName()).thenReturn(displayName);
+        when(template.getTags()).thenReturn(Set.of());
+        when(template.getSource()).thenReturn(Optional.of(MethodSource.from(TEST_CLASS_NAME, displayName)));
+        return template;
     }
 
     private static TestIdentifier childTest(String displayName) {

@@ -20,6 +20,7 @@ It reports through `CtrfReportManager`, and has a package-private constructor th
 - The owner is a token that the listener creates for each test plan it runs, compared by identity. Not the `TestPlan` itself: every listener of a launcher sees the same plan, so of two `CtrfListener`s on one launcher both would own the run, and each test would be recorded twice.
 - `startTestRun(owner, generator)` returns false while another owner's run is active. The listener then ignores all its events, so a JUnit run started from inside a test (CB-2) neither ends the outer run nor adds its tests.
 - `finishTestRun(owner)` acts only for the owner. Results recorded while no run is active are dropped.
+- `finishTestRunOnExit(owner)` ends the run when the JVM exits before the test plan finishes (CB-8). The listener adds a shutdown hook for each test plan whose run it owns, and removes it when the plan finishes. The hook reports the plan's tests that never started as skipped, adds an entry as `other` for each container that was running with nothing running below it (`onTestInterrupted`), then calls it: the tests still running become `other` attempts, and the run is written as usual. HP-11 recovers such a container entry too. The listener's callbacks hold a read lock and the hook its write lock, so the hook waits for the callbacks in progress, the run's normal write included, and the callbacks after it record nothing.
 - `startTestRun(String)` and `finishTestRun()` remain, with an owner of their own.
 
 ## What the Singleton Is For
@@ -93,6 +94,7 @@ CtrfJson (root)
 - JUnit FAILED → CTRF "failed"
 - JUnit ABORTED → CTRF "skipped"
 - JUnit SKIPPED → CTRF "skipped"
+- Running when the JVM exited, a test or a container outside any test → CTRF "other" (CB-8)
 
 ## Concurrency Design
 
