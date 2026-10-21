@@ -308,13 +308,23 @@ When the environment is marked unhealthy, the CTRF report includes:
 }
 ```
 
-## Suites
+## Names and Suites
+
+A test's `name` is its display name. A test that a test method creates, such as an invocation of a `@ParameterizedTest`, a repetition of a `@RepeatedTest` or a dynamic test of a `@TestFactory`, also has the method's display name in front, and those of any dynamic containers between them:
+
+| Test | `name` |
+|---|---|
+| invocation of `@ParameterizedTest` `refundsEachAmount(int)` | `refundsEachAmount(int) [1] 1` |
+| repetition of `@RepeatedTest(3)` `retries()` | `retries() repetition 1 of 3` |
+| dynamic test `inner` in the container `group` of `@TestFactory` `factory()` | `factory() group inner` |
+
+CTRF tools often show `name` alone, as in the GitHub test reporter's failed and flaky tables and in Slack, and some track a test's history by its name, so `[1] 1` alone wouldn't say which test it is. A name that already starts with the method's display name as a whole word, from a pattern such as `@ParameterizedTest(name = "{displayName} {index}")`, isn't changed. The `testId` is JUnit's unique ID either way.
 
 Each test's `suite` lists the display names of its containers, outermost first: its class, any `@Nested` classes, and the method of a parameterized, repeated or dynamic test. The engine isn't part of it. A test with no other container gets the engine's name. CTRF viewers group tests by `suite`, as an IDE does.
 
 ```json
 {
-  "name": "[1] 1",
+  "name": "refundsEachAmount(int) [1] 1",
   "suite": ["Payments", "Refunds", "refundsEachAmount(int)"],
   "filePath": "com.example.PaymentsTest$Refunds"
 }

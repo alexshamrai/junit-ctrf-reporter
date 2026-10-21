@@ -187,10 +187,22 @@ class TestDetailsTest {
     }
 
     @Test
+    void fromAdapter_takesTheAdaptersName() {
+        var adapter = mock(TestIdentifierAdapter.class);
+        when(adapter.getUniqueId()).thenReturn("id");
+        when(adapter.getDisplayName()).thenReturn("[1] 1");
+        when(adapter.getName()).thenReturn("add(int) [1] 1");
+        when(adapter.getTags()).thenReturn(Set.of());
+        when(adapter.getSourceLocation()).thenReturn(Optional.empty());
+
+        assertEquals("add(int) [1] 1", TestDetails.fromAdapter(adapter).displayName());
+    }
+
+    @Test
     void fromAdapter_takesTheAdaptersSuite() {
         var adapter = mock(TestIdentifierAdapter.class);
         when(adapter.getUniqueId()).thenReturn("id");
-        when(adapter.getDisplayName()).thenReturn("refundsTheFee()");
+        when(adapter.getName()).thenReturn("refundsTheFee()");
         when(adapter.getTags()).thenReturn(Set.of());
         when(adapter.getSourceLocation()).thenReturn(Optional.empty());
         when(adapter.getSuite()).thenReturn(List.of("Payments", "Refunds"));

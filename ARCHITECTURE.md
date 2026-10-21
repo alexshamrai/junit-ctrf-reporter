@@ -10,7 +10,7 @@ How the JUnit CTRF Reporter is put together: its entry point, how a test's resul
 - A user's own registration on top, by a services file or by hand, is harmless: `ServiceLoader` loads a class once, and of two instances on one launcher only the first owns the run
 - Sees classes skipped as a whole, failed containers of every kind, other engines (Vintage) and dynamic tests
 - JUnit's launcher catches and logs exceptions from listener callbacks, so the listener needs no guard of its own
-- `TestIdentifierAdapter` (`adapter/`) is its view of a test: identity, tags, source and `suite`, from the `TestIdentifier` and its `TestPlan`
+- `TestIdentifierAdapter` (`adapter/`) is its view of a test: identity, `name`, tags, source and `suite`, from the `TestIdentifier` and its `TestPlan`
 
 It reports through `CtrfReportManager`, and has a package-private constructor that takes the manager, for tests.
 
@@ -137,7 +137,7 @@ test {
 
 ```
 src/main/java/io/github/alexshamrai/
-├── adapter/                       # TestIdentifierAdapter: the listener's view of a test, with its suite
+├── adapter/                       # TestIdentifierAdapter: the listener's view of a test, with its name and suite
 ├── launcher/
 │   └── CtrfListener.java          # JUnit Platform Listener entry point
 ├── ctrf/model/                    # CTRF model classes (CtrfJson, Test, Summary, etc.)

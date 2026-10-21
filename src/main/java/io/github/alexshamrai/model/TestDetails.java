@@ -17,7 +17,7 @@ import java.util.Set;
  * @param tags        the test's tags
  * @param filePath    the test's class, or {@code null}
  * @param uniqueId    the JUnit unique ID, which becomes the report's {@code testId}
- * @param displayName the test's display name, which becomes the report's {@code name}
+ * @param displayName the report's {@code name}: the test's display name, after the test method that created it (MP-13)
  * @param suite       the display names of the test's containers, outermost first; empty if there are none
  */
 public record TestDetails(
@@ -43,7 +43,7 @@ public record TestDetails(
      * @param tags        the test's tags
      * @param filePath    the test's class, or {@code null}
      * @param uniqueId    the JUnit unique ID
-     * @param displayName the test's display name
+     * @param displayName the report's {@code name}
      */
     public TestDetails(long startTime, Set<String> tags, String filePath, String uniqueId, String displayName) {
         this(startTime, tags, filePath, uniqueId, displayName, List.of());
@@ -52,7 +52,7 @@ public record TestDetails(
     /**
      * Creates TestDetails from a test context adapter.
      * <p>
-     * This static factory method extracts all relevant test metadata (unique ID, display name,
+     * This static factory method extracts all relevant test metadata (unique ID, name,
      * tags, source location, suite) from the adapter and constructs a TestDetails record with the
      * current timestamp as the start time.
      *
@@ -65,7 +65,7 @@ public record TestDetails(
             adapter.getTags(),
             adapter.getSourceLocation().orElse(null),
             adapter.getUniqueId(),
-            adapter.getDisplayName(),
+            adapter.getName(),
             adapter.getSuite()
         );
     }
