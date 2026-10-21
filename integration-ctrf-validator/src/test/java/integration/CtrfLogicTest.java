@@ -293,6 +293,15 @@ public class CtrfLogicTest extends BaseIntegrationTest {
             .containsExactly("Payments", "Refunds", "refundsEachAmount(int)");
     }
 
+    @Test
+    void verifyTestsThatATestMethodCreatesAreNamedAfterIt() {
+        var template = "[nested-class:Refunds]/[test-template:refundsEachAmount(int)]/[test-template-invocation:#";
+        assertThat(testWithId("PaymentsTest", template + "1]").getName()).isEqualTo("refundsEachAmount(int) [1] 1");
+        assertThat(testWithId("PaymentsTest", template + "2]").getName()).isEqualTo("refundsEachAmount(int) [2] 2");
+        assertThat(testWithId("PaymentsTest", "[nested-class:Refunds]/[method:refundsTheFee()]").getName())
+            .isEqualTo("refundsTheFee()");
+    }
+
     private io.github.alexshamrai.ctrf.model.Test testWithId(String fakeClass, String segment) {
         var testId = "[engine:junit-jupiter]/[class:" + FAKE_PACKAGE + fakeClass + "]" + (segment == null ? "" : "/" + segment);
         var matches = report.getResults().getTests().stream()

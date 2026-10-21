@@ -364,18 +364,21 @@ public class CtrfListener implements TestExecutionListener {
      * <p>
      * A class is named "initializationError" before any of its tests or nested classes started or were skipped (for
      * example in {@code @BeforeAll}), matching JUnit's XML reporter, and "teardownError" afterwards (for example in
-     * {@code @AfterAll}). Any other container keeps its display name.
+     * {@code @AfterAll}). Any other container is named as a test would be: by its display name, after the test method
+     * that created it, if any (MP-13).
      * Every entry is identified by the container's own unique ID.
      */
     private TestDetails containerEntry(TestIdentifier container, Long startTime, boolean childrenStarted) {
         boolean isClass = container.getSource().filter(ClassSource.class::isInstance).isPresent();
-        String name = container.getDisplayName();
+        var adapter = new TestIdentifierAdapter(container, testPlan);
+        String name;
         if (isClass) {
             name = childrenStarted ? TEARDOWN_ERROR : INITIALIZATION_ERROR;
+        } else {
+            name = adapter.getName();
         }
         String uniqueId = container.getUniqueId();
         // A class error is grouped under its class, with the class's tests; any other container like a test
-        var adapter = new TestIdentifierAdapter(container, testPlan);
         List<String> suite = isClass ? adapter.getSuiteOfChildren() : adapter.getSuite();
 
         String className = container.getSource()

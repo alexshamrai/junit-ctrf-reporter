@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 
 /**
  * The listener's view of a test: what the report needs from a JUnit Platform {@link TestIdentifier}, and, with the
- * {@link TestPlan} it belongs to, its {@code suite}.
+ * {@link TestPlan} it belongs to, its {@code name} and {@code suite}.
  */
 public final class TestIdentifierAdapter {
 
@@ -57,6 +57,44 @@ public final class TestIdentifierAdapter {
      */
     public String getDisplayName() {
         return identifier.getDisplayName();
+    }
+
+    /**
+     * Returns the test's name in the report (MP-13). A test that a test method creates, such as a
+     * {@code @ParameterizedTest}'s invocation, a {@code @RepeatedTest}'s repetition or a {@code @TestFactory}'s dynamic
+     * test, is named after the method and any containers between them: {@code add(int, int) [1] 1, 2}, or
+     * {@code factory() group test} for a dynamic test in a dynamic container. The method is the outermost container
+     * above with a method source. A name that already starts with the method's display name as a whole word, as
+     * JUnit's {@code {displayName}} placeholder makes it, doesn't repeat it. Any other test keeps its display name.
+     *
+     * @return the name; the display name without a plan, or when the plan can't place the identifier
+     */
+    public String getName() {
+        String name = getDisplayName();
+        if (plan == null) {
+            return name;
+        }
+        try {
+            List<TestIdentifier> above = new ArrayList<>();
+            int outermostMethod = -1;
+            Optional<TestIdentifier> parent = plan.getParent(identifier);
+            while (parent.isPresent()) {
+                above.add(parent.get());
+                if (isTestMethod(parent.get())) {
+                    outermostMethod = above.size() - 1;
+                }
+                parent = plan.getParent(parent.get());
+            }
+            for (int i = 0; i <= outermostMethod; i++) {
+                String prefix = above.get(i).getDisplayName();
+                if (i < outermostMethod || !startsWithWord(name, prefix)) {
+                    name = prefix + " " + name;
+                }
+            }
+            return name;
+        } catch (RuntimeException e) {
+            return getDisplayName();
+        }
     }
 
     /**
@@ -151,6 +189,23 @@ public final class TestIdentifierAdapter {
         List<String> suite = new ArrayList<>(getContainerNames());
         suite.add(getDisplayName());
         return suite;
+    }
+
+    // Whether the name starts with the prefix, and a word doesn't go on across the end of the prefix
+    private static boolean startsWithWord(String name, String prefix) {
+        if (!name.startsWith(prefix)) {
+            return false;
+        }
+        if (name.length() == prefix.length() || prefix.isEmpty()) {
+            return true;
+        }
+        return !Character.isLetterOrDigit(prefix.charAt(prefix.length() - 1))
+            || !Character.isLetterOrDigit(name.charAt(prefix.length()));
+    }
+
+    // A test method that creates tests while it runs: a container with a method source
+    private static boolean isTestMethod(TestIdentifier identifier) {
+        return identifier.isContainer() && identifier.getSource().filter(MethodSource.class::isInstance).isPresent();
     }
 
     // Every engine is left out of a suite, also one that the suite engine runs inside a @Suite class

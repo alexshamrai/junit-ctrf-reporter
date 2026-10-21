@@ -355,6 +355,25 @@ public class CtrfListenerTest {
     }
 
     @Test
+    void executionFinished_namesAFailedDynamicContainerAfterItsTestFactory() {
+        var cause = new IllegalStateException("cannot create the group's tests");
+        TestIdentifier factory = templateMethod("factory()");
+        when(testIdentifier.isTest()).thenReturn(false);
+        when(testIdentifier.isContainer()).thenReturn(true);
+        when(testIdentifier.getDisplayName()).thenReturn("group");
+        when(testIdentifier.getSource()).thenReturn(Optional.of(MethodSource.from(TEST_CLASS_NAME, "factory")));
+        when(testPlan.getParent(testIdentifier)).thenReturn(Optional.of(factory));
+        when(testExecutionResult.getStatus()).thenReturn(TestExecutionResult.Status.FAILED);
+        when(testExecutionResult.getThrowable()).thenReturn(Optional.of(cause));
+
+        ctrfListener.executionFinished(testIdentifier, testExecutionResult);
+
+        var detailsCaptor = ArgumentCaptor.forClass(TestDetails.class);
+        verify(reportManager).onTestStart(detailsCaptor.capture());
+        assertEquals("factory() group", detailsCaptor.getValue().displayName());
+    }
+
+    @Test
     void executionFinished_shouldNameClassFailureAfterItsTestsStartedTeardownError() {
         var cause = new IllegalStateException("cleanup failed");
         TestIdentifier childTest = mock(TestIdentifier.class);
