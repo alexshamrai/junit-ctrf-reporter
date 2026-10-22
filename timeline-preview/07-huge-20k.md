@@ -1,6 +1,6 @@
 ### Timeline
 
-**20000** tests and **103** earlier attempts on **16** threads in **3m 16s** · busy **95%** of the time · up to **16** at once<br>Slowest: `suite 1 test 667` (1.5s on `ForkJoinPool-1-worker-2`) · Last to finish: `suite 7 test 1249` at 3:16.193 on `ForkJoinPool-1-worker-8`
+**20000** tests (and **103** runs before a retry) on **16** threads in **3m 16s** · busy **95%** of the time · up to **16** at once<br>Slowest: `suite 1 test 667` (1.5s on `ForkJoinPool-1-worker-2`) · Last to finish: `suite 7 test 1249` at 3:16.193 on `ForkJoinPool-1-worker-8`
 
 ```mermaid
 ---
@@ -28,7 +28,7 @@ config:
 ---
 gantt
 accTitle: Test execution timeline
-accDescr: 20000 tests and 103 earlier attempts on 16 threads over 3m 16s, 186 failed. The slowest test is suite 1 test 667 (1.5s on ForkJoinPool-1-worker-2). The last to finish is suite 7 test 1249 on ForkJoinPool-1-worker-8, at 3:16.193.
+accDescr: 20000 tests and 103 runs before a retry on 16 threads over 3m 16s, 186 failed. The slowest test is suite 1 test 667 (1.5s on ForkJoinPool-1-worker-2). The last to finish is suite 7 test 1249 on ForkJoinPool-1-worker-8, at 3:16.193.
 dateFormat D HH:mm:ss.SSS
 axisFormat %-M:%S
 todayMarker off
@@ -605,7 +605,7 @@ section ​ForkJoinPool-1-worker-16
 <sub>🟩 passed · 🟥 failed · 🟨 failed, then retried (dashed) · ♦️ failed too fast for a bar · 0:00 = 2026-10-21 08:16:56.000 UTC</sub>
 <br><sub>Tests too short to tell apart are merged into one bar.</sub>
 
-| Thread | Tests | Earlier attempts | Failed | Busy | Idle | Utilization |
+| Thread | Tests | Runs before a retry | Failed | Busy | Idle | Utilization |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | ForkJoinPool-1-worker-1 | 1250 | 4 | 13 | 3m 6s | 9.3s | 95% |
 | ForkJoinPool-1-worker-2 | 1250 | 5 | 9 | 3m 6s | 10.2s | 95% |

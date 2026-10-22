@@ -1,6 +1,6 @@
 ### Timeline
 
-**16** tests and **1** earlier attempt on **4** threads in **34.2s** · busy **70%** of the time · up to **4** at once<br>Slowest: `should generate the sales report` (26.0s on `worker-2`) · Last to finish: `should export orders as CSV` at 0:34.200 on `worker-0`
+**16** tests (and **1** run before a retry) on **4** threads in **34.2s** · busy **70%** of the time · up to **4** at once<br>Slowest: `should generate the sales report` (26.0s on `worker-2`) · Last to finish: `should export orders as CSV` at 0:34.200 on `worker-0`
 
 ```mermaid
 ---
@@ -28,7 +28,7 @@ config:
 ---
 gantt
 accTitle: Test execution timeline
-accDescr: 16 tests and 1 earlier attempt on 4 threads over 34.2s, 2 failed. The slowest test is should generate the sales report (26.0s on worker-2). The last to finish is should export orders as CSV on worker-0, at 0:34.200.
+accDescr: 16 tests and 1 run before a retry on 4 threads over 34.2s, 2 failed. The slowest test is should generate the sales report (26.0s on worker-2). The last to finish is should export orders as CSV on worker-0, at 0:34.200.
 dateFormat D HH:mm:ss.SSS
 axisFormat %-M:%S
 todayMarker off
@@ -61,7 +61,7 @@ section ​worker-3
 <br><sub>1 skipped or pending test is not shown.</sub>
 <br><sub>A number on a bar is the row with that number (#) in the test timings below.</sub>
 
-| Thread | Tests | Earlier attempts | Failed | Busy | Idle | Utilization |
+| Thread | Tests | Runs before a retry | Failed | Busy | Idle | Utilization |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | worker-0 | 5 | 1 | 0 | 33.7s | 500ms | 99% |
 | worker-1 | 5 | 0 | 2 | 25.1s | 9.1s | 73% |

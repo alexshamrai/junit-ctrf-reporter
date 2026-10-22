@@ -1,6 +1,6 @@
 ### Timeline
 
-**60** tests and **20** earlier attempts on **3** threads in **1m 10s** · busy **66%** of the time · up to **3** at once<br>Slowest: `shard 1 test 19` (2.1s on `shard-1`) · Last to finish: `shard 3 test 19` at 2:00:35.410 on `shard-3`
+**60** tests (and **20** runs before a retry) on **3** threads in **1m 10s** · busy **66%** of the time · up to **3** at once<br>Slowest: `shard 1 test 19` (2.1s on `shard-1`) · Last to finish: `shard 3 test 19` at 2:00:35.410 on `shard-3`
 
 ```mermaid
 ---
@@ -28,7 +28,7 @@ config:
 ---
 gantt
 accTitle: Test execution timeline
-accDescr: 60 tests and 20 earlier attempts on 3 threads over 1m 10s, 0 failed. The slowest test is shard 1 test 19 (2.1s on shard-1). The last to finish is shard 3 test 19 on shard-3, at 2:00:35.410.
+accDescr: 60 tests and 20 runs before a retry on 3 threads over 1m 10s, 0 failed. The slowest test is shard 1 test 19 (2.1s on shard-1). The last to finish is shard 3 test 19 on shard-3, at 2:00:35.410.
 dateFormat D HH:mm:ss.SSS
 axisFormat %-M:%S
 todayMarker off
@@ -121,11 +121,11 @@ section ​shard-3
 ```
 
 <sub>🟩 passed · 🟨 failed, then retried (dashed) · 0:00 = 2026-10-21 08:16:56.000 UTC</sub>
-<br><sub>20 earlier results of tests that ran again later in the report are drawn as earlier attempts.</sub>
+<br><sub>20 earlier results of tests that ran again later in the report are drawn as runs before a retry.</sub>
 <br><sub>No test ran for 1h 59m, so that stretch is cut out of the chart at the gray line; the tables show real times.</sub>
 <br><sub>A number on a bar is the row with that number (#) in the test timings below.</sub>
 
-| Thread | Tests | Earlier attempts | Failed | Busy | Idle | Utilization |
+| Thread | Tests | Runs before a retry | Failed | Busy | Idle | Utilization |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | shard-1 | 20 | 0 | 0 | 35.0s | 35.8s | 49% |
 | shard-2 | 20 | 0 | 0 | 35.0s | 35.8s | 49% |

@@ -1,6 +1,6 @@
 ### Timeline
 
-**630** tests and **6** earlier attempts on **1** thread in **3m 49s** · busy **24%** of the time<br>Slowest: `Two forks of 50,000 tests each, merged into one report, fit the heap` (2.5s on `Test worker`) · Last to finish: `shouldHandleEmptyTestList()` at 3:22:00.806 on `Test worker`
+**630** tests (and **6** runs before a retry) on **1** thread in **3m 49s** · busy **24%** of the time<br>Slowest: `Two forks of 50,000 tests each, merged into one report, fit the heap` (2.5s on `Test worker`) · Last to finish: `shouldHandleEmptyTestList()` at 3:22:00.806 on `Test worker`
 
 ```mermaid
 ---
@@ -28,7 +28,7 @@ config:
 ---
 gantt
 accTitle: Test execution timeline
-accDescr: 630 tests and 6 earlier attempts on 1 thread over 3m 49s, 0 failed. The slowest test is Two forks of 50,000 tests each, merged into one report, fit the heap (2.5s on Test worker). The last to finish is shouldHandleEmptyTestList() on Test worker, at 3:22:00.806.
+accDescr: 630 tests and 6 runs before a retry on 1 thread over 3m 49s, 0 failed. The slowest test is Two forks of 50,000 tests each, merged into one report, fit the heap (2.5s on Test worker). The last to finish is shouldHandleEmptyTestList() on Test worker, at 3:22:00.806.
 dateFormat D HH:mm:ss.SSS
 axisFormat %-M:%S
 todayMarker off
@@ -52,7 +52,7 @@ section ​Test worker
 <br><sub>Tests too short to tell apart are merged into one bar.</sub>
 
 <details>
-<summary>Test timings (87 of 636: failed attempts and the slowest)</summary>
+<summary>Test timings (87 of 636: retried failures and the slowest)</summary>
 
 | Start | Duration | Thread | Test | Status |
 | ---: | ---: | :--- | :--- | :--- |

@@ -1,6 +1,6 @@
 ### Timeline
 
-**4** tests and **1** earlier attempt on **1** lane in **12.0s** · busy **100%** of the time<br>Slowest: `TestOther` (4.0s) · Last to finish: `TestParse/broken` at 0:12.000
+**4** tests (and **1** run before a retry) on **1** lane in **12.0s** · busy **100%** of the time<br>Slowest: `TestOther` (4.0s) · Last to finish: `TestParse/broken` at 0:12.000
 
 ```mermaid
 ---
@@ -28,7 +28,7 @@ config:
 ---
 gantt
 accTitle: Test execution timeline
-accDescr: 4 tests and 1 earlier attempt on 1 lane over 12.0s, 1 failed. The slowest test is TestOther (4.0s). The last to finish is TestParse/broken, at 0:12.000.
+accDescr: 4 tests and 1 run before a retry on 1 lane over 12.0s, 1 failed. The slowest test is TestOther (4.0s). The last to finish is TestParse/broken, at 0:12.000.
 dateFormat D HH:mm:ss.SSS
 axisFormat %-M:%S
 todayMarker off

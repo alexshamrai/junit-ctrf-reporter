@@ -1,6 +1,6 @@
 ### Timeline
 
-**11** tests and **1** earlier attempt on **3** threads in **28.2s** · busy **89%** of the time · up to **3** at once<br>Slowest and last to finish: `Long running report export` (26.0s on `worker-3`, until 0:28.200)
+**11** tests (and **1** run before a retry) on **3** threads in **28.2s** · busy **89%** of the time · up to **3** at once<br>Slowest and last to finish: `Long running report export` (26.0s on `worker-3`, until 0:28.200)
 
 ```mermaid
 ---
@@ -28,7 +28,7 @@ config:
 ---
 gantt
 accTitle: Test execution timeline
-accDescr: 11 tests and 1 earlier attempt on 3 threads over 28.2s, 2 failed. The slowest test is Long running report export (26.0s on worker-3). The last to finish is Long running report export on worker-3, at 0:28.200.
+accDescr: 11 tests and 1 run before a retry on 3 threads over 28.2s, 2 failed. The slowest test is Long running report export (26.0s on worker-3). The last to finish is Long running report export on worker-3, at 0:28.200.
 dateFormat D HH:mm:ss.SSS
 axisFormat %-M:%S
 todayMarker off
@@ -55,7 +55,7 @@ section ​worker-3
 <br><sub>1 skipped or pending test is not shown.</sub>
 <br><sub>A number on a bar is the row with that number (#) in the test timings below.</sub>
 
-| Thread | Tests | Earlier attempts | Failed | Busy | Idle | Utilization |
+| Thread | Tests | Runs before a retry | Failed | Busy | Idle | Utilization |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | worker-1 | 4 | 1 | 0 | 24.9s | 3.3s | 88% |
 | worker-2 | 4 | 0 | 2 | 22.7s | 5.5s | 80% |
