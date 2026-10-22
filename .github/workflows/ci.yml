@@ -43,3 +43,9 @@ jobs:
           failed-report: true
           timeline-report: true
         if: always()
+      - name: Upload CTRF report
+        uses: actions/upload-artifact@v7
+        with:
+          name: ctrf-report-ci
+          path: ctrf-report.json
+        if: always()
