@@ -35,8 +35,8 @@ todayMarker off
 section ​worker-1
 ​ :16 00:00:00.000, 0ms
 ​Login with valid cr… :16 00:00:00.000, 4200ms
-​ :active, 16 00:00:04.300, 2100ms
-​ :16 00:00:06.450, 1500ms
+​1 :active, 16 00:00:04.300, 2100ms
+​2 :16 00:00:06.450, 1500ms
 ​Checkout∶ pay with card :16 00:00:08.000, 14000ms
 ​Search return… :16 00:00:22.100, 3100ms
 ​ :16 00:00:28.200, 0ms
@@ -46,13 +46,14 @@ section ​worker-2
 ​Profile page loads :16 00:00:10.284, 4866ms
 ​Upload avatar :crit, 16 00:00:15.300, 7700ms
 section ​worker-3
-​ :16 00:00:00.000, 1200ms
-​ :16 00:00:01.300, 800ms
+​3 :16 00:00:00.000, 1200ms
+​4 :16 00:00:01.300, 800ms
 ​Long running report export :16 00:00:02.200, 26000ms
 ```
 
 <sub>🟩 passed · 🟥 failed · 🟨 failed, then retried (dashed) · ♦️ failed too fast for a bar · 0:00 = 2026-10-21 08:16:56.000 UTC</sub>
 <br><sub>1 skipped or pending test is not shown.</sub>
+<br><sub>A number on a bar is the row with that number (#) in the test timings below.</sub>
 
 | Thread | Tests | Earlier attempts | Failed | Busy | Idle | Utilization |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -63,19 +64,19 @@ section ​worker-3
 <details>
 <summary>Test timings (12)</summary>
 
-| Start | Duration | Thread | Test | Status |
-| ---: | ---: | :--- | :--- | :--- |
-| 0:00.000 | 4.2s | worker-1 | Login with valid credentials | ✅ passed |
-| 0:04.300 | 2.1s | worker-1 | Login retry (attempt 1) | ❌ failed |
-| 0:06.450 | 1.5s | worker-1 | Login retry | ✅ passed |
-| 0:08.000 | 14.0s | worker-1 | Checkout: pay with card | ✅ passed |
-| 0:22.100 | 3.1s | worker-1 | Search returns results | ✅ passed |
-| 0:00.000 | 9.8s | worker-2 | Signup flow | ✅ passed |
-| 0:09.900 | 0ms | worker-2 | Init fails fast | ❌ failed |
-| 0:09.950 | 5.2s | worker-2 | Profile page loads | ✅ passed |
-| 0:15.300 | 7.7s | worker-2 | Upload avatar | ❌ failed |
-| 0:00.000 | 1.2s | worker-3 | Cart persists after reload | ✅ passed |
-| 0:01.300 | 800ms | worker-3 | Cart badge count | ✅ passed |
-| 0:02.200 | 26.0s | worker-3 | Long running report export | ✅ passed |
+| # | Start | Duration | Thread | Test | Status |
+| ---: | ---: | ---: | :--- | :--- | :--- |
+|  | 0:00.000 | 4.2s | worker-1 | Login with valid credentials | ✅ passed |
+| 1 | 0:04.300 | 2.1s | worker-1 | Login retry (attempt 1) | ❌ failed |
+| 2 | 0:06.450 | 1.5s | worker-1 | Login retry | ✅ passed |
+|  | 0:08.000 | 14.0s | worker-1 | Checkout: pay with card | ✅ passed |
+|  | 0:22.100 | 3.1s | worker-1 | Search returns results | ✅ passed |
+|  | 0:00.000 | 9.8s | worker-2 | Signup flow | ✅ passed |
+|  | 0:09.900 | 0ms | worker-2 | Init fails fast | ❌ failed |
+|  | 0:09.950 | 5.2s | worker-2 | Profile page loads | ✅ passed |
+|  | 0:15.300 | 7.7s | worker-2 | Upload avatar | ❌ failed |
+| 3 | 0:00.000 | 1.2s | worker-3 | Cart persists after reload | ✅ passed |
+| 4 | 0:01.300 | 800ms | worker-3 | Cart badge count | ✅ passed |
+|  | 0:02.200 | 26.0s | worker-3 | Long running report export | ✅ passed |
 
 </details>

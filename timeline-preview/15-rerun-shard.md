@@ -34,26 +34,26 @@ axisFormat %-M:%S
 todayMarker off
 section ​shard-1
 ​ :16 00:00:00.000, 0ms
-​ :16 00:00:00.000, 1400ms
-​ :16 00:00:01.420, 1437ms
-​ :16 00:00:02.877, 1474ms
-​ :16 00:00:04.371, 1511ms
-​ :16 00:00:05.902, 1548ms
-​ :16 00:00:07.470, 1585ms
-​ :16 00:00:09.075, 1622ms
-​ :16 00:00:10.717, 1659ms
-​ :16 00:00:12.396, 1696ms
+​1 :16 00:00:00.000, 1400ms
+​2 :16 00:00:01.420, 1437ms
+​3 :16 00:00:02.877, 1474ms
+​4 :16 00:00:04.371, 1511ms
+​5 :16 00:00:05.902, 1548ms
+​6 :16 00:00:07.470, 1585ms
+​7 :16 00:00:09.075, 1622ms
+​8 :16 00:00:10.717, 1659ms
+​9 :16 00:00:12.396, 1696ms
 ​ :16 00:00:14.112, 1733ms
 ​ :16 00:00:15.865, 1770ms
 ​ :16 00:00:17.655, 1807ms
 ​ :16 00:00:19.482, 1844ms
-​ :16 00:00:21.346, 1881ms
-​ :16 00:00:23.247, 1918ms
-​ :16 00:00:25.185, 1955ms
-​ :16 00:00:27.160, 1992ms
-​ :16 00:00:29.172, 2029ms
-​ :16 00:00:31.221, 2066ms
-​ :16 00:00:33.307, 2103ms
+​10 :16 00:00:21.346, 1881ms
+​11 :16 00:00:23.247, 1918ms
+​12 :16 00:00:25.185, 1955ms
+​13 :16 00:00:27.160, 1992ms
+​14 :16 00:00:29.172, 2029ms
+​15 :16 00:00:31.221, 2066ms
+​16 :16 00:00:33.307, 2103ms
 ​ :16 00:01:12.945, 0ms
 ​ :vert, 16 00:00:36.473, 0ms
 section ​shard-2
@@ -70,13 +70,13 @@ section ​shard-2
 ​ :16 00:00:15.865, 1770ms
 ​ :16 00:00:17.655, 1807ms
 ​ :16 00:00:19.482, 1844ms
-​ :16 00:00:21.346, 1881ms
-​ :16 00:00:23.247, 1918ms
-​ :16 00:00:25.185, 1955ms
-​ :16 00:00:27.160, 1992ms
-​ :16 00:00:29.172, 2029ms
-​ :16 00:00:31.221, 2066ms
-​ :16 00:00:33.307, 2103ms
+​17 :16 00:00:21.346, 1881ms
+​18 :16 00:00:23.247, 1918ms
+​19 :16 00:00:25.185, 1955ms
+​20 :16 00:00:27.160, 1992ms
+​21 :16 00:00:29.172, 2029ms
+​22 :16 00:00:31.221, 2066ms
+​23 :16 00:00:33.307, 2103ms
 section ​shard-3
 ​ :16 00:00:00.000, 1400ms
 ​ :16 00:00:01.420, 1437ms
@@ -91,13 +91,13 @@ section ​shard-3
 ​ :16 00:00:15.865, 1770ms
 ​ :16 00:00:17.655, 1807ms
 ​ :16 00:00:19.482, 1844ms
-​ :16 00:00:21.346, 1881ms
-​ :16 00:00:23.247, 1918ms
-​ :16 00:00:25.185, 1955ms
-​ :16 00:00:27.160, 1992ms
-​ :16 00:00:29.172, 2029ms
-​ :16 00:00:31.221, 2066ms
-​ :16 00:00:33.307, 2103ms
+​24 :16 00:00:21.346, 1881ms
+​25 :16 00:00:23.247, 1918ms
+​26 :16 00:00:25.185, 1955ms
+​27 :16 00:00:27.160, 1992ms
+​28 :16 00:00:29.172, 2029ms
+​29 :16 00:00:31.221, 2066ms
+​30 :16 00:00:33.307, 2103ms
 ​ :16 00:00:37.535, 1400ms
 ​ :16 00:00:38.955, 1437ms
 ​ :16 00:00:40.412, 1474ms
@@ -111,18 +111,19 @@ section ​shard-3
 ​ :16 00:00:53.400, 1770ms
 ​ :16 00:00:55.190, 1807ms
 ​ :16 00:00:57.017, 1844ms
-​ :16 00:00:58.881, 1881ms
-​ :16 00:01:00.782, 1918ms
-​ :16 00:01:02.720, 1955ms
-​ :16 00:01:04.695, 1992ms
-​ :16 00:01:06.707, 2029ms
-​ :16 00:01:08.756, 2066ms
-​ :16 00:01:10.842, 2103ms
+​31 :16 00:00:58.881, 1881ms
+​32 :16 00:01:00.782, 1918ms
+​33 :16 00:01:02.720, 1955ms
+​34 :16 00:01:04.695, 1992ms
+​35 :16 00:01:06.707, 2029ms
+​36 :16 00:01:08.756, 2066ms
+​37 :16 00:01:10.842, 2103ms
 ```
 
 <sub>🟩 passed · 🟨 failed, then retried (dashed) · 0:00 = 2026-10-21 08:16:56.000 UTC</sub>
 <br><sub>20 earlier results of tests that ran again later in the report are drawn as earlier attempts.</sub>
 <br><sub>No test ran for 1h 59m, so that stretch is cut out of the chart at the gray line; the tables show real times.</sub>
+<br><sub>A number on a bar is the row with that number (#) in the test timings below.</sub>
 
 | Thread | Tests | Earlier attempts | Failed | Busy | Idle | Utilization |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -133,87 +134,87 @@ section ​shard-3
 <details>
 <summary>Test timings (80)</summary>
 
-| Start | Duration | Thread | Test | Status |
-| ---: | ---: | :--- | :--- | :--- |
-| 0:00:00.000 | 1.4s | shard-1 | shard 1 test 0 | ✅ passed |
-| 0:00:01.420 | 1.4s | shard-1 | shard 1 test 1 | ✅ passed |
-| 0:00:02.877 | 1.5s | shard-1 | shard 1 test 2 | ✅ passed |
-| 0:00:04.371 | 1.5s | shard-1 | shard 1 test 3 | ✅ passed |
-| 0:00:05.902 | 1.5s | shard-1 | shard 1 test 4 | ✅ passed |
-| 0:00:07.470 | 1.6s | shard-1 | shard 1 test 5 | ✅ passed |
-| 0:00:09.075 | 1.6s | shard-1 | shard 1 test 6 | ✅ passed |
-| 0:00:10.717 | 1.7s | shard-1 | shard 1 test 7 | ✅ passed |
-| 0:00:12.396 | 1.7s | shard-1 | shard 1 test 8 | ✅ passed |
-| 0:00:14.112 | 1.7s | shard-1 | shard 1 test 9 | ✅ passed |
-| 0:00:15.865 | 1.8s | shard-1 | shard 1 test 10 | ✅ passed |
-| 0:00:17.655 | 1.8s | shard-1 | shard 1 test 11 | ✅ passed |
-| 0:00:19.482 | 1.8s | shard-1 | shard 1 test 12 | ✅ passed |
-| 0:00:21.346 | 1.9s | shard-1 | shard 1 test 13 | ✅ passed |
-| 0:00:23.247 | 1.9s | shard-1 | shard 1 test 14 | ✅ passed |
-| 0:00:25.185 | 2.0s | shard-1 | shard 1 test 15 | ✅ passed |
-| 0:00:27.160 | 2.0s | shard-1 | shard 1 test 16 | ✅ passed |
-| 0:00:29.172 | 2.0s | shard-1 | shard 1 test 17 | ✅ passed |
-| 0:00:31.221 | 2.1s | shard-1 | shard 1 test 18 | ✅ passed |
-| 0:00:33.307 | 2.1s | shard-1 | shard 1 test 19 | ✅ passed |
-| 0:00:00.000 | 1.4s | shard-2 | shard 2 test 0 | ✅ passed |
-| 0:00:01.420 | 1.4s | shard-2 | shard 2 test 1 | ✅ passed |
-| 0:00:02.877 | 1.5s | shard-2 | shard 2 test 2 | ✅ passed |
-| 0:00:04.371 | 1.5s | shard-2 | shard 2 test 3 | ✅ passed |
-| 0:00:05.902 | 1.5s | shard-2 | shard 2 test 4 | ✅ passed |
-| 0:00:07.470 | 1.6s | shard-2 | shard 2 test 5 | ✅ passed |
-| 0:00:09.075 | 1.6s | shard-2 | shard 2 test 6 | ✅ passed |
-| 0:00:10.717 | 1.7s | shard-2 | shard 2 test 7 | ✅ passed |
-| 0:00:12.396 | 1.7s | shard-2 | shard 2 test 8 | ✅ passed |
-| 0:00:14.112 | 1.7s | shard-2 | shard 2 test 9 | ✅ passed |
-| 0:00:15.865 | 1.8s | shard-2 | shard 2 test 10 | ✅ passed |
-| 0:00:17.655 | 1.8s | shard-2 | shard 2 test 11 | ✅ passed |
-| 0:00:19.482 | 1.8s | shard-2 | shard 2 test 12 | ✅ passed |
-| 0:00:21.346 | 1.9s | shard-2 | shard 2 test 13 | ✅ passed |
-| 0:00:23.247 | 1.9s | shard-2 | shard 2 test 14 | ✅ passed |
-| 0:00:25.185 | 2.0s | shard-2 | shard 2 test 15 | ✅ passed |
-| 0:00:27.160 | 2.0s | shard-2 | shard 2 test 16 | ✅ passed |
-| 0:00:29.172 | 2.0s | shard-2 | shard 2 test 17 | ✅ passed |
-| 0:00:31.221 | 2.1s | shard-2 | shard 2 test 18 | ✅ passed |
-| 0:00:33.307 | 2.1s | shard-2 | shard 2 test 19 | ✅ passed |
-| 0:00:00.000 | 1.4s | shard-3 | shard 3 test 0 (earlier run) | ✅ passed |
-| 0:00:01.420 | 1.4s | shard-3 | shard 3 test 1 (earlier run) | ✅ passed |
-| 0:00:02.877 | 1.5s | shard-3 | shard 3 test 2 (earlier run) | ✅ passed |
-| 0:00:04.371 | 1.5s | shard-3 | shard 3 test 3 (earlier run) | ✅ passed |
-| 0:00:05.902 | 1.5s | shard-3 | shard 3 test 4 (earlier run) | ✅ passed |
-| 0:00:07.470 | 1.6s | shard-3 | shard 3 test 5 (earlier run) | ✅ passed |
-| 0:00:09.075 | 1.6s | shard-3 | shard 3 test 6 (earlier run) | ✅ passed |
-| 0:00:10.717 | 1.7s | shard-3 | checkout fails (earlier run) | ❌ failed |
-| 0:00:12.396 | 1.7s | shard-3 | shard 3 test 8 (earlier run) | ✅ passed |
-| 0:00:14.112 | 1.7s | shard-3 | shard 3 test 9 (earlier run) | ✅ passed |
-| 0:00:15.865 | 1.8s | shard-3 | shard 3 test 10 (earlier run) | ✅ passed |
-| 0:00:17.655 | 1.8s | shard-3 | shard 3 test 11 (earlier run) | ✅ passed |
-| 0:00:19.482 | 1.8s | shard-3 | shard 3 test 12 (earlier run) | ✅ passed |
-| 0:00:21.346 | 1.9s | shard-3 | shard 3 test 13 (earlier run) | ✅ passed |
-| 0:00:23.247 | 1.9s | shard-3 | shard 3 test 14 (earlier run) | ✅ passed |
-| 0:00:25.185 | 2.0s | shard-3 | shard 3 test 15 (earlier run) | ✅ passed |
-| 0:00:27.160 | 2.0s | shard-3 | shard 3 test 16 (earlier run) | ✅ passed |
-| 0:00:29.172 | 2.0s | shard-3 | shard 3 test 17 (earlier run) | ✅ passed |
-| 0:00:31.221 | 2.1s | shard-3 | shard 3 test 18 (earlier run) | ✅ passed |
-| 0:00:33.307 | 2.1s | shard-3 | shard 3 test 19 (earlier run) | ✅ passed |
-| 2:00:00.000 | 1.4s | shard-3 | shard 3 test 0 | ✅ passed |
-| 2:00:01.420 | 1.4s | shard-3 | shard 3 test 1 | ✅ passed |
-| 2:00:02.877 | 1.5s | shard-3 | shard 3 test 2 | ✅ passed |
-| 2:00:04.371 | 1.5s | shard-3 | shard 3 test 3 | ✅ passed |
-| 2:00:05.902 | 1.5s | shard-3 | shard 3 test 4 | ✅ passed |
-| 2:00:07.470 | 1.6s | shard-3 | shard 3 test 5 | ✅ passed |
-| 2:00:09.075 | 1.6s | shard-3 | shard 3 test 6 | ✅ passed |
-| 2:00:10.717 | 1.7s | shard-3 | checkout fails | ✅ passed |
-| 2:00:12.396 | 1.7s | shard-3 | shard 3 test 8 | ✅ passed |
-| 2:00:14.112 | 1.7s | shard-3 | shard 3 test 9 | ✅ passed |
-| 2:00:15.865 | 1.8s | shard-3 | shard 3 test 10 | ✅ passed |
-| 2:00:17.655 | 1.8s | shard-3 | shard 3 test 11 | ✅ passed |
-| 2:00:19.482 | 1.8s | shard-3 | shard 3 test 12 | ✅ passed |
-| 2:00:21.346 | 1.9s | shard-3 | shard 3 test 13 | ✅ passed |
-| 2:00:23.247 | 1.9s | shard-3 | shard 3 test 14 | ✅ passed |
-| 2:00:25.185 | 2.0s | shard-3 | shard 3 test 15 | ✅ passed |
-| 2:00:27.160 | 2.0s | shard-3 | shard 3 test 16 | ✅ passed |
-| 2:00:29.172 | 2.0s | shard-3 | shard 3 test 17 | ✅ passed |
-| 2:00:31.221 | 2.1s | shard-3 | shard 3 test 18 | ✅ passed |
-| 2:00:33.307 | 2.1s | shard-3 | shard 3 test 19 | ✅ passed |
+| # | Start | Duration | Thread | Test | Status |
+| ---: | ---: | ---: | :--- | :--- | :--- |
+| 1 | 0:00:00.000 | 1.4s | shard-1 | shard 1 test 0 | ✅ passed |
+| 2 | 0:00:01.420 | 1.4s | shard-1 | shard 1 test 1 | ✅ passed |
+| 3 | 0:00:02.877 | 1.5s | shard-1 | shard 1 test 2 | ✅ passed |
+| 4 | 0:00:04.371 | 1.5s | shard-1 | shard 1 test 3 | ✅ passed |
+| 5 | 0:00:05.902 | 1.5s | shard-1 | shard 1 test 4 | ✅ passed |
+| 6 | 0:00:07.470 | 1.6s | shard-1 | shard 1 test 5 | ✅ passed |
+| 7 | 0:00:09.075 | 1.6s | shard-1 | shard 1 test 6 | ✅ passed |
+| 8 | 0:00:10.717 | 1.7s | shard-1 | shard 1 test 7 | ✅ passed |
+| 9 | 0:00:12.396 | 1.7s | shard-1 | shard 1 test 8 | ✅ passed |
+|  | 0:00:14.112 | 1.7s | shard-1 | shard 1 test 9 | ✅ passed |
+|  | 0:00:15.865 | 1.8s | shard-1 | shard 1 test 10 | ✅ passed |
+|  | 0:00:17.655 | 1.8s | shard-1 | shard 1 test 11 | ✅ passed |
+|  | 0:00:19.482 | 1.8s | shard-1 | shard 1 test 12 | ✅ passed |
+| 10 | 0:00:21.346 | 1.9s | shard-1 | shard 1 test 13 | ✅ passed |
+| 11 | 0:00:23.247 | 1.9s | shard-1 | shard 1 test 14 | ✅ passed |
+| 12 | 0:00:25.185 | 2.0s | shard-1 | shard 1 test 15 | ✅ passed |
+| 13 | 0:00:27.160 | 2.0s | shard-1 | shard 1 test 16 | ✅ passed |
+| 14 | 0:00:29.172 | 2.0s | shard-1 | shard 1 test 17 | ✅ passed |
+| 15 | 0:00:31.221 | 2.1s | shard-1 | shard 1 test 18 | ✅ passed |
+| 16 | 0:00:33.307 | 2.1s | shard-1 | shard 1 test 19 | ✅ passed |
+|  | 0:00:00.000 | 1.4s | shard-2 | shard 2 test 0 | ✅ passed |
+|  | 0:00:01.420 | 1.4s | shard-2 | shard 2 test 1 | ✅ passed |
+|  | 0:00:02.877 | 1.5s | shard-2 | shard 2 test 2 | ✅ passed |
+|  | 0:00:04.371 | 1.5s | shard-2 | shard 2 test 3 | ✅ passed |
+|  | 0:00:05.902 | 1.5s | shard-2 | shard 2 test 4 | ✅ passed |
+|  | 0:00:07.470 | 1.6s | shard-2 | shard 2 test 5 | ✅ passed |
+|  | 0:00:09.075 | 1.6s | shard-2 | shard 2 test 6 | ✅ passed |
+|  | 0:00:10.717 | 1.7s | shard-2 | shard 2 test 7 | ✅ passed |
+|  | 0:00:12.396 | 1.7s | shard-2 | shard 2 test 8 | ✅ passed |
+|  | 0:00:14.112 | 1.7s | shard-2 | shard 2 test 9 | ✅ passed |
+|  | 0:00:15.865 | 1.8s | shard-2 | shard 2 test 10 | ✅ passed |
+|  | 0:00:17.655 | 1.8s | shard-2 | shard 2 test 11 | ✅ passed |
+|  | 0:00:19.482 | 1.8s | shard-2 | shard 2 test 12 | ✅ passed |
+| 17 | 0:00:21.346 | 1.9s | shard-2 | shard 2 test 13 | ✅ passed |
+| 18 | 0:00:23.247 | 1.9s | shard-2 | shard 2 test 14 | ✅ passed |
+| 19 | 0:00:25.185 | 2.0s | shard-2 | shard 2 test 15 | ✅ passed |
+| 20 | 0:00:27.160 | 2.0s | shard-2 | shard 2 test 16 | ✅ passed |
+| 21 | 0:00:29.172 | 2.0s | shard-2 | shard 2 test 17 | ✅ passed |
+| 22 | 0:00:31.221 | 2.1s | shard-2 | shard 2 test 18 | ✅ passed |
+| 23 | 0:00:33.307 | 2.1s | shard-2 | shard 2 test 19 | ✅ passed |
+|  | 0:00:00.000 | 1.4s | shard-3 | shard 3 test 0 (earlier run) | ✅ passed |
+|  | 0:00:01.420 | 1.4s | shard-3 | shard 3 test 1 (earlier run) | ✅ passed |
+|  | 0:00:02.877 | 1.5s | shard-3 | shard 3 test 2 (earlier run) | ✅ passed |
+|  | 0:00:04.371 | 1.5s | shard-3 | shard 3 test 3 (earlier run) | ✅ passed |
+|  | 0:00:05.902 | 1.5s | shard-3 | shard 3 test 4 (earlier run) | ✅ passed |
+|  | 0:00:07.470 | 1.6s | shard-3 | shard 3 test 5 (earlier run) | ✅ passed |
+|  | 0:00:09.075 | 1.6s | shard-3 | shard 3 test 6 (earlier run) | ✅ passed |
+|  | 0:00:10.717 | 1.7s | shard-3 | checkout fails (earlier run) | ❌ failed |
+|  | 0:00:12.396 | 1.7s | shard-3 | shard 3 test 8 (earlier run) | ✅ passed |
+|  | 0:00:14.112 | 1.7s | shard-3 | shard 3 test 9 (earlier run) | ✅ passed |
+|  | 0:00:15.865 | 1.8s | shard-3 | shard 3 test 10 (earlier run) | ✅ passed |
+|  | 0:00:17.655 | 1.8s | shard-3 | shard 3 test 11 (earlier run) | ✅ passed |
+|  | 0:00:19.482 | 1.8s | shard-3 | shard 3 test 12 (earlier run) | ✅ passed |
+| 24 | 0:00:21.346 | 1.9s | shard-3 | shard 3 test 13 (earlier run) | ✅ passed |
+| 25 | 0:00:23.247 | 1.9s | shard-3 | shard 3 test 14 (earlier run) | ✅ passed |
+| 26 | 0:00:25.185 | 2.0s | shard-3 | shard 3 test 15 (earlier run) | ✅ passed |
+| 27 | 0:00:27.160 | 2.0s | shard-3 | shard 3 test 16 (earlier run) | ✅ passed |
+| 28 | 0:00:29.172 | 2.0s | shard-3 | shard 3 test 17 (earlier run) | ✅ passed |
+| 29 | 0:00:31.221 | 2.1s | shard-3 | shard 3 test 18 (earlier run) | ✅ passed |
+| 30 | 0:00:33.307 | 2.1s | shard-3 | shard 3 test 19 (earlier run) | ✅ passed |
+|  | 2:00:00.000 | 1.4s | shard-3 | shard 3 test 0 | ✅ passed |
+|  | 2:00:01.420 | 1.4s | shard-3 | shard 3 test 1 | ✅ passed |
+|  | 2:00:02.877 | 1.5s | shard-3 | shard 3 test 2 | ✅ passed |
+|  | 2:00:04.371 | 1.5s | shard-3 | shard 3 test 3 | ✅ passed |
+|  | 2:00:05.902 | 1.5s | shard-3 | shard 3 test 4 | ✅ passed |
+|  | 2:00:07.470 | 1.6s | shard-3 | shard 3 test 5 | ✅ passed |
+|  | 2:00:09.075 | 1.6s | shard-3 | shard 3 test 6 | ✅ passed |
+|  | 2:00:10.717 | 1.7s | shard-3 | checkout fails | ✅ passed |
+|  | 2:00:12.396 | 1.7s | shard-3 | shard 3 test 8 | ✅ passed |
+|  | 2:00:14.112 | 1.7s | shard-3 | shard 3 test 9 | ✅ passed |
+|  | 2:00:15.865 | 1.8s | shard-3 | shard 3 test 10 | ✅ passed |
+|  | 2:00:17.655 | 1.8s | shard-3 | shard 3 test 11 | ✅ passed |
+|  | 2:00:19.482 | 1.8s | shard-3 | shard 3 test 12 | ✅ passed |
+| 31 | 2:00:21.346 | 1.9s | shard-3 | shard 3 test 13 | ✅ passed |
+| 32 | 2:00:23.247 | 1.9s | shard-3 | shard 3 test 14 | ✅ passed |
+| 33 | 2:00:25.185 | 2.0s | shard-3 | shard 3 test 15 | ✅ passed |
+| 34 | 2:00:27.160 | 2.0s | shard-3 | shard 3 test 16 | ✅ passed |
+| 35 | 2:00:29.172 | 2.0s | shard-3 | shard 3 test 17 | ✅ passed |
+| 36 | 2:00:31.221 | 2.1s | shard-3 | shard 3 test 18 | ✅ passed |
+| 37 | 2:00:33.307 | 2.1s | shard-3 | shard 3 test 19 | ✅ passed |
 
 </details>

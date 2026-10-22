@@ -52,7 +52,7 @@ section ​Test worker
 <br><sub>Tests too short to tell apart are merged into one bar.</sub>
 
 <details>
-<summary>Test timings (90 of 636: failed attempts and the slowest)</summary>
+<summary>Test timings (87 of 636: failed attempts and the slowest)</summary>
 
 | Start | Duration | Thread | Test | Status |
 | ---: | ---: | :--- | :--- | :--- |
@@ -67,7 +67,6 @@ section ​Test worker
 | 3:21:04.439 | 116ms | Test worker | A report given as a bare file name, as the default ctrf-report.json is, is written in the working directory | ✅ passed |
 | 3:21:04.575 | 27ms | Test worker | update with a null runId throws, and leaves the report as it was | ✅ passed |
 | 3:21:04.634 | 26ms | Test worker | When the report's own directory can't be written, the earlier report stays as it was and nothing is thrown | ✅ passed |
-| 3:21:04.713 | 24ms | Test worker | A write that fails halfway leaves the previous report parseable and unchanged | ✅ passed |
 | 3:21:04.743 | 42ms | Test worker | update passes the current report to the merge function and writes what it returns | ✅ passed |
 | 3:21:04.812 | 67ms | Test worker | update creates missing directories and writes the report, with its lock file next to it | ✅ passed |
 | 3:21:04.885 | 73ms | Test worker | Updates from many threads at once all land | ✅ passed |
@@ -78,12 +77,10 @@ section ​Test worker
 | 3:21:07.090 | 143ms | Test worker | A failed test gets the output JUnit captured for it | ✅ passed |
 | 3:21:07.266 | 52ms | Test worker | An unhealthy report of the same run keeps the merged report unhealthy | ✅ passed |
 | 3:21:07.396 | 146ms | Test worker | A non-numeric build number is written as buildId, and the report has no schema errors | ✅ passed |
-| 3:21:07.554 | 22ms | Test worker | The validator rejects a test with the legacy filepath key | ✅ passed |
 | 3:21:07.606 | 43ms | Test worker | The static methods mark and read the health of the JVM's default manager | ✅ passed |
 | 3:21:07.802 | 38ms | Test worker | Should extract unique ID from TestIdentifier | ✅ passed |
 | 3:21:07.859 | 30ms | Test worker | Under a suite engine, every engine is left out, and the @⁠Suite class stays | ✅ passed |
 | 3:21:07.908 | 56ms | Test worker | MP-13: a test that a test method creates is named after the method | ✅ passed |
-| 3:21:07.973 | 25ms | Test worker | MP-13: the tests of a @⁠ParameterizedClass keep their names | ✅ passed |
 | 3:21:08.021 | 99ms | Test worker | An identifier whose ancestors the plan can't give has no suite, and doesn't throw | ✅ passed |
 | 3:21:08.192 | 34ms | Test worker | summaryWritesItsDuration() | ✅ passed |
 | 3:21:08.337 | 42ms | Test worker | readerReadsTheGoldenJsonAsJacksonDoes(String, Object, String) "full-report" | ✅ passed |

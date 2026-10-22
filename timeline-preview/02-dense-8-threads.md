@@ -59,7 +59,7 @@ section ​pool-1-thread-1
 ​ :16 00:02:59.826, 5877ms
 ​ :16 00:03:05.722, 3293ms
 ​ :16 00:03:09.017, 454ms
-​ :16 00:03:09.557, 5408ms
+​1 :16 00:03:09.557, 5408ms
 ​ :16 00:03:14.980, 6421ms
 ​ :crit, milestone, 16 00:03:25.461, 0ms
 ​ :16 00:03:29.520, 2050ms
@@ -103,7 +103,7 @@ section ​pool-1-thread-2
 ​32 tests :16 00:02:41.308, 25619ms
 ​ :16 00:03:06.941, 2803ms
 ​ :16 00:03:09.848, 8073ms
-​ :16 00:03:17.942, 5399ms
+​2 :16 00:03:17.942, 5399ms
 ​ :16 00:03:23.342, 3265ms
 ​ :16 00:03:26.687, 11637ms
 ​ :16 00:03:38.381, 4089ms
@@ -134,15 +134,15 @@ section ​pool-1-thread-3
 ​57 tests :16 00:01:03.123, 49034ms
 ​ :crit, milestone, 16 00:01:56.217, 0ms
 ​35 tests :16 00:02:00.277, 28375ms
-​ :crit, 16 00:02:28.673, 5773ms
+​3 :crit, 16 00:02:28.673, 5773ms
 ​29 tests :16 00:02:34.483, 25201ms
 ​ :16 00:02:59.787, 3203ms
 ​ :16 00:03:03.008, 6017ms
-​ :16 00:03:09.046, 5641ms
+​4 :16 00:03:09.046, 5641ms
 ​52 tests :16 00:03:14.769, 42136ms
 ​ :16 00:03:56.916, 3669ms
 ​ :16 00:04:00.623, 5718ms
-​ :16 00:04:06.357, 5325ms
+​5 :16 00:04:06.357, 5325ms
 ​ :16 00:04:11.708, 1789ms
 ​ :16 00:04:13.514, 3041ms
 ​ :16 00:04:16.609, 4906ms
@@ -154,7 +154,7 @@ section ​pool-1-thread-3
 section ​pool-1-thread-4
 ​ :crit, milestone, 16 00:00:01.974, 0ms
 ​ :16 00:00:06.033, 8297ms
-​ :16 00:00:14.430, 5474ms
+​6 :16 00:00:14.430, 5474ms
 ​21 tests :16 00:00:19.939, 21716ms
 ​ :crit, milestone, 16 00:00:45.715, 0ms
 ​ :16 00:00:49.774, 4924ms
@@ -186,7 +186,7 @@ section ​pool-1-thread-4
 section ​pool-1-thread-5
 ​ :16 00:00:00.280, 3489ms
 ​ :16 00:00:03.794, 4245ms
-​ :16 00:00:08.137, 5501ms
+​7 :16 00:00:08.137, 5501ms
 ​ :16 00:00:13.640, 15491ms
 ​ :16 00:00:29.138, 3362ms
 ​50 tests :16 00:00:32.504, 41543ms
@@ -241,7 +241,7 @@ section ​pool-1-thread-6
 ​ :16 00:03:33.366, 3541ms
 ​ :16 00:03:37.004, 3850ms
 ​ :16 00:03:40.870, 3570ms
-​ :16 00:03:44.445, 5883ms
+​8 :16 00:03:44.445, 5883ms
 ​ :16 00:03:50.356, 587ms
 ​ :16 00:03:50.998, 2947ms
 ​ :16 00:03:53.949, 11995ms
@@ -261,7 +261,7 @@ section ​pool-1-thread-7
 ​ :16 00:01:10.923, 11470ms
 ​ :16 00:01:28.319, 1254ms
 ​ :16 00:01:29.588, 4025ms
-​ :16 00:01:33.635, 5377ms
+​9 :16 00:01:33.635, 5377ms
 ​ :16 00:01:39.060, 2111ms
 ​ :crit, milestone, 16 00:01:45.231, 0ms
 ​ :16 00:01:53.131, 10144ms
@@ -271,7 +271,7 @@ section ​pool-1-thread-7
 ​ :16 00:02:13.843, 8576ms
 ​ :16 00:02:22.431, 3128ms
 ​ :16 00:02:25.612, 5783ms
-​ :16 00:02:31.445, 7783ms
+​10 :16 00:02:31.445, 7783ms
 ​ :16 00:02:39.320, 8478ms
 ​ :16 00:02:47.836, 2771ms
 ​46 tests :16 00:02:50.607, 29439ms
@@ -321,6 +321,7 @@ section ​pool-1-thread-8
 ```
 
 <sub>🟩 passed · 🟥 failed · ♦️ failed too fast for a bar · 0:00 = 2026-10-21 08:16:56.000 UTC</sub>
+<br><sub>A number on a bar is the row with that number (#) in the test timings below.</sub>
 <br><sub>Tests too short to tell apart are merged into one bar.</sub>
 
 | Thread | Tests | Failed | Busy | Idle | Utilization |
@@ -335,109 +336,109 @@ section ​pool-1-thread-8
 | pool-1-thread-8 | 265 | 2 | 4m 5s | 37.4s | 87% |
 
 <details>
-<summary>Test timings (100 of 2250: failures and the slowest)</summary>
+<summary>Test timings (100 of 2250: failures, numbered bars and the slowest)</summary>
 
-| Start | Duration | Thread | Test | Status |
-| ---: | ---: | :--- | :--- | :--- |
-| 0:41.815 | 3.3s | pool-1-thread-1 | pool-1-thread-1 test 47 | ✅ passed |
-| 0:51.252 | 3.9s | pool-1-thread-1 | pool-1-thread-1 test 58 | ✅ passed |
-| 1:03.062 | 3.3s | pool-1-thread-1 | pool-1-thread-1 test 69 | ✅ passed |
-| 1:35.401 | 4.1s | pool-1-thread-1 | pool-1-thread-1 test 99 | ✅ passed |
-| 1:42.327 | 287ms | pool-1-thread-1 | pool-1-thread-1 test 103 | ❌ failed |
-| 1:42.632 | 3.8s | pool-1-thread-1 | pool-1-thread-1 test 104 | ✅ passed |
-| 2:42.549 | 5.1s | pool-1-thread-1 | pool-1-thread-1 test 170 | ✅ passed |
-| 3:05.722 | 3.3s | pool-1-thread-1 | pool-1-thread-1 test 181 | ✅ passed |
-| 3:09.557 | 5.4s | pool-1-thread-1 | pool-1-thread-1 test 183 | ✅ passed |
-| 3:25.313 | 295ms | pool-1-thread-1 | pool-1-thread-1 test 195 | ❌ failed |
-| 3:31.726 | 4.0s | pool-1-thread-1 | pool-1-thread-1 test 204 | ✅ passed |
-| 3:41.094 | 4.4s | pool-1-thread-1 | pool-1-thread-1 test 211 | ✅ passed |
-| 3:53.335 | 5.1s | pool-1-thread-1 | pool-1-thread-1 test 226 | ✅ passed |
-| 3:58.468 | 209ms | pool-1-thread-1 | pool-1-thread-1 test 227 | ❌ failed |
-| 4:08.901 | 3.3s | pool-1-thread-1 | pool-1-thread-1 test 234 | ✅ passed |
-| 4:32.748 | 4.5s | pool-1-thread-1 | pool-1-thread-1 test 261 | ✅ passed |
-| 4:38.920 | 3.7s | pool-1-thread-1 | pool-1-thread-1 test 265 | ✅ passed |
-| 0:17.098 | 3.6s | pool-1-thread-2 | pool-1-thread-2 test 291 | ✅ passed |
-| 0:20.731 | 685ms | pool-1-thread-2 | pool-1-thread-2 test 292 | ❌ failed |
-| 0:37.268 | 4.3s | pool-1-thread-2 | pool-1-thread-2 test 315 | ✅ passed |
-| 0:52.749 | 3.6s | pool-1-thread-2 | pool-1-thread-2 test 332 | ✅ passed |
-| 0:56.315 | 1.2s | pool-1-thread-2 | pool-1-thread-2 test 333 | ❌ failed |
-| 1:14.877 | 3.2s | pool-1-thread-2 | pool-1-thread-2 test 351 | ✅ passed |
-| 1:41.086 | 5.1s | pool-1-thread-2 | pool-1-thread-2 test 385 | ✅ passed |
-| 1:59.341 | 506ms | pool-1-thread-2 | pool-1-thread-2 test 400 | ❌ failed |
-| 2:12.351 | 4.4s | pool-1-thread-2 | pool-1-thread-2 test 420 | ✅ passed |
-| 2:37.074 | 349ms | pool-1-thread-2 | pool-1-thread-2 test 446 | ❌ failed |
-| 3:17.942 | 5.4s | pool-1-thread-2 | pool-1-thread-2 test 498 | ✅ passed |
-| 3:23.342 | 3.3s | pool-1-thread-2 | pool-1-thread-2 test 499 | ✅ passed |
-| 3:38.381 | 4.1s | pool-1-thread-2 | pool-1-thread-2 test 516 | ✅ passed |
-| 3:47.607 | 4.5s | pool-1-thread-2 | pool-1-thread-2 test 522 | ✅ passed |
-| 3:54.243 | 4.1s | pool-1-thread-2 | pool-1-thread-2 test 526 | ✅ passed |
-| 4:23.226 | 176ms | pool-1-thread-2 | pool-1-thread-2 test 557 | ❌ failed |
-| 0:08.086 | 391ms | pool-1-thread-3 | pool-1-thread-3 test 590 | ❌ failed |
-| 0:23.519 | 709ms | pool-1-thread-3 | pool-1-thread-3 test 615 | ❌ failed |
-| 0:36.874 | 1.2s | pool-1-thread-3 | pool-1-thread-3 test 628 | ❌ failed |
-| 0:41.840 | 3.2s | pool-1-thread-3 | pool-1-thread-3 test 634 | ✅ passed |
-| 0:58.909 | 4.2s | pool-1-thread-3 | pool-1-thread-3 test 648 | ✅ passed |
-| 1:56.151 | 132ms | pool-1-thread-3 | pool-1-thread-3 test 709 | ❌ failed |
-| 2:28.673 | 5.8s | pool-1-thread-3 | pool-1-thread-3 test 748 | ❌ failed |
-| 2:59.787 | 3.2s | pool-1-thread-3 | pool-1-thread-3 test 778 | ✅ passed |
-| 3:09.046 | 5.6s | pool-1-thread-3 | pool-1-thread-3 test 790 | ✅ passed |
-| 3:56.916 | 3.7s | pool-1-thread-3 | pool-1-thread-3 test 843 | ✅ passed |
-| 4:06.357 | 5.3s | pool-1-thread-3 | pool-1-thread-3 test 849 | ✅ passed |
-| 0:01.748 | 451ms | pool-1-thread-4 | pool-1-thread-4 test 874 | ❌ failed |
-| 0:14.430 | 5.5s | pool-1-thread-4 | pool-1-thread-4 test 886 | ✅ passed |
-| 0:45.681 | 67ms | pool-1-thread-4 | pool-1-thread-4 test 912 | ❌ failed |
-| 0:54.766 | 3.3s | pool-1-thread-4 | pool-1-thread-4 test 927 | ✅ passed |
-| 1:13.906 | 3.4s | pool-1-thread-4 | pool-1-thread-4 test 946 | ✅ passed |
-| 1:38.567 | 3.4s | pool-1-thread-4 | pool-1-thread-4 test 964 | ✅ passed |
-| 1:44.908 | 3.3s | pool-1-thread-4 | pool-1-thread-4 test 968 | ✅ passed |
-| 2:07.979 | 4.7s | pool-1-thread-4 | pool-1-thread-4 test 989 | ✅ passed |
-| 3:53.722 | 3.9s | pool-1-thread-4 | pool-1-thread-4 test 1097 | ✅ passed |
-| 4:25.215 | 57ms | pool-1-thread-4 | pool-1-thread-4 test 1125 | ❌ failed |
-| 4:26.681 | 5.4s | pool-1-thread-4 | pool-1-thread-4 test 1127 | ✅ passed |
-| 0:00.280 | 3.5s | pool-1-thread-5 | pool-1-thread-5 test 1137 | ✅ passed |
-| 0:08.137 | 5.5s | pool-1-thread-5 | pool-1-thread-5 test 1145 | ✅ passed |
-| 0:29.138 | 3.4s | pool-1-thread-5 | pool-1-thread-5 test 1166 | ✅ passed |
-| 2:12.019 | 3.6s | pool-1-thread-5 | pool-1-thread-5 test 1264 | ✅ passed |
-| 2:15.847 | 4.6s | pool-1-thread-5 | pool-1-thread-5 test 1266 | ✅ passed |
-| 2:31.886 | 4.6s | pool-1-thread-5 | pool-1-thread-5 test 1287 | ✅ passed |
-| 2:43.607 | 3.4s | pool-1-thread-5 | pool-1-thread-5 test 1298 | ✅ passed |
-| 2:50.122 | 1.0s | pool-1-thread-5 | pool-1-thread-5 test 1301 | ❌ failed |
-| 3:09.451 | 3.3s | pool-1-thread-5 | pool-1-thread-5 test 1322 | ✅ passed |
-| 3:22.080 | 3.9s | pool-1-thread-5 | pool-1-thread-5 test 1335 | ✅ passed |
-| 3:28.391 | 3.9s | pool-1-thread-5 | pool-1-thread-5 test 1338 | ✅ passed |
-| 3:51.632 | 3.2s | pool-1-thread-5 | pool-1-thread-5 test 1365 | ✅ passed |
-| 4:13.720 | 522ms | pool-1-thread-5 | pool-1-thread-5 test 1387 | ❌ failed |
-| 0:01.175 | 454ms | pool-1-thread-6 | pool-1-thread-6 test 1417 | ❌ failed |
-| 0:36.245 | 3.7s | pool-1-thread-6 | pool-1-thread-6 test 1460 | ✅ passed |
-| 1:35.820 | 334ms | pool-1-thread-6 | pool-1-thread-6 test 1524 | ❌ failed |
-| 2:04.989 | 4.9s | pool-1-thread-6 | pool-1-thread-6 test 1546 | ✅ passed |
-| 2:21.049 | 3.8s | pool-1-thread-6 | pool-1-thread-6 test 1562 | ✅ passed |
-| 3:17.585 | 286ms | pool-1-thread-6 | pool-1-thread-6 test 1633 | ❌ failed |
-| 3:33.366 | 3.5s | pool-1-thread-6 | pool-1-thread-6 test 1655 | ✅ passed |
-| 3:40.870 | 3.6s | pool-1-thread-6 | pool-1-thread-6 test 1662 | ✅ passed |
-| 3:44.445 | 5.9s | pool-1-thread-6 | pool-1-thread-6 test 1663 | ✅ passed |
-| 4:39.932 | 2.9s | pool-1-thread-6 | pool-1-thread-6 test 1713 | ❌ failed |
-| 0:31.101 | 3.5s | pool-1-thread-7 | pool-1-thread-7 test 1748 | ✅ passed |
-| 0:40.275 | 3.8s | pool-1-thread-7 | pool-1-thread-7 test 1753 | ✅ passed |
-| 0:49.358 | 3.4s | pool-1-thread-7 | pool-1-thread-7 test 1762 | ✅ passed |
-| 1:07.580 | 3.3s | pool-1-thread-7 | pool-1-thread-7 test 1777 | ✅ passed |
-| 1:29.588 | 4.0s | pool-1-thread-7 | pool-1-thread-7 test 1791 | ✅ passed |
-| 1:33.635 | 5.4s | pool-1-thread-7 | pool-1-thread-7 test 1792 | ✅ passed |
-| 1:45.023 | 415ms | pool-1-thread-7 | pool-1-thread-7 test 1804 | ❌ failed |
-| 2:03.335 | 4.4s | pool-1-thread-7 | pool-1-thread-7 test 1822 | ✅ passed |
-| 2:31.445 | 7.8s | pool-1-thread-7 | pool-1-thread-7 test 1846 | ✅ passed |
-| 3:49.577 | 3.9s | pool-1-thread-7 | pool-1-thread-7 test 1940 | ✅ passed |
-| 4:01.802 | 7.1s | pool-1-thread-7 | pool-1-thread-7 test 1954 | ✅ passed |
-| 4:27.877 | 4.2s | pool-1-thread-7 | pool-1-thread-7 test 1973 | ✅ passed |
-| 0:51.952 | 731ms | pool-1-thread-8 | pool-1-thread-8 test 2045 | ❌ failed |
-| 1:50.759 | 5.5s | pool-1-thread-8 | pool-1-thread-8 test 2098 | ✅ passed |
-| 2:10.445 | 472ms | pool-1-thread-8 | pool-1-thread-8 test 2108 | ❌ failed |
-| 2:22.535 | 3.5s | pool-1-thread-8 | pool-1-thread-8 test 2124 | ✅ passed |
-| 2:36.511 | 6.8s | pool-1-thread-8 | pool-1-thread-8 test 2135 | ✅ passed |
-| 3:18.799 | 4.6s | pool-1-thread-8 | pool-1-thread-8 test 2177 | ✅ passed |
-| 3:34.848 | 3.3s | pool-1-thread-8 | pool-1-thread-8 test 2196 | ✅ passed |
-| 4:18.634 | 3.4s | pool-1-thread-8 | pool-1-thread-8 test 2239 | ✅ passed |
-| 4:24.746 | 5.8s | pool-1-thread-8 | pool-1-thread-8 test 2244 | ✅ passed |
-| 4:32.061 | 5.1s | pool-1-thread-8 | pool-1-thread-8 test 2246 | ✅ passed |
+| # | Start | Duration | Thread | Test | Status |
+| ---: | ---: | ---: | :--- | :--- | :--- |
+|  | 0:41.815 | 3.3s | pool-1-thread-1 | pool-1-thread-1 test 47 | ✅ passed |
+|  | 0:51.252 | 3.9s | pool-1-thread-1 | pool-1-thread-1 test 58 | ✅ passed |
+|  | 1:03.062 | 3.3s | pool-1-thread-1 | pool-1-thread-1 test 69 | ✅ passed |
+|  | 1:35.401 | 4.1s | pool-1-thread-1 | pool-1-thread-1 test 99 | ✅ passed |
+|  | 1:42.327 | 287ms | pool-1-thread-1 | pool-1-thread-1 test 103 | ❌ failed |
+|  | 1:42.632 | 3.8s | pool-1-thread-1 | pool-1-thread-1 test 104 | ✅ passed |
+|  | 2:42.549 | 5.1s | pool-1-thread-1 | pool-1-thread-1 test 170 | ✅ passed |
+|  | 3:05.722 | 3.3s | pool-1-thread-1 | pool-1-thread-1 test 181 | ✅ passed |
+| 1 | 3:09.557 | 5.4s | pool-1-thread-1 | pool-1-thread-1 test 183 | ✅ passed |
+|  | 3:25.313 | 295ms | pool-1-thread-1 | pool-1-thread-1 test 195 | ❌ failed |
+|  | 3:31.726 | 4.0s | pool-1-thread-1 | pool-1-thread-1 test 204 | ✅ passed |
+|  | 3:41.094 | 4.4s | pool-1-thread-1 | pool-1-thread-1 test 211 | ✅ passed |
+|  | 3:53.335 | 5.1s | pool-1-thread-1 | pool-1-thread-1 test 226 | ✅ passed |
+|  | 3:58.468 | 209ms | pool-1-thread-1 | pool-1-thread-1 test 227 | ❌ failed |
+|  | 4:08.901 | 3.3s | pool-1-thread-1 | pool-1-thread-1 test 234 | ✅ passed |
+|  | 4:32.748 | 4.5s | pool-1-thread-1 | pool-1-thread-1 test 261 | ✅ passed |
+|  | 4:38.920 | 3.7s | pool-1-thread-1 | pool-1-thread-1 test 265 | ✅ passed |
+|  | 0:17.098 | 3.6s | pool-1-thread-2 | pool-1-thread-2 test 291 | ✅ passed |
+|  | 0:20.731 | 685ms | pool-1-thread-2 | pool-1-thread-2 test 292 | ❌ failed |
+|  | 0:37.268 | 4.3s | pool-1-thread-2 | pool-1-thread-2 test 315 | ✅ passed |
+|  | 0:52.749 | 3.6s | pool-1-thread-2 | pool-1-thread-2 test 332 | ✅ passed |
+|  | 0:56.315 | 1.2s | pool-1-thread-2 | pool-1-thread-2 test 333 | ❌ failed |
+|  | 1:14.877 | 3.2s | pool-1-thread-2 | pool-1-thread-2 test 351 | ✅ passed |
+|  | 1:41.086 | 5.1s | pool-1-thread-2 | pool-1-thread-2 test 385 | ✅ passed |
+|  | 1:59.341 | 506ms | pool-1-thread-2 | pool-1-thread-2 test 400 | ❌ failed |
+|  | 2:12.351 | 4.4s | pool-1-thread-2 | pool-1-thread-2 test 420 | ✅ passed |
+|  | 2:37.074 | 349ms | pool-1-thread-2 | pool-1-thread-2 test 446 | ❌ failed |
+| 2 | 3:17.942 | 5.4s | pool-1-thread-2 | pool-1-thread-2 test 498 | ✅ passed |
+|  | 3:23.342 | 3.3s | pool-1-thread-2 | pool-1-thread-2 test 499 | ✅ passed |
+|  | 3:38.381 | 4.1s | pool-1-thread-2 | pool-1-thread-2 test 516 | ✅ passed |
+|  | 3:47.607 | 4.5s | pool-1-thread-2 | pool-1-thread-2 test 522 | ✅ passed |
+|  | 3:54.243 | 4.1s | pool-1-thread-2 | pool-1-thread-2 test 526 | ✅ passed |
+|  | 4:23.226 | 176ms | pool-1-thread-2 | pool-1-thread-2 test 557 | ❌ failed |
+|  | 0:08.086 | 391ms | pool-1-thread-3 | pool-1-thread-3 test 590 | ❌ failed |
+|  | 0:23.519 | 709ms | pool-1-thread-3 | pool-1-thread-3 test 615 | ❌ failed |
+|  | 0:36.874 | 1.2s | pool-1-thread-3 | pool-1-thread-3 test 628 | ❌ failed |
+|  | 0:41.840 | 3.2s | pool-1-thread-3 | pool-1-thread-3 test 634 | ✅ passed |
+|  | 0:58.909 | 4.2s | pool-1-thread-3 | pool-1-thread-3 test 648 | ✅ passed |
+|  | 1:56.151 | 132ms | pool-1-thread-3 | pool-1-thread-3 test 709 | ❌ failed |
+| 3 | 2:28.673 | 5.8s | pool-1-thread-3 | pool-1-thread-3 test 748 | ❌ failed |
+|  | 2:59.787 | 3.2s | pool-1-thread-3 | pool-1-thread-3 test 778 | ✅ passed |
+| 4 | 3:09.046 | 5.6s | pool-1-thread-3 | pool-1-thread-3 test 790 | ✅ passed |
+|  | 3:56.916 | 3.7s | pool-1-thread-3 | pool-1-thread-3 test 843 | ✅ passed |
+| 5 | 4:06.357 | 5.3s | pool-1-thread-3 | pool-1-thread-3 test 849 | ✅ passed |
+|  | 0:01.748 | 451ms | pool-1-thread-4 | pool-1-thread-4 test 874 | ❌ failed |
+| 6 | 0:14.430 | 5.5s | pool-1-thread-4 | pool-1-thread-4 test 886 | ✅ passed |
+|  | 0:45.681 | 67ms | pool-1-thread-4 | pool-1-thread-4 test 912 | ❌ failed |
+|  | 0:54.766 | 3.3s | pool-1-thread-4 | pool-1-thread-4 test 927 | ✅ passed |
+|  | 1:13.906 | 3.4s | pool-1-thread-4 | pool-1-thread-4 test 946 | ✅ passed |
+|  | 1:38.567 | 3.4s | pool-1-thread-4 | pool-1-thread-4 test 964 | ✅ passed |
+|  | 1:44.908 | 3.3s | pool-1-thread-4 | pool-1-thread-4 test 968 | ✅ passed |
+|  | 2:07.979 | 4.7s | pool-1-thread-4 | pool-1-thread-4 test 989 | ✅ passed |
+|  | 3:53.722 | 3.9s | pool-1-thread-4 | pool-1-thread-4 test 1097 | ✅ passed |
+|  | 4:25.215 | 57ms | pool-1-thread-4 | pool-1-thread-4 test 1125 | ❌ failed |
+|  | 4:26.681 | 5.4s | pool-1-thread-4 | pool-1-thread-4 test 1127 | ✅ passed |
+|  | 0:00.280 | 3.5s | pool-1-thread-5 | pool-1-thread-5 test 1137 | ✅ passed |
+| 7 | 0:08.137 | 5.5s | pool-1-thread-5 | pool-1-thread-5 test 1145 | ✅ passed |
+|  | 0:29.138 | 3.4s | pool-1-thread-5 | pool-1-thread-5 test 1166 | ✅ passed |
+|  | 2:12.019 | 3.6s | pool-1-thread-5 | pool-1-thread-5 test 1264 | ✅ passed |
+|  | 2:15.847 | 4.6s | pool-1-thread-5 | pool-1-thread-5 test 1266 | ✅ passed |
+|  | 2:31.886 | 4.6s | pool-1-thread-5 | pool-1-thread-5 test 1287 | ✅ passed |
+|  | 2:43.607 | 3.4s | pool-1-thread-5 | pool-1-thread-5 test 1298 | ✅ passed |
+|  | 2:50.122 | 1.0s | pool-1-thread-5 | pool-1-thread-5 test 1301 | ❌ failed |
+|  | 3:09.451 | 3.3s | pool-1-thread-5 | pool-1-thread-5 test 1322 | ✅ passed |
+|  | 3:22.080 | 3.9s | pool-1-thread-5 | pool-1-thread-5 test 1335 | ✅ passed |
+|  | 3:28.391 | 3.9s | pool-1-thread-5 | pool-1-thread-5 test 1338 | ✅ passed |
+|  | 3:51.632 | 3.2s | pool-1-thread-5 | pool-1-thread-5 test 1365 | ✅ passed |
+|  | 4:13.720 | 522ms | pool-1-thread-5 | pool-1-thread-5 test 1387 | ❌ failed |
+|  | 0:01.175 | 454ms | pool-1-thread-6 | pool-1-thread-6 test 1417 | ❌ failed |
+|  | 0:36.245 | 3.7s | pool-1-thread-6 | pool-1-thread-6 test 1460 | ✅ passed |
+|  | 1:35.820 | 334ms | pool-1-thread-6 | pool-1-thread-6 test 1524 | ❌ failed |
+|  | 2:04.989 | 4.9s | pool-1-thread-6 | pool-1-thread-6 test 1546 | ✅ passed |
+|  | 2:21.049 | 3.8s | pool-1-thread-6 | pool-1-thread-6 test 1562 | ✅ passed |
+|  | 3:17.585 | 286ms | pool-1-thread-6 | pool-1-thread-6 test 1633 | ❌ failed |
+|  | 3:33.366 | 3.5s | pool-1-thread-6 | pool-1-thread-6 test 1655 | ✅ passed |
+|  | 3:40.870 | 3.6s | pool-1-thread-6 | pool-1-thread-6 test 1662 | ✅ passed |
+| 8 | 3:44.445 | 5.9s | pool-1-thread-6 | pool-1-thread-6 test 1663 | ✅ passed |
+|  | 4:39.932 | 2.9s | pool-1-thread-6 | pool-1-thread-6 test 1713 | ❌ failed |
+|  | 0:31.101 | 3.5s | pool-1-thread-7 | pool-1-thread-7 test 1748 | ✅ passed |
+|  | 0:40.275 | 3.8s | pool-1-thread-7 | pool-1-thread-7 test 1753 | ✅ passed |
+|  | 0:49.358 | 3.4s | pool-1-thread-7 | pool-1-thread-7 test 1762 | ✅ passed |
+|  | 1:07.580 | 3.3s | pool-1-thread-7 | pool-1-thread-7 test 1777 | ✅ passed |
+|  | 1:29.588 | 4.0s | pool-1-thread-7 | pool-1-thread-7 test 1791 | ✅ passed |
+| 9 | 1:33.635 | 5.4s | pool-1-thread-7 | pool-1-thread-7 test 1792 | ✅ passed |
+|  | 1:45.023 | 415ms | pool-1-thread-7 | pool-1-thread-7 test 1804 | ❌ failed |
+|  | 2:03.335 | 4.4s | pool-1-thread-7 | pool-1-thread-7 test 1822 | ✅ passed |
+| 10 | 2:31.445 | 7.8s | pool-1-thread-7 | pool-1-thread-7 test 1846 | ✅ passed |
+|  | 3:49.577 | 3.9s | pool-1-thread-7 | pool-1-thread-7 test 1940 | ✅ passed |
+|  | 4:01.802 | 7.1s | pool-1-thread-7 | pool-1-thread-7 test 1954 | ✅ passed |
+|  | 4:27.877 | 4.2s | pool-1-thread-7 | pool-1-thread-7 test 1973 | ✅ passed |
+|  | 0:51.952 | 731ms | pool-1-thread-8 | pool-1-thread-8 test 2045 | ❌ failed |
+|  | 1:50.759 | 5.5s | pool-1-thread-8 | pool-1-thread-8 test 2098 | ✅ passed |
+|  | 2:10.445 | 472ms | pool-1-thread-8 | pool-1-thread-8 test 2108 | ❌ failed |
+|  | 2:22.535 | 3.5s | pool-1-thread-8 | pool-1-thread-8 test 2124 | ✅ passed |
+|  | 2:36.511 | 6.8s | pool-1-thread-8 | pool-1-thread-8 test 2135 | ✅ passed |
+|  | 3:18.799 | 4.6s | pool-1-thread-8 | pool-1-thread-8 test 2177 | ✅ passed |
+|  | 3:34.848 | 3.3s | pool-1-thread-8 | pool-1-thread-8 test 2196 | ✅ passed |
+|  | 4:18.634 | 3.4s | pool-1-thread-8 | pool-1-thread-8 test 2239 | ✅ passed |
+|  | 4:24.746 | 5.8s | pool-1-thread-8 | pool-1-thread-8 test 2244 | ✅ passed |
+|  | 4:32.061 | 5.1s | pool-1-thread-8 | pool-1-thread-8 test 2246 | ✅ passed |
 
 </details>

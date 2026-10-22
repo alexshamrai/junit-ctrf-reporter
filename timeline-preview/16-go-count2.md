@@ -37,7 +37,7 @@ section ​Lane 1
 ​TestFlaky (attempt 1) :active, 16 00:00:00.000, 2000ms
 ​TestOther :16 00:00:02.000, 4000ms
 ​TestFlaky :16 00:00:06.000, 3000ms
-​ :16 00:00:09.000, 1000ms
+​1 :16 00:00:09.000, 1000ms
 ​TestParse/broken :crit, 16 00:00:10.000, 2000ms
 ​ :16 00:00:12.000, 0ms
 ```
@@ -46,16 +46,17 @@ section ​Lane 1
 <br><sub>1 result listed more than once is counted once.</sub>
 <br><sub>1 parent test that only groups its subtests (<code>TestX</code> around <code>TestX/case</code>) is not drawn.</sub>
 <br><sub>The report has no thread IDs (<code>threadId</code>), so lanes are inferred from start and stop times.</sub>
+<br><sub>A number on a bar is the row with that number (#) in the test timings below.</sub>
 
 <details>
 <summary>Test timings (5)</summary>
 
-| Start | Duration | Lane | Test | Status |
-| ---: | ---: | :--- | :--- | :--- |
-| 0:00.000 | 2.0s | Lane 1 | TestFlaky (attempt 1) | ❌ failed |
-| 0:02.000 | 4.0s | Lane 1 | TestOther | ✅ passed |
-| 0:06.000 | 3.0s | Lane 1 | TestFlaky | ✅ passed |
-| 0:09.000 | 1.0s | Lane 1 | TestParse/empty | ✅ passed |
-| 0:10.000 | 2.0s | Lane 1 | TestParse/broken | ❌ failed |
+| # | Start | Duration | Lane | Test | Status |
+| ---: | ---: | ---: | :--- | :--- | :--- |
+|  | 0:00.000 | 2.0s | Lane 1 | TestFlaky (attempt 1) | ❌ failed |
+|  | 0:02.000 | 4.0s | Lane 1 | TestOther | ✅ passed |
+|  | 0:06.000 | 3.0s | Lane 1 | TestFlaky | ✅ passed |
+| 1 | 0:09.000 | 1.0s | Lane 1 | TestParse/empty | ✅ passed |
+|  | 0:10.000 | 2.0s | Lane 1 | TestParse/broken | ❌ failed |
 
 </details>
