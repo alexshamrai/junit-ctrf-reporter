@@ -1,0 +1,129 @@
+name: Timeline fixtures
+
+on:
+  push:
+    branches:
+      - test/timeline-report
+  workflow_dispatch:
+
+jobs:
+  fixtures:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Generate fixtures
+        run: python3 .github/timeline-fixtures/make.py fixtures
+      - name: 01 Small E2E run on 3 workers
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/01-e2e-small.json
+          title: '01 Small E2E run on 3 workers'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 02 Dense run: 2,250 tests on 8 threads
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/02-dense-8-threads.json
+          title: '02 Dense run: 2,250 tests on 8 threads'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 03 No thread IDs
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/03-no-thread-ids.json
+          title: '03 No thread IDs'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 04 Two forks sharing a thread name
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/04-forks-same-thread-name.json
+          title: '04 Two forks sharing a thread name'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 05 Everything in the same millisecond
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/05-zero-span.json
+          title: '05 Everything in the same millisecond'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 06 A single test
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/06-single.json
+          title: '06 A single test'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 07 20,000 tests on 16 threads
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/07-huge-20k.json
+          title: '07 20,000 tests on 16 threads'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 08 Names that look like Mermaid syntax
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/08-hostile-names.json
+          title: '08 Names that look like Mermaid syntax'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 09 Two-hour run
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/09-long-2h.json
+          title: '09 Two-hour run'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 10 Run of 400ms
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/10-very-short.json
+          title: '10 Run of 400ms'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 11 Runs two days apart
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/11-over-24h.json
+          title: '11 Runs two days apart'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 12 One hundred thread IDs
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/12-too-many-threads.json
+          title: '12 One hundred thread IDs'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 13 Sixty overlapping tests without thread IDs
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/13-too-many-lanes.json
+          title: '13 Sixty overlapping tests without thread IDs'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: 14 Partial timing data
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/14-partial-data.json
+          title: '14 Partial timing data'
+          timeline-report: true
+          annotate: false
+        if: always()

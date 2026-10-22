@@ -44,11 +44,12 @@ jobs:
         if: always()
 
       - name: Publish CTRF Test Report
-        uses: ctrf-io/github-test-reporter@v1.3.2
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
         with:
           report-path: ${{ env.REPORT_FILE }}
 
           summary-report: true
+          timeline-report: true
           test-report: true
           fail-rate-report: true
           failed-folded-report: true

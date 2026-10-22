@@ -4,6 +4,9 @@ on:
   pull_request:
     branches:
       - master
+  push:
+    branches:
+      - test/timeline-report
 
 jobs:
   build:
@@ -33,7 +36,10 @@ jobs:
       - name: Run unit tests on Java 25, 17 and 21
         run: ./gradlew :test :testOnJava17 :testOnJava21 --continue
       - name: Publish CTRF Test Report
-        uses: ctrf-io/github-test-reporter@v1.3.2
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
         with:
           report-path: 'ctrf-report.json'
+          summary-report: true
+          failed-report: true
+          timeline-report: true
         if: always()
