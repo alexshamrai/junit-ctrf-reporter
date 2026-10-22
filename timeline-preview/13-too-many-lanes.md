@@ -1,6 +1,6 @@
 ### Timeline
 
-**60** tests on **60** lanes in **10.1s** · busy **99%** of the time · up to **60** at once
+**60** tests on **60** lanes in **10.1s** · busy **99%** of the time · up to **60** at once<br>Slowest: `overlap 0` (10.0s) · Last to finish: `overlap 59` at 0:10.059
 
 ```mermaid
 ---
@@ -14,11 +14,12 @@ config:
     barGap: 3
     fontSize: 10
     sectionFontSize: 10
+  themeCSS: ".taskText.critText0,.taskText.critText1,.taskText.critText2,.taskText.critText3{fill:#ffffff !important}.active0,.active1,.active2,.active3{stroke-dasharray:4 2}"
   themeVariables:
     taskBkgColor: '#4ac26b'
     taskBorderColor: '#1a7f37'
-    critBkgColor: '#f85149'
-    critBorderColor: '#cf222e'
+    critBkgColor: '#cf222e'
+    critBorderColor: '#82071e'
     activeTaskBkgColor: '#eac54f'
     activeTaskBorderColor: '#9a6700'
     doneTaskBkgColor: '#afb8c1'
@@ -27,14 +28,16 @@ config:
     taskTextDarkColor: '#1f2328'
     sectionBkgColor: '#8c959f'
     sectionBkgColor2: '#8c959f'
+    vertLineColor: '#8c959f'
 ---
 gantt
 accTitle: Test execution timeline
-accDescr: 60 tests on 60 lanes over 10.1s, 0 failed
+accDescr: 60 tests on 60 lanes over 10.1s, 0 failed. The slowest test is overlap 0 (10.0s). The last to finish is overlap 59, at 0:10.059.
 dateFormat D HH:mm:ss.SSS
 axisFormat %-M:%S
 todayMarker off
 section ​Lane 1
+​ :16 00:00:00.000, 0ms
 ​overlap 0 :16 00:00:00.000, 10000ms
 ​ :16 00:00:10.059, 0ms
 section ​Lane 2
@@ -117,10 +120,10 @@ section ​Lane 40
 ​overlap 39 :16 00:00:00.039, 10000ms
 ```
 
-<sub>🟩 passed · 0:00 = 2026-10-21 08:16:56 UTC</sub>
+<sub>🟩 passed · 0:00 = 2026-10-21 08:16:56.000 UTC</sub>
 <br><sub>The report has no thread IDs (<code>threadId</code>), so lanes are inferred from start and stop times.</sub>
 <br><sub>So many tests overlap that the times may have been recorded after the tests ran; if fewer workers ran, the lanes do not match them.</sub>
-<br><sub>20 more lanes with 20 tests are not drawn; their failures are still listed in the test timings.</sub>
+<br><sub>20 more lanes with 20 tests are not drawn.</sub>
 
 | Lane | Tests | Failed | Busy | Idle | Utilization |
 | :--- | ---: | ---: | ---: | ---: | ---: |

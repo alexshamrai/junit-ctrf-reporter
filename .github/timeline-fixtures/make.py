@@ -111,4 +111,28 @@ report([t("good", 0, 1000, thread="a"), t("no timing", None, 500, thread="a"),
         {"name": "start only", "status": "passed", "duration": 700, "start": T0 + 2000, "threadId": "a"},
         {"name": "stop only", "status": "failed", "duration": 300, "stop": T0 + 4000, "threadId": "a"},
         t("pending", None, 0, "pending")], "14-partial-data")
+# 15. three shards, then "re-run failed jobs" runs shard 3 again two hours later
+tests = []
+for shard in (1, 2, 3):
+    cur = 0
+    for i in range(20):
+        name = "checkout fails" if (shard, i) == (3, 7) else f"shard {shard} test {i}"
+        tests.append(t(name, cur, 1400 + 37 * i, "failed" if (shard, i) == (3, 7) else "passed", thread=f"shard-{shard}")); cur += 1400 + 37 * i + 20
+cur = 2 * 3600000
+for i in range(20):
+    name = "checkout fails" if i == 7 else f"shard 3 test {i}"
+    tests.append(t(name, cur, 1400 + 37 * i, thread="shard-3")); cur += 1400 + 37 * i + 20
+report(tests, "15-rerun-shard")
+
+# 16. go-ctrf-json-reporter after "go test -count=2": the final result spans both
+# attempts and repeats the last one
+report([
+    t("TestFlaky", 0, 9000, retries=1, retryAttempts=[
+        {"attempt": 1, "status": "failed", "duration": 2000, "start": T0, "stop": T0 + 2000},
+        {"attempt": 2, "status": "passed", "duration": 3000, "start": T0 + 6000, "stop": T0 + 9000}]),
+    t("TestOther", 2000, 4000),
+    t("TestParse", 9000, 3000, "failed"),
+    t("TestParse/empty", 9000, 1000),
+    t("TestParse/broken", 10000, 2000, "failed"),
+], "16-go-count2")
 print("ok")

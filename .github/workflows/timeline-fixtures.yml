@@ -127,3 +127,19 @@ jobs:
           timeline-report: true
           annotate: false
         if: always()
+      - name: '15 Shard 3 re-run two hours later'
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/15-rerun-shard.json
+          title: '15 Shard 3 re-run two hours later'
+          timeline-report: true
+          annotate: false
+        if: always()
+      - name: '16 Go test -count=2 with subtests'
+        uses: alexshamrai/github-test-reporter@feature/timeline-report
+        with:
+          report-path: fixtures/16-go-count2.json
+          title: '16 Go test -count=2 with subtests'
+          timeline-report: true
+          annotate: false
+        if: always()

@@ -1,6 +1,6 @@
 ### Timeline
 
-**100** tests on **1** lane in **1m 39s** · busy **90%** of the time
+**100** tests on **1** lane in **1m 39s** · busy **90%** of the time<br>Slowest: `seq 0` (900ms) · Last to finish: `seq 99` at 1:39.900
 
 ```mermaid
 ---
@@ -10,11 +10,12 @@ config:
     useWidth: 1000
     leftPadding: 75
     rightPadding: 40
+  themeCSS: ".taskText.critText0,.taskText.critText1,.taskText.critText2,.taskText.critText3{fill:#ffffff !important}.active0,.active1,.active2,.active3{stroke-dasharray:4 2}"
   themeVariables:
     taskBkgColor: '#4ac26b'
     taskBorderColor: '#1a7f37'
-    critBkgColor: '#f85149'
-    critBorderColor: '#cf222e'
+    critBkgColor: '#cf222e'
+    critBorderColor: '#82071e'
     activeTaskBkgColor: '#eac54f'
     activeTaskBorderColor: '#9a6700'
     doneTaskBkgColor: '#afb8c1'
@@ -23,18 +24,21 @@ config:
     taskTextDarkColor: '#1f2328'
     sectionBkgColor: '#8c959f'
     sectionBkgColor2: '#8c959f'
+    vertLineColor: '#8c959f'
 ---
 gantt
 accTitle: Test execution timeline
-accDescr: 100 tests on 1 lane over 1m 39s, 0 failed
+accDescr: 100 tests on 1 lane over 1m 39s, 0 failed. The slowest test is seq 0 (900ms). The last to finish is seq 99, at 1:39.900.
 dateFormat D HH:mm:ss.SSS
 axisFormat %-M:%S
 todayMarker off
 section ​Lane 1
+​ :16 00:00:00.000, 0ms
 ​100 tests :16 00:00:00.000, 99900ms
+​ :16 00:01:39.900, 0ms
 ```
 
-<sub>🟩 passed · 0:00 = 2026-10-21 08:16:56 UTC</sub>
+<sub>🟩 passed · 0:00 = 2026-10-21 08:16:56.000 UTC</sub>
 <br><sub>The report has 100 thread IDs, too many for one lane each, so lanes are inferred from start and stop times.</sub>
 <br><sub>Tests too short to tell apart are merged into one bar.</sub>
 

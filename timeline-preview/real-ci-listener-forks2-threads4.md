@@ -1,6 +1,6 @@
 ### Timeline
 
-**25** tests and **9** earlier attempts on **10** threads in **4.3s** · busy **22%** of the time · up to **8** at once
+**627** tests on **1** thread in **50.1s** · busy **97%** of the time<br>Slowest: `A rerun that replaces another run's report of 100,000 tests fits the heap` (2.5s on `Test worker`) · Last to finish: `shouldCreateSummaryWithCorrectCounts()` at 0:50.109 on `Test worker`
 
 ```mermaid
 ---
@@ -8,13 +8,14 @@ config:
   gantt:
     displayMode: compact
     useWidth: 1000
-    leftPadding: 206
+    leftPadding: 97
     rightPadding: 40
+  themeCSS: ".taskText.critText0,.taskText.critText1,.taskText.critText2,.taskText.critText3{fill:#ffffff !important}.active0,.active1,.active2,.active3{stroke-dasharray:4 2}"
   themeVariables:
     taskBkgColor: '#4ac26b'
     taskBorderColor: '#1a7f37'
-    critBkgColor: '#f85149'
-    critBorderColor: '#cf222e'
+    critBkgColor: '#cf222e'
+    critBorderColor: '#82071e'
     activeTaskBkgColor: '#eac54f'
     activeTaskBorderColor: '#9a6700'
     doneTaskBkgColor: '#afb8c1'
@@ -23,112 +24,183 @@ config:
     taskTextDarkColor: '#1f2328'
     sectionBkgColor: '#8c959f'
     sectionBkgColor2: '#8c959f'
+    vertLineColor: '#8c959f'
 ---
 gantt
 accTitle: Test execution timeline
-accDescr: 25 tests on 10 threads over 4.3s, 7 failed
+accDescr: 627 tests on 1 thread over 50.1s, 0 failed. The slowest test is A rerun that replaces another run's report of 100,000 tests fits the heap (2.5s on Test worker). The last to finish is shouldCreateSummaryWithCorrectCounts() on Test worker, at 0:50.109.
 dateFormat D HH:mm:ss.SSS
-axisFormat %-S.%Ls
+axisFormat %-M:%S
 todayMarker off
-section ​ForkJoinPool-1-worker-1
-​ :16 00:00:00.050, 66ms
-​Flaky test pa… :active, 16 00:00:00.407, 507ms
-​ :crit, 16 00:00:03.984, 33ms
-section ​ForkJoinPool-1-worker-1 (2)
-​secondLongOneSecondTest() :16 00:00:00.069, 1004ms
-​secondLongH… :16 00:00:01.074, 503ms
-​Flaky test pa… :16 00:00:03.784, 514ms
-section ​ForkJoinPool-1-worker-2
-​ :active, 16 00:00:00.000, 79ms
-​ :16 00:00:00.089, 12ms
-​ :active, 16 00:00:00.297, 106ms
-​secondLongTwoSecondTest() :16 00:00:00.915, 2003ms
-​ :crit, 16 00:00:03.747, 80ms
-​ :crit, 16 00:00:03.828, 112ms
-​ :crit, 16 00:00:03.984, 33ms
-section ​ForkJoinPool-1-worker-2 (2)
-​ :active, 16 00:00:00.008, 165ms
-​ :16 00:00:03.773, 48ms
-section ​ForkJoinPool-1-worker-3
-​ :16 00:00:00.054, 80ms
-​ :active, 16 00:00:00.155, 31ms
-section ​ForkJoinPool-1-worker-3 (2)
-​ :done, 16 00:00:00.067, 90ms
-​ :16 00:00:00.157, 12ms
-​firstLongTwoSecondTest() :16 00:00:00.203, 2006ms
-​ :crit, 16 00:00:03.822, 0ms
-​ :crit, milestone, 16 00:00:03.826, 0ms
-section ​ForkJoinPool-1-worker-4
-​ :16 00:00:00.154, 17ms
-​firstLongHalf… :16 00:00:00.198, 503ms
-​firstLongOneSecondTest() :16 00:00:00.702, 1003ms
-​ :crit, 16 00:00:03.785, 124ms
-section ​Earlier attempts
-​ :active, 16 00:00:00.034, 114ms
-​ :active, 16 00:00:00.185, 111ms
-section ​Earlier attempts (2)
-​ :16 00:00:00.042, 106ms
-section ​Earlier attempts (3)
-​ :active, milestone, 16 00:00:00.096, 0ms
+section ​Test worker
+​ :16 00:00:00.000, 0ms
+​ :16 00:00:00.000, 101ms
+​ :16 00:00:00.108, 765ms
+​ :16 00:00:00.875, 192ms
+​ :16 00:00:01.210, 785ms
+​ :16 00:00:01.996, 905ms
+​ :16 00:00:02.902, 3ms
+​ :16 00:00:02.905, 621ms
+​ :16 00:00:03.526, 1956ms
+​ :16 00:00:05.483, 559ms
+​ :16 00:00:06.043, 1649ms
+​ :16 00:00:07.693, 549ms
+​ :16 00:00:08.242, 556ms
+​ :16 00:00:08.798, 568ms
+​ :16 00:00:09.367, 538ms
+​ :16 00:00:09.905, 547ms
+​ :16 00:00:10.452, 569ms
+​ :16 00:00:11.021, 590ms
+​ :16 00:00:11.611, 559ms
+​ :16 00:00:12.170, 1088ms
+​ :16 00:00:13.258, 1099ms
+​ :16 00:00:14.357, 1012ms
+​ :16 00:00:15.370, 1022ms
+​ :16 00:00:17.678, 2ms
+​ :16 00:00:17.681, 1293ms
+​ :16 00:00:18.975, 2409ms
+​ :16 00:00:21.384, 2450ms
+​ :16 00:00:23.835, 532ms
+​ :16 00:00:24.367, 548ms
+​ :16 00:00:24.915, 527ms
+​ :16 00:00:25.443, 540ms
+​ :16 00:00:25.984, 553ms
+​ :16 00:00:26.537, 867ms
+​ :16 00:00:27.405, 518ms
+​ :16 00:00:27.923, 463ms
+​ :16 00:00:28.386, 509ms
+​ :16 00:00:28.895, 520ms
+​ :16 00:00:29.416, 557ms
+​ :16 00:00:29.974, 985ms
+​ :16 00:00:30.959, 1366ms
+​ :16 00:00:32.326, 1034ms
+​ :16 00:00:33.360, 1034ms
+​ :16 00:00:34.394, 1049ms
+​ :16 00:00:35.443, 546ms
+​ :16 00:00:35.989, 1084ms
+​ :16 00:00:37.073, 1590ms
+​ :16 00:00:38.664, 5ms
+​ :16 00:00:38.669, 544ms
+​ :16 00:00:39.213, 534ms
+​ :16 00:00:39.748, 505ms
+​ :16 00:00:40.253, 544ms
+​ :16 00:00:40.797, 533ms
+​ :16 00:00:41.330, 542ms
+​ :16 00:00:41.873, 555ms
+​ :16 00:00:42.428, 541ms
+​ :16 00:00:42.969, 511ms
+​ :16 00:00:43.480, 578ms
+​ :16 00:00:44.059, 562ms
+​ :16 00:00:44.621, 642ms
+​ :16 00:00:45.263, 534ms
+​ :16 00:00:45.797, 595ms
+​ :16 00:00:46.392, 544ms
+​ :16 00:00:46.936, 511ms
+​ :16 00:00:47.448, 529ms
+​ :16 00:00:47.977, 1582ms
+​ :16 00:00:49.559, 548ms
+​ :16 00:00:50.107, 2ms
+​ :16 00:00:50.109, 0ms
 ```
 
-<sub>🟩 passed · 🟥 failed · 🟨 failed, then retried · ⬜ skipped or other · ♦️ failed too fast for a bar · 0:00 = 2026-10-22 16:06:22 UTC</sub>
-<br><sub>6 skipped or pending tests are not shown.</sub>
-<br><sub>Tests on <code>ForkJoinPool-1-worker-1</code>, <code>ForkJoinPool-1-worker-2</code>, <code>ForkJoinPool-1-worker-3</code> overlap in time (processes sharing a thread name, or a test timed around others), so they are drawn as several lanes.</sub>
-<br><sub>4 earlier attempts overlap other tests on their thread (attempts do not record where they ran), so they are drawn in a lane of their own.</sub>
+<sub>🟩 passed · 0:00 = 2026-10-22 16:10:59.620 UTC</sub>
 <br><sub>Tests too short to tell apart are merged into one bar.</sub>
 
-| Thread | Tests | Earlier attempts | Failed | Busy | Idle | Utilization |
-| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| ForkJoinPool-1-worker-1 | 4 | 1 | 1 | 605ms | 3.7s | 14% |
-| ForkJoinPool-1-worker-1 (2) | 3 | 0 | 0 | 2.0s | 2.3s | 47% |
-| ForkJoinPool-1-worker-2 | 6 | 2 | 3 | 2.4s | 1.9s | 56% |
-| ForkJoinPool-1-worker-2 (2) | 1 | 1 | 0 | 213ms | 4.1s | 5% |
-| ForkJoinPool-1-worker-3 | 2 | 1 | 0 | 107ms | 4.2s | 2% |
-| ForkJoinPool-1-worker-3 (2) | 5 | 0 | 2 | 2.2s | 2.1s | 51% |
-| ForkJoinPool-1-worker-4 | 4 | 0 | 1 | 1.6s | 2.7s | 38% |
-| Earlier attempts | 0 | 2 | 0 | 225ms | 4.1s | 5% |
-| Earlier attempts (2) | 0 | 1 | 0 | 106ms | 4.2s | 2% |
-| Earlier attempts (3) | 0 | 1 | 0 | 2ms | 4.3s | 0% |
-
 <details>
-<summary>Test timings (34)</summary>
+<summary>Test timings (91 of 627: the slowest)</summary>
 
 | Start | Duration | Thread | Test | Status |
 | ---: | ---: | :--- | :--- | :--- |
-| 0:00.000 | 79ms | ForkJoinPool-1-worker-2 | initializationError (attempt 1) | ❌ failed |
-| 0:00.008 | 165ms | ForkJoinPool-1-worker-2 (2) | teardownError (attempt 1) | ❌ failed |
-| 0:00.034 | 114ms | Earlier attempts | usesData(int) (attempt 1) | ❌ failed |
-| 0:00.042 | 106ms | Earlier attempts (2) | testBeforeFailingTeardown() (attempt 1) | ✅ passed |
-| 0:00.050 | 41ms | ForkJoinPool-1-worker-1 | secondTestTwo() | ✅ passed |
-| 0:00.054 | 40ms | ForkJoinPool-1-worker-3 | secondSuccessTest() | ✅ passed |
-| 0:00.067 | 90ms | ForkJoinPool-1-worker-3 (2) | requiresUnavailableService() | ⏭️ skipped |
-| 0:00.069 | 1.0s | ForkJoinPool-1-worker-1 (2) | secondLongOneSecondTest() | ✅ passed |
-| 0:00.089 | 8ms | ForkJoinPool-1-worker-2 | firstTestTwo() | ✅ passed |
-| 0:00.091 | 18ms | ForkJoinPool-1-worker-1 | secondTestOne() | ✅ passed |
-| 0:00.095 | 2ms | Earlier attempts (3) | initializationError (attempt 1) | ❌ failed |
-| 0:00.098 | 3ms | ForkJoinPool-1-worker-2 | firstTestOne() | ✅ passed |
-| 0:00.098 | 36ms | ForkJoinPool-1-worker-3 | firstSuccessTest(TestReporter) | ✅ passed |
-| 0:00.110 | 6ms | ForkJoinPool-1-worker-1 | refundsTheFee() | ✅ passed |
-| 0:00.154 | 17ms | ForkJoinPool-1-worker-4 | refundsEachAmount(int) [2] 2 | ✅ passed |
-| 0:00.155 | 31ms | ForkJoinPool-1-worker-3 | factory() (attempt 1) | ❌ failed |
-| 0:00.157 | 12ms | ForkJoinPool-1-worker-3 (2) | refundsEachAmount(int) [1] 1 | ✅ passed |
-| 0:00.185 | 111ms | Earlier attempts | firstFailedTest() (attempt 1) | ❌ failed |
-| 0:00.198 | 503ms | ForkJoinPool-1-worker-4 | firstLongHalfSecondTest() | ✅ passed |
-| 0:00.203 | 2.0s | ForkJoinPool-1-worker-3 (2) | firstLongTwoSecondTest() | ✅ passed |
-| 0:00.297 | 106ms | ForkJoinPool-1-worker-2 | Second failed test (attempt 1) | ❌ failed |
-| 0:00.407 | 507ms | ForkJoinPool-1-worker-1 | Flaky test passed on the second run (attempt 1) | ❌ failed |
-| 0:00.702 | 1.0s | ForkJoinPool-1-worker-4 | firstLongOneSecondTest() | ✅ passed |
-| 0:00.915 | 2.0s | ForkJoinPool-1-worker-2 | secondLongTwoSecondTest() | ✅ passed |
-| 0:01.074 | 503ms | ForkJoinPool-1-worker-1 (2) | secondLongHalfSecondTest() | ✅ passed |
-| 0:03.747 | 80ms | ForkJoinPool-1-worker-2 | teardownError | ❌ failed |
-| 0:03.762 | 60ms | ForkJoinPool-1-worker-3 (2) | usesData(int) | ❌ failed |
-| 0:03.773 | 48ms | ForkJoinPool-1-worker-2 (2) | testBeforeFailingTeardown() | ✅ passed |
-| 0:03.784 | 514ms | ForkJoinPool-1-worker-1 (2) | Flaky test passed on the second run | ✅ passed |
-| 0:03.785 | 124ms | ForkJoinPool-1-worker-4 | firstFailedTest() | ❌ failed |
-| 0:03.823 | 6ms | ForkJoinPool-1-worker-3 (2) | factory() | ❌ failed |
-| 0:03.828 | 112ms | ForkJoinPool-1-worker-2 | Second failed test | ❌ failed |
-| 0:03.984 | 33ms | ForkJoinPool-1-worker-1 | initializationError | ❌ failed |
-| 0:03.984 | 33ms | ForkJoinPool-1-worker-2 | initializationError | ❌ failed |
+| 0:00.000 | 53ms | Test worker | Each attempt keeps its own attachments through folding and unfolding | ✅ passed |
+| 0:00.053 | 13ms | Test worker | A test that failed and then was skipped is skipped, with the failure in its history | ✅ passed |
+| 0:00.108 | 765ms | Test worker | testGenerateCtrfJsonWithUnhealthyEnvironment() | ✅ passed |
+| 0:00.922 | 14ms | Test worker | blankBuildNumberSetsNeitherField(String) "null" sets neither field | ✅ passed |
+| 0:01.029 | 18ms | Test worker | wholeBuildNumberIsWrittenAsBuildNumber(String, long) ""777"" is buildNumber "777" | ✅ passed |
+| 0:01.210 | 37ms | Test worker | Review Focus 2: non-ASCII text longer than the read buffers is read back whole | ✅ passed |
+| 0:01.247 | 110ms | Test worker | A report given as a bare file name, as the default ctrf-report.json is, is written in the working directory | ✅ passed |
+| 0:01.358 | 19ms | Test worker | A report that isn't valid UTF-8 reaches the merge function as null | ✅ passed |
+| 0:01.377 | 14ms | Test worker | update with a null runId throws, and leaves the report as it was | ✅ passed |
+| 0:01.395 | 14ms | Test worker | A damaged report of the same run reaches the merge function as null, with a warning | ✅ passed |
+| 0:01.425 | 13ms | Test worker | When the report's own directory can't be written, the earlier report stays as it was and nothing is thrown | ✅ passed |
+| 0:01.561 | 25ms | Test worker | Updates from many threads at once all land | ✅ passed |
+| 0:01.595 | 308ms | Test worker | When another holder keeps the lock, update waits for the timeout and then writes without it | ✅ passed |
+| 0:01.904 | 55ms | Test worker | A report path that names a directory gets ctrf-report.json inside it, with a warning, and its other files stay | ✅ passed |
+| 0:01.960 | 17ms | Test worker | A 0.4 report whose buildNumber isn't a number can't be read, so it reaches the merge function as null | ✅ passed |
+| 0:01.996 | 905ms | Test worker | A move that keeps failing is retried for about a second, then reported, leaving no temp file | ✅ passed |
+| 0:02.905 | 621ms | Test worker | Of threads finishing the same run at once, exactly one writes the report, round after round | ✅ passed |
+| 0:03.526 | 148ms | Test worker | Tests started and finished on many threads at once are each reported once, with their status | ✅ passed |
+| 0:03.677 | 70ms | Test worker | A failed test gets the output JUnit captured for it | ✅ passed |
+| 0:03.780 | 21ms | Test worker | An unhealthy report of the same run keeps the merged report unhealthy | ✅ passed |
+| 0:03.853 | 93ms | Test worker | A non-numeric build number is written as buildId, and the report has no schema errors | ✅ passed |
+| 0:03.954 | 15ms | Test worker | The validator rejects a test with the legacy filepath key | ✅ passed |
+| 0:03.987 | 47ms | Test worker | The static methods mark and read the health of the JVM's default manager | ✅ passed |
+| 0:04.112 | 14ms | Test worker | Attempts added from many threads are all kept | ✅ passed |
+| 0:04.134 | 40ms | Test worker | Should extract unique ID from TestIdentifier | ✅ passed |
+| 0:04.187 | 22ms | Test worker | Under a suite engine, every engine is left out, and the @⁠Suite class stays | ✅ passed |
+| 0:04.216 | 22ms | Test worker | MP-13: a test that a test method creates is named after the method | ✅ passed |
+| 0:04.241 | 18ms | Test worker | MP-13: the tests of a @⁠ParameterizedClass keep their names | ✅ passed |
+| 0:04.280 | 38ms | Test worker | An identifier whose ancestors the plan can't give has no suite, and doesn't throw | ✅ passed |
+| 0:04.487 | 226ms | Test worker | readerReadsTheGoldenJsonAsJacksonDoes(String, Object, String) "full-report" | ✅ passed |
+| 0:04.720 | 85ms | Test worker | readerReadsALargeGeneratedReportAsJacksonDoes() | ✅ passed |
+| 0:05.007 | 52ms | Test worker | exitHook\_afterTheRunFinished\_doesNothing() | ✅ passed |
+| 0:05.135 | 19ms | Test worker | exitHook\_reportsTheTestsThatNeverStartedAsSkippedThenFinishesTheRunOnExit() | ✅ passed |
+| 0:05.155 | 19ms | Test worker | executionFinished\_shouldDelegateToManagerForAbortedTest() | ✅ passed |
+| 0:05.179 | 212ms | Test worker | exitHook\_waitsForTheCallbackInProgressAndTheCallbacksAfterItRecordNothing() | ✅ passed |
+| 0:05.438 | 32ms | Test worker | fromAdapter\_takesTheAdaptersSuite() | ✅ passed |
+| 0:05.483 | 559ms | Test worker | listenerReportsAFailedAssumptionAsSkipped() | ✅ passed |
+| 0:06.043 | 1.6s | Test worker | eachAttemptKeepsItsOwnFileWhenEachJvmWritesToItsOwnDirectory() | ✅ passed |
+| 0:07.693 | 549ms | Test worker | fileThatAClassPublishedBeforeItsSetupFailedIsAttachedToItsInitializationError() | ✅ passed |
+| 0:08.242 | 556ms | Test worker | screenshotThatATestWatcherPublishesForAFailedTestIsAttachedToIt() | ✅ passed |
+| 0:08.798 | 568ms | Test worker | publishedFilesAreAttachedToTheirTests() | ✅ passed |
+| 0:09.367 | 538ms | Test worker | ctrfEnvironmentVariablesConfigureTheReport() | ✅ passed |
+| 0:09.905 | 547ms | Test worker | listenerReportsAfterAllFailureOfAClassWhoseTestsWereSkippedAsTeardownError() | ✅ passed |
+| 0:10.452 | 569ms | Test worker | listenerReportsFailedParameterizedAndFactoryContainers() | ✅ passed |
+| 0:11.021 | 590ms | Test worker | listenerFailedCountMatchesJunitFailedTestsPlusFailedContainers() | ✅ passed |
+| 0:11.611 | 559ms | Test worker | listenerReportsAfterAllFailureAsTeardownError() | ✅ passed |
+| 0:12.170 | 1.1s | Test worker | listenerReportsATeardownFailureThatRecoversAsPassedAndFlaky() | ✅ passed |
+| 0:13.258 | 1.1s | Test worker | listenerReportsATeardownFailureInEveryRoundAsFailed() | ✅ passed |
+| 0:14.357 | 1.0s | Test worker | listenerReportsASetupFailureThatRecoversAsPassedAndFlaky() | ✅ passed |
+| 0:15.370 | 1.0s | Test worker | listenerReportsASetupFailureInEveryRoundAsFailed() | ✅ passed |
+| 0:17.681 | 1.3s | Test worker | A first write of 100,000 tests fits the heap | ✅ passed |
+| 0:18.975 | 2.4s | Test worker | Two forks of 50,000 tests each, merged into one report, fit the heap | ✅ passed |
+| 0:21.384 | 2.5s | Test worker | A rerun that replaces another run's report of 100,000 tests fits the heap | ✅ passed |
+| 0:23.835 | 532ms | Test worker | exitInAClassSetupAddsAnEntryForTheClass() | ✅ passed |
+| 0:24.367 | 548ms | Test worker | classWhoseSetupFailedBeforeTheExitKeepsOnlyItsInitializationError() | ✅ passed |
+| 0:24.915 | 527ms | Test worker | exitInAParameterSourceAddsAnEntryForTheParameterizedTest() | ✅ passed |
+| 0:25.443 | 540ms | Test worker | jvmTerminatedMidTestReportsTheTestAsOther() | ✅ passed |
+| 0:25.984 | 553ms | Test worker | jvmThatExitsMidRunReportsItsTests() | ✅ passed |
+| 0:26.537 | 867ms | Test worker | forkThatExitsMidRunKeepsItsTestsBesideTheOtherForks() | ✅ passed |
+| 0:27.405 | 518ms | Test worker | secondListenerOnTheSameLauncherReportsNothing() | ✅ passed |
+| 0:27.923 | 463ms | Test worker | junitsDeactivateSettingTurnsTheListenerOff() | ✅ passed |
+| 0:28.386 | 509ms | Test worker | listenerRegisteredByHandAsWellReportsEachTestOnce() | ✅ passed |
+| 0:28.895 | 520ms | Test worker | jarRegistersTheListenerItself() | ✅ passed |
+| 0:29.416 | 557ms | Test worker | nestedRunThroughTheListenerNeitherEndsTheRunNorAddsItsTests() | ✅ passed |
+| 0:29.974 | 985ms | Test worker | listenerReportsEveryTestOnceUnderParallelExecution() | ✅ passed |
+| 0:30.959 | 1.4s | Test worker | forksOfOneRunFinishingTogetherAllLandInOneReport() | ✅ passed |
+| 0:32.326 | 1.0s | Test worker | newBuildReplacesTheReportOfAnEarlierBuild() | ✅ passed |
+| 0:33.360 | 1.0s | Test worker | newCiRunReplacesTheReportOfAnEarlierCiRun() | ✅ passed |
+| 0:34.394 | 1.0s | Test worker | sameCiRunMergesItsJvms() | ✅ passed |
+| 0:35.443 | 546ms | Test worker | secondExecutionInTheSameJvmKeepsTheFirstExecutionsResults() | ✅ passed |
+| 0:35.989 | 1.1s | Test worker | listenerFoldsRetryRoundsIntoOneEntryPerTest() | ✅ passed |
+| 0:37.073 | 1.6s | Test worker | listenerExtendsTheHistoryInAThirdRound() | ✅ passed |
+| 0:38.669 | 544ms | Test worker | listenerReportsDisabledTestMethodsWhoseTestsJunitCreatesOnlyWhileRunningThem() | ✅ passed |
+| 0:39.213 | 534ms | Test worker | listenerReportsEachTestOfAnAbortedClassAsSkippedWithTheAssumptionMessage() | ✅ passed |
+| 0:39.748 | 505ms | Test worker | listenerReportsEachTestOfADisabledClassWithTheClassReason() | ✅ passed |
+| 0:40.253 | 544ms | Test worker | listenerCountsMatchJunitWhenWholeClassesAreSkipped() | ✅ passed |
+| 0:40.797 | 533ms | Test worker | listenerReportsTestsOfADisabledNestedClassOnceWhenTheOuterClassAbortsLater() | ✅ passed |
+| 0:41.330 | 542ms | Test worker | listenerReportsEachTestOfAConditionallySkippedClassWithTheConditionReason() | ✅ passed |
+| 0:41.873 | 555ms | Test worker | listenerDoesNotReportTestMethodsThatAlreadyRanAsSkippedWhenTheirClassAbortsLater() | ✅ passed |
+| 0:42.428 | 541ms | Test worker | listenerReportsATestSkippedOnItsOwnOnceWhenItsClassAbortsLater() | ✅ passed |
+| 0:42.969 | 511ms | Test worker | listenerReportsATemplateMethodOfADisabledClassAsSkipped() | ✅ passed |
+| 0:43.480 | 578ms | Test worker | listenerReportsAFailedContainerOnlyAsFailedWhenItsClassAbortsLater() | ✅ passed |
+| 0:44.059 | 562ms | Test worker | listenerGroupsClassErrorsAndTestsOfASkippedClassUnderTheirClass() | ✅ passed |
+| 0:44.621 | 642ms | Test worker | listenerGroupsEveryEntryByItsContainers() | ✅ passed |
+| 0:45.263 | 534ms | Test worker | everyReportedTestCarriesItsJunitUniqueIdAsTestId() | ✅ passed |
+| 0:45.797 | 595ms | Test worker | testsSharingDisplayNamesWithFailedTestsInAnotherClassAreNotRetries() | ✅ passed |
+| 0:46.392 | 544ms | Test worker | passingTestsWithTheSameMethodNameInTwoClassesAreNotFlaky() | ✅ passed |
+| 0:46.936 | 511ms | Test worker | outputOfAFailedClassSetupGoesToItsInitializationError() | ✅ passed |
+| 0:47.448 | 529ms | Test worker | withoutCaptureThereIsNoOutput() | ✅ passed |
+| 0:47.977 | 1.6s | Test worker | eachAttemptKeepsItsOwnOutput() | ✅ passed |
+| 0:49.559 | 548ms | Test worker | failedTestKeepsItsCapturedOutputAndAPassedOneDropsIt() | ✅ passed |
 
 </details>
