@@ -31,13 +31,13 @@ ext {
     // The oldest supported JUnit: main code compiles against it. renovate.json keeps it on 5.10.x
     junitMinVersion = '5.10.5'
     lombokVersion = '1.18.48'
-    jacksonVersion = '3.2.4'
+    jacksonVersion = '3.3.0'
     mockitoVersion = '5.24.0'
     assertjVersion = '3.27.7'
 
     slf4jVersion = '2.0.20'
-    logbackVersion = '1.6.5'
-    networkntValidatorVersion = '3.0.8'
+    logbackVersion = '1.6.7'
+    networkntValidatorVersion = '3.0.9'
 }
 
 version = projectVersion
@@ -113,7 +113,7 @@ tasks.withType(Test).configureEach {
 }
 
 checkstyle {
-    toolVersion = '14.3.0'
+    toolVersion = '14.4.0'
     configFile = file("${project.rootDir}/config/checkstyle/checkstyle.xml")
 }
 
