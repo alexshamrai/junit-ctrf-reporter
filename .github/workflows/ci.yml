@@ -33,7 +33,7 @@ jobs:
       - name: Run unit tests on Java 25, 17 and 21
         run: ./gradlew :test :testOnJava17 :testOnJava21 --continue
       - name: Publish CTRF Test Report
-        uses: ctrf-io/github-test-reporter@v1.3.2
+        uses: ctrf-io/github-test-reporter@v1.4.0
         with:
           report-path: 'ctrf-report.json'
         if: always()
