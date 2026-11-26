@@ -36,7 +36,6 @@ ext {
     assertjVersion = '3.27.7'
 
     slf4jVersion = '2.0.20'
-    logbackVersion = '1.6.8'
     networkntValidatorVersion = '3.0.9'
 }
 
