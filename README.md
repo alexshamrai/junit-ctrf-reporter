@@ -96,13 +96,66 @@ Launcher launcher = LauncherFactory.create(LauncherConfig.builder()
 
 A listener registered twice on one launcher, by the jar and by hand, reports once.
 
-### Turning it off
+### Choosing which tests report
 
-To run tests without a report, for example in one module of a larger build, use JUnit's own setting for listeners that the Platform loads automatically, as a system property of the test JVM or in `junit-platform.properties`:
+The listener reports in every test JVM that has the jar on its classpath. So the build decides which tests report, with the means it already has: where the dependency is declared, and, where that can't tell test tasks apart, the JUnit setting in [Turning it off](#turning-it-off).
+
+**Gradle.** Each source set, and each suite of the JVM Test Suite plugin, has its own dependencies: `testImplementation` adds the reporter to the `test` task only. Declare it for each one whose tests should report:
+
+```groovy
+dependencies {
+    testImplementation     'io.github.alexshamrai:junit-ctrf-reporter:0.6.0'
+    funcTestImplementation 'io.github.alexshamrai:junit-ctrf-reporter:0.6.0'
+    // integrationTest doesn't have it, so its tests don't report
+}
+```
+
+A source set whose configuration extends another's, as with `integrationTestImplementation.extendsFrom testImplementation`, gets the reporter too: turn it off in its task. In a multi-module build, declare the dependency in the modules that should report, or in a convention plugin that only they apply.
+
+**Maven.** Surefire and Failsafe run with the same test classpath, so the tests of both report. Turn the reporter off in the plugin whose tests shouldn't.
+
+#### Turning it off
+
+To run tests without a report while the jar is on their classpath, use JUnit's own setting for listeners that the Platform loads automatically:
 
 ```properties
 junit.platform.execution.listeners.deactivate=io.github.alexshamrai.launcher.CtrfListener
 ```
+
+Set it as a system property of the test JVM. Under Gradle, for one test task:
+
+```groovy
+tasks.named('integrationTest') {
+    systemProperty 'junit.platform.execution.listeners.deactivate', 'io.github.alexshamrai.launcher.CtrfListener'
+}
+```
+
+Under Maven, in the `<configuration>` of `maven-surefire-plugin` or `maven-failsafe-plugin`:
+
+```xml
+<systemPropertyVariables>
+    <junit.platform.execution.listeners.deactivate>io.github.alexshamrai.launcher.CtrfListener</junit.platform.execution.listeners.deactivate>
+</systemPropertyVariables>
+```
+
+It can also go in `junit-platform.properties`, which turns the listener off for every test task that has the file on its classpath. Under Maven, Surefire and Failsafe share `src/test/resources`, so the file turns it off for both.
+
+#### One report or one per test task
+
+By default, the test tasks of one module write one report. The default `ctrf.report.path`, `ctrf-report.json`, is resolved against the module's directory, and the tasks of one build share a run id, so their results merge, as those of parallel forks do (see [Parallel Forks, Retries and Reruns](#parallel-forks-retries-and-reruns)). For a report per test task, give each its own path:
+
+```groovy
+tasks.withType(Test).configureEach { task ->
+    task.systemProperty 'ctrf.report.path',
+        layout.buildDirectory.file("ctrf/${task.name}.json").get().asFile.absolutePath
+}
+```
+
+Under Maven, set `ctrf.report.path` in each plugin's `<systemPropertyVariables>`, for example to `${project.build.directory}/ctrf/failsafe.json`.
+
+Give each task its own path in two cases:
+- the tasks run the same tests, for example one task per JDK version. In one report, a test that fails on one JDK and passes on the other would fold into one passed, flaky entry;
+- each task has its own run id, as in [How the Run Is Identified](#how-the-run-is-identified). A task replaces the report of another run, so only the last task's results would be left.
 
 ### Upgrading from CtrfExtension
 
@@ -479,7 +532,7 @@ tasks.withType<Test>().configureEach {
 }
 ```
 
-Each test task then gets its own id. If a build runs several test tasks, give each its own `ctrf.report.path`. This matters most when two tasks run the same tests, for example one per JDK version. Writing to one report, a test that fails on one JDK and passes on the other would fold into one passed, flaky entry.
+Each test task then gets its own id. If a build runs several test tasks, give each its own `ctrf.report.path`, as in [One report or one per test task](#one-report-or-one-per-test-task): otherwise each task replaces the report of the one before.
 
 Separate build invocations are separate runs unless they share a run id, for example `./gradlew test` followed by `./gradlew integrationTest`, or two Maven invocations. On a CI system that isn't listed above, pass the same `-Dctrf.run.id=<your CI build id>` to every invocation whose results belong in one report.
 
