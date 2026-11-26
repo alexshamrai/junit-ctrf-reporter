@@ -49,6 +49,7 @@ jobs:
           report-path: ${{ env.REPORT_FILE }}
 
           summary-report: true
+          timeline-report: true
           test-report: true
           fail-rate-report: true
           failed-folded-report: true
