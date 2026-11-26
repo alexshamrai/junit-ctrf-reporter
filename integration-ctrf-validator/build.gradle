@@ -10,12 +10,11 @@ repositories {
 }
 
 dependencies {
-    implementation "org.slf4j:slf4j-api:${rootProject.ext.slf4jVersion}"
-    implementation "ch.qos.logback:logback-classic:${rootProject.ext.logbackVersion}"
-
     implementation platform("tools.jackson:jackson-bom:${rootProject.ext.jacksonVersion}")
     implementation "tools.jackson.core:jackson-databind"
     implementation "com.networknt:json-schema-validator:${rootProject.ext.networkntValidatorVersion}"
+    // A logging provider for the schema validator, so tests don't print SLF4J's "no providers" warning
+    runtimeOnly "org.slf4j:slf4j-nop:${rootProject.ext.slf4jVersion}"
 
     testImplementation platform("org.junit:junit-bom:${rootProject.ext.junitVersion}")
     testImplementation 'org.junit.jupiter:junit-jupiter'
